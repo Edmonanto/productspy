@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { productsApi, Product } from "@/lib/api";
+import { DEMO_PRODUCTS } from "@/lib/demo-products";
 import ProductCard from "@/components/products/ProductCard";
 import Topbar from "@/components/layout/Topbar";
 import { SlidersHorizontal, RefreshCw } from "lucide-react";
@@ -26,7 +27,8 @@ export default function TrendingPage() {
     { refreshInterval: 1_800_000 } // refresh every 30 min
   );
 
-  const products: Product[] = data?.products ?? [];
+  const apiProducts: Product[] = data?.products ?? [];
+  const products: Product[] = apiProducts.length > 0 ? apiProducts : DEMO_PRODUCTS;
 
   return (
     <div className="flex flex-col h-full">
@@ -102,6 +104,14 @@ export default function TrendingPage() {
           </button>
         </div>
 
+        {/* Demo notice */}
+        {apiProducts.length === 0 && !isLoading && (
+          <div className="flex items-center gap-2 bg-violet-600/10 border border-violet-600/20 rounded-lg px-4 py-2.5 text-xs text-violet-300">
+            <span>✨</span>
+            <span>Showing sample products — your scraper will populate real data every 30 minutes once connected.</span>
+          </div>
+        )}
+
         {/* Stats bar */}
         <div className="flex items-center gap-6 text-sm">
           <span className="text-zinc-500">
@@ -123,12 +133,6 @@ export default function TrendingPage() {
             {Array.from({ length: 20 }).map((_, i) => (
               <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl aspect-[3/4] animate-pulse" />
             ))}
-          </div>
-        ) : products.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="text-5xl mb-4">🔍</div>
-            <p className="text-zinc-400 font-medium">No products found</p>
-            <p className="text-zinc-600 text-sm">Try lowering the minimum score or changing filters</p>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">

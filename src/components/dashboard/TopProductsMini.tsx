@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { Product } from "@/lib/api";
+import { DEMO_PRODUCTS } from "@/lib/demo-products";
 import { formatPrice, scoreColor, scoreLabel, sourceIcon } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
 
@@ -11,6 +12,9 @@ interface Props {
 }
 
 export default function TopProductsMini({ products, loading }: Props) {
+  const isDemo = products.length === 0 && !loading;
+  const displayProducts = isDemo ? DEMO_PRODUCTS : products;
+
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
       <div className="flex items-center justify-between mb-4">
@@ -36,13 +40,13 @@ export default function TopProductsMini({ products, loading }: Props) {
             </div>
           ))}
         </div>
-      ) : products.length === 0 ? (
-        <div className="py-8 text-center text-zinc-600 text-sm">
-          No products yet — scraper runs every 6h
-        </div>
       ) : (
+        <>
+          {isDemo && (
+            <p className="text-[10px] text-violet-400/70 mb-2">✨ Sample data — real products load once scraper runs</p>
+          )}
         <div className="space-y-2">
-          {products.slice(0, 7).map((p, i) => {
+          {displayProducts.slice(0, 7).map((p, i) => {
             const score = p.score?.overall_score ?? 0;
             return (
               <Link key={p.id} href={`/dashboard/products/${p.id}`}>
@@ -89,6 +93,7 @@ export default function TopProductsMini({ products, loading }: Props) {
             );
           })}
         </div>
+        </>
       )}
     </div>
   );
