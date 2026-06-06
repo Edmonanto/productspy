@@ -23,7 +23,7 @@ export default function TrendingPage() {
       min_score: minScore,
       limit: 40,
     }),
-    { refreshInterval: 300_000 } // refresh every 5 min
+    { refreshInterval: 1_800_000 } // refresh every 30 min
   );
 
   const products: Product[] = data?.products ?? [];

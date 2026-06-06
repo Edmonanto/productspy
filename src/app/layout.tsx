@@ -6,8 +6,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "ProductSpy AI — Find Winning Dropshipping Products",
-  description: "AI-powered product research for dropshippers. Find trending products before your competitors.",
+  title: "ProductSpy Pro — Find Winning Dropshipping Products",
+  description: "Pro-grade product research for dropshippers. Find trending products before your competitors.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

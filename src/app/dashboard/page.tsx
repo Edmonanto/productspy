@@ -25,7 +25,7 @@ export default function DashboardPage() {
   const { data: trendingData, isLoading: productsLoading } = useSWR(
     "dashboard-trending",
     () => productsApi.trending({ min_score: 60, limit: 10 }),
-    { refreshInterval: 600_000 } // refresh every 10 min
+    { refreshInterval: 1_800_000 } // refresh every 30 min
   );
 
   const { data: watchlistData, isLoading: watchlistLoading } = useSWR(
@@ -68,7 +68,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
             label="Top Score Today"
             value={topScore || "—"}
@@ -113,9 +113,9 @@ export default function DashboardPage() {
         </div>
 
         {/* Main content grid */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left col: top products */}
-          <div className="col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6">
             <TopProductsMini products={products} loading={productsLoading} />
             <ScoreDistributionChart data={MOCK_DISTRIBUTION} />
           </div>
