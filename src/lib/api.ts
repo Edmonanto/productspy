@@ -3,8 +3,21 @@
  */
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
+async function getToken(): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  // Try Supabase session first
+  try {
+    const { createClient } = await import("@/lib/supabase/client");
+    const supabase = createClient();
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) return data.session.access_token;
+  } catch {}
+  // Fallback to localStorage
+  return localStorage.getItem("access_token");
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const token = await getToken();
 
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
