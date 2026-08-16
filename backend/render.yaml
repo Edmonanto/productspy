@@ -1,0 +1,40 @@
+# Render blueprint for the ProductSpy Pro backend.
+# The Next.js frontend deploys separately on Vercel — it is not in here.
+#
+# Both services read secrets from the "ProductSpy Env" env group, which must
+# be created and linked in the Render dashboard before the first deploy.
+
+services:
+  # ── API ───────────────────────────────────────────────────────────────
+  - type: web
+    name: productspy-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    # An empty buildCommand skips dependency installation entirely.
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+      - key: CORS_ORIGINS
+        value: https://productspy.pro,https://www.productspy.pro
+      - fromGroup: ProductSpy Env
+
+  # ── Ingestion worker ──────────────────────────────────────────────────
+  # Runs every 6 hours. Each run snapshots every product it sees, which is
+  # what trend scoring is computed from — so the schedule is the data asset,
+  # not just a refresh. Cron jobs are a paid Render feature.
+  - type: cron
+    name: productspy-ingest
+    runtime: python
+    rootDir: backend
+    plan: starter
+    schedule: "0 */6 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.ingest.worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+      - fromGroup: ProductSpy Env

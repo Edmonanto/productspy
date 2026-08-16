@@ -159,14 +159,24 @@ def test_rescore_persists(client, monkeypatch):
     async def save_score(pid, score):
         saved["pid"], saved["score"] = pid, score
 
+    async def current_orders(_pid):
+        return 1000
+
+    async def orders_at(_pid, _days):
+        return 500  # doubled week-over-week
+
     monkeypatch.setattr(repository, "get_product", get_product)
     monkeypatch.setattr(repository, "save_score", save_score)
+    monkeypatch.setattr(repository, "current_orders", current_orders)
+    monkeypatch.setattr(repository, "orders_at", orders_at)
 
     body = client.post(f"/api/v1/products/{PRODUCT.id}/rescore").json()
     assert "score" in body
     assert saved["pid"] == PRODUCT.id
     # margin = (24.99-4.20)/24.99 = 83% -> saturates at 100
     assert body["score"]["margin_score"] == 100
+    # rescore uses the same snapshot history the worker scores with
+    assert body["score"]["trend_score"] == 100
 
 
 # ── watchlist ───────────────────────────────────────────────────────────────

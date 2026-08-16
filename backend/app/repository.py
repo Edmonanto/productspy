@@ -4,6 +4,7 @@ from typing import Any
 import asyncpg
 
 from . import config, db
+from .providers.base import RawProduct
 from .schemas import AdSignal, Product, Score, Subscription, Supplier
 
 # Products are always read with their score, suppliers and ad signals attached,
@@ -122,6 +123,130 @@ async def search(q: str, min_score: int = 40, limit: int = 40) -> tuple[list[Pro
 async def get_product(product_id: str) -> Product | None:
     row = await db.fetchrow(f"{_PRODUCT_SELECT} where p.id = $1", product_id)
     return _to_product(row) if row else None
+
+
+async def upsert_product(raw: "RawProduct") -> str:
+    """Insert or refresh a product from a provider; returns its uuid."""
+    return str(
+        await db.fetchval(
+            """
+            insert into products (title, image_url, product_url, category,
+                price_usd, cost_usd, source, external_id, orders_count,
+                rating, provider, updated_at)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+            on conflict (source, external_id) do update set
+                title = excluded.title,
+                image_url = coalesce(excluded.image_url, products.image_url),
+                product_url = excluded.product_url,
+                category = coalesce(excluded.category, products.category),
+                price_usd = excluded.price_usd,
+                cost_usd = excluded.cost_usd,
+                orders_count = excluded.orders_count,
+                rating = excluded.rating,
+                updated_at = now()
+            returning id
+            """,
+            raw.title,
+            raw.image_url,
+            raw.product_url,
+            raw.category,
+            raw.price_usd,
+            raw.cost_usd,
+            raw.source,
+            raw.external_id,
+            raw.orders_count,
+            raw.rating,
+            raw.source,
+        )
+    )
+
+
+async def record_ad_signal(product_id: str, platform: str, ad_count: int) -> None:
+    await db.execute(
+        """
+        insert into ad_signals (product_id, platform, ad_count, last_seen_at)
+        values ($1, $2, $3, now())
+        on conflict (product_id, platform) do update set
+            ad_count = excluded.ad_count, last_seen_at = now()
+        """,
+        product_id,
+        platform,
+        ad_count,
+    )
+
+
+# ── Snapshots (the trend signal we build ourselves) ─────────────────────────
+async def write_snapshot(
+    product_id: str,
+    price_usd: float | None,
+    cost_usd: float | None,
+    orders_count: int | None,
+    ad_count: int | None,
+) -> None:
+    await db.execute(
+        "insert into product_snapshots (product_id, price_usd, cost_usd, "
+        "orders_count, ad_count) values ($1, $2, $3, $4, $5)",
+        product_id,
+        price_usd,
+        cost_usd,
+        orders_count,
+        ad_count,
+    )
+
+
+async def orders_at(product_id: str, days_ago: int) -> int | None:
+    """Orders from the newest snapshot at least `days_ago` days old.
+
+    Returns None until history reaches that far back, which is what keeps
+    trend_score neutral rather than fabricated during the first weeks.
+    """
+    return await db.fetchval(
+        """
+        select orders_count from product_snapshots
+        where product_id = $1
+          and captured_at <= now() - ($2 || ' days')::interval
+          and orders_count is not null
+        order by captured_at desc limit 1
+        """,
+        product_id,
+        str(days_ago),
+    )
+
+
+async def current_orders(product_id: str) -> int | None:
+    return await db.fetchval(
+        "select orders_count from products where id = $1", product_id
+    )
+
+
+# ── Ingestion run log ───────────────────────────────────────────────────────
+async def start_run(provider: str) -> int:
+    return int(
+        await db.fetchval(
+            "insert into ingestion_runs (provider) values ($1) returning id",
+            provider,
+        )
+    )
+
+
+async def finish_run(
+    run_id: int,
+    fetched: int,
+    upserted: int,
+    scored: int,
+    summarized: int,
+    error: str | None = None,
+) -> None:
+    await db.execute(
+        "update ingestion_runs set finished_at = now(), fetched = $2, "
+        "upserted = $3, scored = $4, summarized = $5, error = $6 where id = $1",
+        run_id,
+        fetched,
+        upserted,
+        scored,
+        summarized,
+        error,
+    )
 
 
 async def save_score(product_id: str, score: Score) -> None:

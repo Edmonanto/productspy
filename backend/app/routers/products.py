@@ -1,7 +1,7 @@
 """/products — trending, search, detail, rescore."""
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from .. import quota, repository, scoring
+from .. import config, quota, repository, scoring
 from ..auth import CurrentUser, current_user
 from ..schemas import Product, ProductList, RescoreResponse
 
@@ -53,6 +53,13 @@ async def rescore_product(
     if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
 
-    score = scoring.rescore(product)
+    # Reuse the same inputs the ingestion worker scores with, so a manual
+    # rescore and a scheduled one can't disagree.
+    orders = await repository.current_orders(product_id)
+    previous = await repository.orders_at(product_id, config.TREND_WINDOW_DAYS)
+
+    score = scoring.score_product(
+        product, orders_count=orders, previous_orders=previous
+    )
     await repository.save_score(product_id, score)
     return RescoreResponse(score=score)

@@ -50,30 +50,57 @@ The database layer is stubbed, so no Postgres is required.
 | `GET /products/trending` | done — filters by source, category, min_score |
 | `GET /products/search` | done — charges daily search quota (429 when spent) |
 | `GET /products/{id}` | done |
-| `POST /products/{id}/rescore` | partial — recomputes margin + competition (see below) |
+| `POST /products/{id}/rescore` | done — recomputes all four components from snapshot history |
 | `GET /watchlist/` `POST` `DELETE` | done — free plan capped at 10 |
 | `GET /billing/status` | done — reads real subscription rows |
 | `POST /billing/checkout` `portal` `cancel` | **501** — Phase 3 |
+| `python -m app.ingest.worker` | done — scheduled ingestion + scoring + summaries |
+
+## Ingestion (the engine)
+
+```bash
+python -m app.ingest.worker
+```
+
+Per provider: fetch → upsert → **snapshot** → score → summarise. On Render it
+runs as a cron job every 6 hours (see `render.yaml`); each run also writes a
+`product_snapshots` row per product.
+
+Providers are opt-in by credential — set the keys and the source turns on:
+
+| Provider | Env | Gives you |
+| --- | --- | --- |
+| AliExpress Affiliate | `ALIEXPRESS_APP_KEY` / `_SECRET` | Supplier **cost** (margin) + orders (demand). Official, free after Portals approval; covers the affiliate catalogue only. |
+| Apify actors | `APIFY_TOKEN` + `APIFY_*_ACTOR` | Amazon / TikTok / Facebook Ad Library. One actor per source. |
+
+With no credentials set the worker logs what's missing and exits 1 without
+touching the database.
+
+**The AliExpress request signature is implemented from their published scheme
+but has not been exercised against a live approved account** — verify the first
+run's response before trusting the schedule.
 
 ## Scoring
 
-`app/scoring.py` computes what is derivable from stored data today:
+`app/scoring.py`. Weights: demand 30%, margin 30%, trend 25%, competition 15%.
 
 - **margin** — gross margin from `price_usd` vs `cost_usd`; 70%+ saturates at 100.
-- **competition** — inverted ad volume (few advertisers scores high); no data
-  returns a neutral 50 rather than falsely claiming an open market.
+- **demand** — units sold, log-scaled so the top end doesn't dominate.
+- **competition** — inverted ad volume; few advertisers scores high.
+- **trend** — **order velocity between two of our own snapshots.** This is the
+  part no provider sells you: after ~2 weeks of runs, "orders grew 40%
+  week-over-week" is computed from `product_snapshots`, not bought.
 
-**demand** and **trend** need time-series signals that the Phase 2 ingestion
-worker will collect, so `rescore` preserves existing values instead of
-inventing them. `ai_summary` is likewise left to Phase 2.
+Any signal we lack returns a neutral **50**, never a flattering 100 — an
+unknown must not outrank a product with proven numbers. `trend` therefore stays
+neutral until history reaches `TREND_WINDOW_DAYS` back.
+
+`ai_summary` is one Claude call per product during ingestion (`app/summarize.py`),
+written only when a product has none, so re-runs cost nothing. Set
+`ANTHROPIC_API_KEY` to enable it; without it, ingestion runs and summaries stay
+empty. Model via `ANTHROPIC_MODEL` (default `claude-opus-5`).
 
 ## Remaining work
-
-**Phase 2 — ingestion & scoring.** A scheduled worker that pulls products,
-upserts them, records `ad_signals` over time, then derives demand/trend and
-writes an `ai_summary`. Note that scraping AliExpress/Amazon/TikTok directly is
-brittle and against their terms; prefer official/affiliate APIs or a licensed
-data provider.
 
 **Phase 3 — billing.** Stripe and PayPal checkout, a customer portal, and
 `POST /billing/webhook/{provider}` to keep `subscriptions` in sync. The four
