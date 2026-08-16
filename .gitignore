@@ -8,3 +8,6 @@ node_modules/
 *.DS_Store
 out/
 build/
+
+# Next.js generated types
+next-env.d.ts
