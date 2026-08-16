@@ -64,3 +64,32 @@ APIFY_TIMEOUT_SECONDS = int(os.environ.get("APIFY_TIMEOUT_SECONDS", "300"))
 # ── Claude (ai_summary) ─────────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-5")
+
+# ── Billing ─────────────────────────────────────────────────────────────────
+# Where the provider sends the customer back after checkout.
+APP_URL = os.environ.get("APP_URL", "https://productspy.pro")
+
+STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+
+PAYPAL_CLIENT_ID = os.environ.get("PAYPAL_CLIENT_ID", "")
+PAYPAL_CLIENT_SECRET = os.environ.get("PAYPAL_CLIENT_SECRET", "")
+PAYPAL_WEBHOOK_ID = os.environ.get("PAYPAL_WEBHOOK_ID", "")
+PAYPAL_API_BASE = os.environ.get(
+    "PAYPAL_API_BASE", "https://api-m.paypal.com"  # sandbox: api-m.sandbox.paypal.com
+)
+
+# Paid plans only — "free" is never checked out.
+STRIPE_PRICE_IDS: dict[str, str] = {
+    "starter": os.environ.get("STRIPE_PRICE_STARTER", ""),
+    "pro": os.environ.get("STRIPE_PRICE_PRO", ""),
+    "agency": os.environ.get("STRIPE_PRICE_AGENCY", ""),
+}
+
+PAYPAL_PLAN_IDS: dict[str, str] = {
+    "starter": os.environ.get("PAYPAL_PLAN_STARTER", ""),
+    "pro": os.environ.get("PAYPAL_PLAN_PRO", ""),
+    "agency": os.environ.get("PAYPAL_PLAN_AGENCY", ""),
+}
+
+PAID_PLANS = ("starter", "pro", "agency")

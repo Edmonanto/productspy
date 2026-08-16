@@ -53,7 +53,8 @@ The database layer is stubbed, so no Postgres is required.
 | `POST /products/{id}/rescore` | done — recomputes all four components from snapshot history |
 | `GET /watchlist/` `POST` `DELETE` | done — free plan capped at 10 |
 | `GET /billing/status` | done — reads real subscription rows |
-| `POST /billing/checkout` `portal` `cancel` | **501** — Phase 3 |
+| `POST /billing/checkout` `portal` `cancel` | done — Stripe + PayPal |
+| `POST /billing/webhook/{stripe,paypal}` | done — signature-verified, idempotent |
 | `python -m app.ingest.worker` | done — scheduled ingestion + scoring + summaries |
 
 ## Ingestion (the engine)
@@ -100,9 +101,37 @@ written only when a product has none, so re-runs cost nothing. Set
 `ANTHROPIC_API_KEY` to enable it; without it, ingestion runs and summaries stay
 empty. Model via `ANTHROPIC_MODEL` (default `claude-opus-5`).
 
+## Billing
+
+Stripe and PayPal, selected per checkout by the `provider` query param the
+frontend already sends. Plans and quotas live in `app/config.py`; the price /
+plan ids come from env (`STRIPE_PRICE_*`, `PAYPAL_PLAN_*`).
+
+**Subscription state is only ever written from a verified webhook.** The
+browser's return from a checkout URL is never treated as proof of payment —
+anyone can navigate to the success URL, so trusting it would hand out free
+upgrades. `POST /billing/webhook/stripe` verifies the Stripe signature;
+`POST /billing/webhook/paypal` calls PayPal's verify-webhook-signature
+endpoint. Neither accepts an unverified payload.
+
+Deliveries are idempotent: `billing_events` has a unique key on
+`(provider, event_id)`, so a retried or replayed event is a no-op rather than
+a second upgrade. Processing failures are recorded and return 500 so the
+provider retries.
+
+Cancelling sets `cancel_at_period_end` — the user keeps what they paid for
+until the period closes. PayPal has no hosted billing portal, so `/portal`
+returns PayPal's own automatic-payments page for PayPal subscribers rather
+than pretending we host one.
+
+Register the webhook endpoints in each dashboard and put the signing secrets
+in `STRIPE_WEBHOOK_SECRET` / `PAYPAL_WEBHOOK_ID`. Use
+`PAYPAL_API_BASE=https://api-m.sandbox.paypal.com` while testing.
+
+Run `migrations/003_billing.sql` before deploying this.
+
 ## Remaining work
 
-**Phase 3 — billing.** Stripe and PayPal checkout, a customer portal, and
-`POST /billing/webhook/{provider}` to keep `subscriptions` in sync. The four
-plans (`free`, `starter` $29, `pro` $79, `agency` $199) and their quotas are
-already defined in `app/config.py`.
+Nothing blocking. Untested against live provider accounts — run Stripe's
+`stripe listen --forward-to localhost:8000/api/v1/billing/webhook/stripe` and
+a PayPal sandbox subscription before switching real keys on.

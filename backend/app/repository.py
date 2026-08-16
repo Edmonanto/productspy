@@ -328,6 +328,102 @@ async def subscription(user_id: str) -> tuple[Subscription, str]:
     )
 
 
+async def subscription_row(user_id: str) -> asyncpg.Record | None:
+    """Full subscription row, including the provider ids the API calls need."""
+    return await db.fetchrow(
+        "select plan, status, provider, provider_customer_id, "
+        "provider_subscription_id, current_period_end, cancel_at_period_end "
+        "from subscriptions where user_id = $1",
+        user_id,
+    )
+
+
+async def upsert_subscription(
+    user_id: str,
+    plan: str,
+    status: str,
+    provider: str,
+    customer_id: str | None = None,
+    subscription_id: str | None = None,
+    current_period_end: Any = None,
+    cancel_at_period_end: bool = False,
+) -> None:
+    """Write subscription state. Only ever called from a verified webhook."""
+    await db.execute(
+        """
+        insert into subscriptions (user_id, plan, status, provider,
+            provider_customer_id, provider_subscription_id,
+            current_period_end, cancel_at_period_end, updated_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+        on conflict (user_id) do update set
+            plan = excluded.plan,
+            status = excluded.status,
+            provider = excluded.provider,
+            -- Keep known provider ids if a later event omits them.
+            provider_customer_id = coalesce(
+                excluded.provider_customer_id, subscriptions.provider_customer_id),
+            provider_subscription_id = coalesce(
+                excluded.provider_subscription_id, subscriptions.provider_subscription_id),
+            current_period_end = coalesce(
+                excluded.current_period_end, subscriptions.current_period_end),
+            cancel_at_period_end = excluded.cancel_at_period_end,
+            updated_at = now()
+        """,
+        user_id,
+        plan,
+        status,
+        provider,
+        customer_id,
+        subscription_id,
+        current_period_end,
+        cancel_at_period_end,
+    )
+
+
+async def find_user_by_provider_id(
+    customer_id: str | None, subscription_id: str | None
+) -> str | None:
+    """Recover our user id when an event carries no metadata."""
+    row = await db.fetchrow(
+        "select user_id from subscriptions "
+        "where ($1::text is not null and provider_subscription_id = $1) "
+        "   or ($2::text is not null and provider_customer_id = $2) limit 1",
+        subscription_id,
+        customer_id,
+    )
+    return str(row["user_id"]) if row else None
+
+
+# ── Webhook idempotency ─────────────────────────────────────────────────────
+async def claim_billing_event(provider: str, event_id: str, event_type: str) -> bool:
+    """Record an event; return False if we have already seen it.
+
+    Both providers retry on non-2xx and can deliver duplicates, so this is what
+    stops a replayed event from applying twice.
+    """
+    row = await db.fetchrow(
+        "insert into billing_events (provider, event_id, event_type) "
+        "values ($1, $2, $3) on conflict (provider, event_id) do nothing "
+        "returning id",
+        provider,
+        event_id,
+        event_type,
+    )
+    return row is not None
+
+
+async def complete_billing_event(
+    provider: str, event_id: str, error: str | None = None
+) -> None:
+    await db.execute(
+        "update billing_events set processed_at = now(), error = $3 "
+        "where provider = $1 and event_id = $2",
+        provider,
+        event_id,
+        error,
+    )
+
+
 async def searches_used_today(user_id: str) -> int:
     return int(
         await db.fetchval(
