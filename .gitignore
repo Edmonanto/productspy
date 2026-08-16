@@ -11,3 +11,10 @@ build/
 
 # Next.js generated types
 next-env.d.ts
+
+# Python backend
+backend/.venv/
+backend/.env
+__pycache__/
+*.pyc
+.pytest_cache/
