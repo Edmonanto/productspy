@@ -24,6 +24,9 @@ def enabled_providers() -> list[base.Provider]:
 
     # One Apify actor per source; unset actor ids are simply skipped.
     for actor_id, source in (
+        # AliExpress via Apify needs no affiliate approval, and covers the
+        # full catalogue rather than the affiliate subset.
+        (config.APIFY_ALIEXPRESS_ACTOR, "aliexpress"),
         (config.APIFY_AMAZON_ACTOR, "amazon"),
         (config.APIFY_TIKTOK_ACTOR, "tiktok"),
         (config.APIFY_ADS_ACTOR, "facebook"),

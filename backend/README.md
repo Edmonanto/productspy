@@ -73,7 +73,14 @@ Providers are opt-in by credential — set the keys and the source turns on:
 | --- | --- | --- |
 | **1688 Open Platform** | `ALIBABA1688_APP_KEY` / `_SECRET` | Real **wholesale/factory cost** in CNY, plus MOQ and sales volume. The best cost signal available — margin scoring is only as good as this number. |
 | AliExpress Affiliate | `ALIEXPRESS_APP_KEY` / `_SECRET` | Retail price + orders. Official, free after Portals approval; affiliate catalogue only. |
-| Apify actors | `APIFY_TOKEN` + `APIFY_*_ACTOR` | Amazon / TikTok / Facebook Ad Library. One actor per source. |
+| **Apify — AliExpress** | `APIFY_TOKEN` alone | **No approval needed.** Full AliExpress catalogue (not just the affiliate subset), ~$0.0025 per product returned. The actor id defaults, so a token is enough to turn it on. |
+| Apify — other actors | `APIFY_TOKEN` + `APIFY_*_ACTOR` | Amazon / TikTok / Facebook Ad Library. One actor per source. |
+
+**Fastest route to real data:** set `APIFY_TOKEN` and run the worker. No
+affiliate approval, no real-name verification, and products land under
+`source="aliexpress"` so they share a catalogue with the official provider if
+you switch later. At 50 products x 4 runs/day that is roughly $15/month,
+inside Apify's $29 Starter credit.
 
 ### 1688 notes
 

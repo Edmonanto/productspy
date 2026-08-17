@@ -76,6 +76,9 @@ WHOLESALE_MARKUP = float(os.environ.get("WHOLESALE_MARKUP", "3.0"))
 
 # Apify — one actor per source; leave an actor id unset to skip that source.
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
+APIFY_ALIEXPRESS_ACTOR = os.environ.get(
+    "APIFY_ALIEXPRESS_ACTOR", "sovereigntaylor/aliexpress-product-scraper"
+)
 APIFY_AMAZON_ACTOR = os.environ.get("APIFY_AMAZON_ACTOR", "")
 APIFY_TIKTOK_ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "")
 APIFY_ADS_ACTOR = os.environ.get("APIFY_ADS_ACTOR", "")

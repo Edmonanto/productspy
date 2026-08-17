@@ -127,3 +127,37 @@ def test_registry_enables_1688_when_credentials_present(monkeypatch):
     monkeypatch.setattr(config, "APIFY_TOKEN", "")
     names = [p.name for p in enabled_providers()]
     assert names == ["1688"]
+
+
+# ── Apify AliExpress (no-approval path) ─────────────────────────────────────
+def test_apify_aliexpress_enabled_by_token_alone(monkeypatch):
+    """The actor id has a default, so APIFY_TOKEN alone turns AliExpress on."""
+    monkeypatch.setattr(config, "ALIBABA1688_APP_KEY", "")
+    monkeypatch.setattr(config, "ALIBABA1688_APP_SECRET", "")
+    monkeypatch.setattr(config, "ALIEXPRESS_APP_KEY", "")
+    monkeypatch.setattr(config, "ALIEXPRESS_APP_SECRET", "")
+    monkeypatch.setattr(config, "APIFY_TOKEN", "tok")
+    monkeypatch.setattr(config, "APIFY_AMAZON_ACTOR", "")
+    monkeypatch.setattr(config, "APIFY_TIKTOK_ACTOR", "")
+    monkeypatch.setattr(config, "APIFY_ADS_ACTOR", "")
+
+    names = [p.name for p in enabled_providers()]
+    assert names == ["apify:aliexpress"]
+
+
+def test_apify_aliexpress_products_land_under_aliexpress_source():
+    """Source must match the official provider so both feed one catalogue."""
+    from app.providers.apify import ApifyProvider
+
+    provider = ApifyProvider(
+        actor_id="sovereigntaylor/aliexpress-product-scraper",
+        source="aliexpress", token="t",
+    )
+    [p] = provider.parse([{
+        "id": "100500", "title": "LED Dog Collar",
+        "url": "https://aliexpress.com/item/100500.html",
+        "price": "$24.99", "sold": "3,200",
+    }])
+    assert p.source == "aliexpress"
+    assert p.price_usd == 24.99
+    assert p.orders_count == 3200
