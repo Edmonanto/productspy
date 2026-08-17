@@ -71,8 +71,34 @@ Providers are opt-in by credential — set the keys and the source turns on:
 
 | Provider | Env | Gives you |
 | --- | --- | --- |
-| AliExpress Affiliate | `ALIEXPRESS_APP_KEY` / `_SECRET` | Supplier **cost** (margin) + orders (demand). Official, free after Portals approval; covers the affiliate catalogue only. |
+| **1688 Open Platform** | `ALIBABA1688_APP_KEY` / `_SECRET` | Real **wholesale/factory cost** in CNY, plus MOQ and sales volume. The best cost signal available — margin scoring is only as good as this number. |
+| AliExpress Affiliate | `ALIEXPRESS_APP_KEY` / `_SECRET` | Retail price + orders. Official, free after Portals approval; affiliate catalogue only. |
 | Apify actors | `APIFY_TOKEN` + `APIFY_*_ACTOR` | Amazon / TikTok / Facebook Ad Library. One actor per source. |
+
+### 1688 notes
+
+1688 is Alibaba's **domestic Chinese wholesale** marketplace, so its auth
+differs from AliExpress in three ways — do not copy that client:
+
+* gateway `gw.open.1688.com` with a `param2/{version}/{namespace}/{api}/{appKey}` path,
+* signature is **HMAC-SHA1**, uppercase hex (AliExpress uses SHA256),
+* the signed string begins with the URL path, then the sorted params.
+
+`ALIBABA1688_NAMESPACE` and `ALIBABA1688_API_NAME` are configurable because
+which call you may invoke depends on the service package granted to your app.
+Set them to match your grant rather than trusting the defaults.
+
+**Wholesale listings have no retail price.** `cost_usd` is the real number
+(converted at `CNY_PER_USD`); `price_usd` is *derived* as
+`cost × WHOLESALE_MARKUP` (default 3.0) purely so margin scoring has an
+anchor. It is an assumption, not an observed market price — replace it with a
+real retail comparison (Amazon/AliExpress for the same product) before
+presenting margin as fact to paying users.
+
+**Access reality:** the 1688 Open Platform is Chinese-language and normally
+requires real-name verification (Chinese mobile + Alipay), and some API
+packages require a business entity. It is not necessarily an easier gate than
+AliExpress — verify you can register before betting the roadmap on it.
 
 With no credentials set the worker logs what's missing and exits 1 without
 touching the database.

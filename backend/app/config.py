@@ -54,6 +54,26 @@ ALIEXPRESS_APP_SECRET = os.environ.get("ALIEXPRESS_APP_SECRET", "")
 ALIEXPRESS_TRACKING_ID = os.environ.get("ALIEXPRESS_TRACKING_ID", "productspy")
 ALIEXPRESS_CATEGORY_IDS = os.environ.get("ALIEXPRESS_CATEGORY_IDS", "")
 
+# 1688 Open Platform (Alibaba domestic wholesale — real factory costs).
+# namespace/api_name are configurable: which call you may invoke depends on
+# the service package granted to your app.
+ALIBABA1688_APP_KEY = os.environ.get("ALIBABA1688_APP_KEY", "")
+ALIBABA1688_APP_SECRET = os.environ.get("ALIBABA1688_APP_SECRET", "")
+ALIBABA1688_ACCESS_TOKEN = os.environ.get("ALIBABA1688_ACCESS_TOKEN", "")
+ALIBABA1688_NAMESPACE = os.environ.get(
+    "ALIBABA1688_NAMESPACE", "com.alibaba.fenxiao.crossborder"
+)
+ALIBABA1688_API_NAME = os.environ.get(
+    "ALIBABA1688_API_NAME", "product.search.keywordQuery"
+)
+ALIBABA1688_KEYWORDS = os.environ.get("ALIBABA1688_KEYWORDS", "")
+ALIBABA1688_CATEGORY_ID = os.environ.get("ALIBABA1688_CATEGORY_ID", "")
+
+# 1688 quotes wholesale CNY. Converting to USD and deriving an indicative
+# retail price keeps margin scoring meaningful on wholesale-only listings.
+CNY_PER_USD = float(os.environ.get("CNY_PER_USD", "7.15"))
+WHOLESALE_MARKUP = float(os.environ.get("WHOLESALE_MARKUP", "3.0"))
+
 # Apify — one actor per source; leave an actor id unset to skip that source.
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
 APIFY_AMAZON_ACTOR = os.environ.get("APIFY_AMAZON_ACTOR", "")
