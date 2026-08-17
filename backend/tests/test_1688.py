@@ -161,3 +161,55 @@ def test_apify_aliexpress_products_land_under_aliexpress_source():
     assert p.source == "aliexpress"
     assert p.price_usd == 24.99
     assert p.orders_count == 3200
+
+
+# ── Apify actor input shape ─────────────────────────────────────────────────
+def _ali_provider(**kw):
+    from app.providers.apify import ApifyProvider
+    return ApifyProvider(
+        actor_id="thirdwatch/aliexpress-product-scraper",
+        source="aliexpress", token="t", **kw,
+    )
+
+
+def test_input_matches_actor_example_schema(monkeypatch):
+    """Verified against the actor's own exampleRunInput. Wrong keys return an
+    empty dataset with HTTP 200, so this is the difference between working
+    and silently ingesting nothing."""
+    monkeypatch.setattr(config, "APIFY_INPUT_JSON", "")
+    monkeypatch.setattr(config, "APIFY_CATEGORY", "all")
+    monkeypatch.setattr(config, "APIFY_COUNTRY", "US")
+
+    payload = _ali_provider(queries=["bluetooth earbuds"]).build_input(15)
+    assert payload == {
+        "queries": ["bluetooth earbuds"],
+        "maxResults": 15,
+        "category": "all",
+        "country": "US",
+    }
+    assert "maxItems" not in payload  # the key we used to send, which did nothing
+
+
+def test_queries_parsed_from_comma_separated_env(monkeypatch):
+    monkeypatch.setattr(config, "APIFY_QUERIES", " pet collar , phone stand ,, ")
+    assert config.apify_queries() == ["pet collar", "phone stand"]
+
+
+def test_input_json_override_replaces_built_input(monkeypatch):
+    monkeypatch.setattr(config, "APIFY_INPUT_JSON", '{"startUrls":["https://x"]}')
+    assert _ali_provider().build_input(10) == {"startUrls": ["https://x"]}
+
+
+def test_malformed_input_json_falls_back_instead_of_crashing(monkeypatch):
+    monkeypatch.setattr(config, "APIFY_INPUT_JSON", "{not json")
+    monkeypatch.setattr(config, "APIFY_CATEGORY", "all")
+    monkeypatch.setattr(config, "APIFY_COUNTRY", "US")
+    payload = _ali_provider(queries=["x"]).build_input(5)
+    assert payload["queries"] == ["x"]  # fell back to the built input
+
+
+def test_non_object_input_json_is_rejected(monkeypatch):
+    monkeypatch.setattr(config, "APIFY_INPUT_JSON", '["not","an","object"]')
+    monkeypatch.setattr(config, "APIFY_CATEGORY", "all")
+    monkeypatch.setattr(config, "APIFY_COUNTRY", "US")
+    assert "queries" in _ali_provider(queries=["x"]).build_input(5)

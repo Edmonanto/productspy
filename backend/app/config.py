@@ -76,9 +76,27 @@ WHOLESALE_MARKUP = float(os.environ.get("WHOLESALE_MARKUP", "3.0"))
 
 # Apify — one actor per source; leave an actor id unset to skip that source.
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
+# Verified to exist in the Apify store, ~19k runs/30d, and its example run
+# input is the {queries, maxResults, category, country} shape we send.
 APIFY_ALIEXPRESS_ACTOR = os.environ.get(
-    "APIFY_ALIEXPRESS_ACTOR", "sovereigntaylor/aliexpress-product-scraper"
+    "APIFY_ALIEXPRESS_ACTOR", "thirdwatch/aliexpress-product-scraper"
 )
+
+# Search terms the actor crawls. Without these it returns nothing, so this is
+# effectively what defines your catalogue.
+APIFY_QUERIES = os.environ.get(
+    "APIFY_QUERIES",
+    "pet accessories,phone accessories,kitchen gadgets,home decor,fitness",
+)
+APIFY_CATEGORY = os.environ.get("APIFY_CATEGORY", "all")
+APIFY_COUNTRY = os.environ.get("APIFY_COUNTRY", "US")
+# Escape hatch: raw JSON replacing the built input for a differently-shaped actor.
+APIFY_INPUT_JSON = os.environ.get("APIFY_INPUT_JSON", "")
+
+
+def apify_queries() -> list[str]:
+    return [q.strip() for q in APIFY_QUERIES.split(",") if q.strip()]
+
 APIFY_AMAZON_ACTOR = os.environ.get("APIFY_AMAZON_ACTOR", "")
 APIFY_TIKTOK_ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "")
 APIFY_ADS_ACTOR = os.environ.get("APIFY_ADS_ACTOR", "")

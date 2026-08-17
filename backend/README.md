@@ -73,14 +73,26 @@ Providers are opt-in by credential — set the keys and the source turns on:
 | --- | --- | --- |
 | **1688 Open Platform** | `ALIBABA1688_APP_KEY` / `_SECRET` | Real **wholesale/factory cost** in CNY, plus MOQ and sales volume. The best cost signal available — margin scoring is only as good as this number. |
 | AliExpress Affiliate | `ALIEXPRESS_APP_KEY` / `_SECRET` | Retail price + orders. Official, free after Portals approval; affiliate catalogue only. |
-| **Apify — AliExpress** | `APIFY_TOKEN` alone | **No approval needed.** Full AliExpress catalogue (not just the affiliate subset), ~$0.0025 per product returned. The actor id defaults, so a token is enough to turn it on. |
+| **Apify — AliExpress** | `APIFY_TOKEN` alone | **No approval needed.** Full AliExpress catalogue (not just the affiliate subset). Actor defaults to `thirdwatch/aliexpress-product-scraper`, billed pay-per-event. |
 | Apify — other actors | `APIFY_TOKEN` + `APIFY_*_ACTOR` | Amazon / TikTok / Facebook Ad Library. One actor per source. |
 
 **Fastest route to real data:** set `APIFY_TOKEN` and run the worker. No
 affiliate approval, no real-name verification, and products land under
 `source="aliexpress"` so they share a catalogue with the official provider if
-you switch later. At 50 products x 4 runs/day that is roughly $15/month,
-inside Apify's $29 Starter credit.
+you switch later.
+
+`APIFY_QUERIES` is the important one — the actor searches those terms, so that
+list *is* your catalogue. It returns nothing without them.
+
+Actor input schemas are not standardised between authors. The default shape
+(`{queries, maxResults, category, country}`) was verified against this actor's
+own example run input; if you switch actors, set `APIFY_INPUT_JSON` to the raw
+JSON that actor expects. A wrong shape returns an **empty dataset with HTTP
+200**, so the worker logs a loud warning on zero items rather than treating it
+as "no results today".
+
+Pricing is pay-per-event and set by the actor author — check the actor's page
+for the current rate before scheduling frequent runs.
 
 ### 1688 notes
 
