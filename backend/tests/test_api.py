@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db, quota, repository, scoring
+from app import config, db, quota, repository, scoring
 from app.auth import CurrentUser, current_user
 from app.main import app
 from app.schemas import AdSignal, Product, Score, Subscription
@@ -204,7 +204,14 @@ def test_billing_status(client, monkeypatch):
     assert body["can_manage"] is False
 
 
-def test_billing_checkout_not_implemented(client):
+def test_billing_checkout_fails_cleanly_when_provider_unconfigured(client, monkeypatch):
+    """Without STRIPE_SECRET_KEY, checkout must 501 rather than half-succeed."""
+    async def subscription_row(_uid):
+        return None
+
+    monkeypatch.setattr(repository, "subscription_row", subscription_row)
+    monkeypatch.setattr(config, "STRIPE_SECRET_KEY", "")
+
     res = client.post("/api/v1/billing/checkout?plan=pro&provider=stripe")
     assert res.status_code == 501
     assert "detail" in res.json()  # frontend surfaces error.detail
