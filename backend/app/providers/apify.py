@@ -5,6 +5,7 @@ Facebook Ad Library) without writing or maintaining scrapers. One actor per
 source; the field mapping below is intentionally permissive because actor
 output shapes vary between authors.
 """
+import json
 import logging
 from typing import Any
 
@@ -44,17 +45,50 @@ def _as_int(value: Any) -> int | None:
 
 
 class ApifyProvider:
-    """Runs one actor synchronously and reads its dataset."""
+    """Runs one actor synchronously and reads its dataset.
 
-    def __init__(self, actor_id: str, source: str, token: str = "") -> None:
+    Actor input schemas are not standardised — each author picks their own
+    field names — so the input is built from config and can be replaced
+    wholesale with APIFY_INPUT_JSON for an actor that expects something else.
+    Sending the wrong keys returns an empty dataset with a successful HTTP
+    status, which is why `fetch` warns loudly on zero items.
+    """
+
+    def __init__(
+        self,
+        actor_id: str,
+        source: str,
+        token: str = "",
+        queries: list[str] | None = None,
+    ) -> None:
         self.actor_id = actor_id
         self.source = source
         self.name = f"apify:{source}"
         self.token = token or config.APIFY_TOKEN
+        self.queries = queries if queries is not None else config.apify_queries()
 
     @property
     def configured(self) -> bool:
         return bool(self.token and self.actor_id)
+
+    def build_input(self, limit: int) -> dict[str, Any]:
+        """Actor input. Shape verified against the AliExpress actor's own
+        example run input: {queries, maxResults, category, country}."""
+        if config.APIFY_INPUT_JSON:
+            try:
+                override = json.loads(config.APIFY_INPUT_JSON)
+                if isinstance(override, dict):
+                    return override
+                log.error("APIFY_INPUT_JSON must be a JSON object; ignoring")
+            except json.JSONDecodeError as exc:
+                log.error("APIFY_INPUT_JSON is not valid JSON (%s); ignoring", exc)
+
+        return {
+            "queries": self.queries,
+            "maxResults": limit,
+            "category": config.APIFY_CATEGORY,
+            "country": config.APIFY_COUNTRY,
+        }
 
     async def fetch(self, limit: int = 50) -> list[RawProduct]:
         if not self.configured:
@@ -69,11 +103,19 @@ class ApifyProvider:
         async with httpx.AsyncClient(timeout=config.APIFY_TIMEOUT_SECONDS) as client:
             response = await client.post(
                 url,
-                params={"token": self.token, "limit": limit},
-                json={"maxItems": limit},
+                params={"token": self.token},
+                json=self.build_input(limit),
             )
             response.raise_for_status()
             items = response.json()
+
+        if isinstance(items, list) and not items:
+            # Almost always an input-shape mismatch rather than "no results".
+            log.warning(
+                "%s: actor returned 0 items — check the actor's input schema "
+                "matches what we send, or set APIFY_INPUT_JSON",
+                self.name,
+            )
 
         if not isinstance(items, list):
             log.error("%s: unexpected dataset shape %r", self.name, type(items))

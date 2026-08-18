@@ -1,6 +1,9 @@
 # Render blueprint for the ProductSpy Pro backend.
 # The Next.js frontend deploys separately on Vercel — it is not in here.
 #
+# This file MUST live at the repository root: Render only reads a Blueprint
+# from the root, regardless of where the service's rootDir points.
+#
 # Both services read secrets from the "ProductSpy Env" env group, which must
 # be created and linked in the Render dashboard before the first deploy.
 
