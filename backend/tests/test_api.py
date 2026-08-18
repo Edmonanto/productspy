@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db, quota, repository, scoring
+from app import config, db, quota, repository, scoring
 from app.auth import CurrentUser, current_user
 from app.main import app
 from app.schemas import AdSignal, Product, Score, Subscription
@@ -159,14 +159,24 @@ def test_rescore_persists(client, monkeypatch):
     async def save_score(pid, score):
         saved["pid"], saved["score"] = pid, score
 
+    async def current_orders(_pid):
+        return 1000
+
+    async def orders_at(_pid, _days):
+        return 500  # doubled week-over-week
+
     monkeypatch.setattr(repository, "get_product", get_product)
     monkeypatch.setattr(repository, "save_score", save_score)
+    monkeypatch.setattr(repository, "current_orders", current_orders)
+    monkeypatch.setattr(repository, "orders_at", orders_at)
 
     body = client.post(f"/api/v1/products/{PRODUCT.id}/rescore").json()
     assert "score" in body
     assert saved["pid"] == PRODUCT.id
     # margin = (24.99-4.20)/24.99 = 83% -> saturates at 100
     assert body["score"]["margin_score"] == 100
+    # rescore uses the same snapshot history the worker scores with
+    assert body["score"]["trend_score"] == 100
 
 
 # ── watchlist ───────────────────────────────────────────────────────────────
@@ -194,7 +204,14 @@ def test_billing_status(client, monkeypatch):
     assert body["can_manage"] is False
 
 
-def test_billing_checkout_not_implemented(client):
+def test_billing_checkout_fails_cleanly_when_provider_unconfigured(client, monkeypatch):
+    """Without STRIPE_SECRET_KEY, checkout must 501 rather than half-succeed."""
+    async def subscription_row(_uid):
+        return None
+
+    monkeypatch.setattr(repository, "subscription_row", subscription_row)
+    monkeypatch.setattr(config, "STRIPE_SECRET_KEY", "")
+
     res = client.post("/api/v1/billing/checkout?plan=pro&provider=stripe")
     assert res.status_code == 501
     assert "detail" in res.json()  # frontend surfaces error.detail
