@@ -338,7 +338,7 @@ export default function BillingPage() {
               </div>
               <div>
                 <p className="text-white font-semibold">Cancel subscription?</p>
-                <p className="text-zinc-500 text-xs">You'll keep access until period end</p>
+                <p className="text-zinc-500 text-xs">You&apos;ll keep access until period end</p>
               </div>
             </div>
             {periodEnd && (

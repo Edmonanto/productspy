@@ -470,6 +470,62 @@ async def save_match(
     )
 
 
+async def list_matches(status: str, limit: int) -> list[asyncpg.Record]:
+    """Review queue: both sides of each match, strongest candidates first."""
+    return await db.fetch(
+        """
+        select m.id, m.confidence, m.method, m.evidence, m.status, m.created_at,
+               r.id as retail_id, r.title as retail_title, r.image_url as retail_image,
+               r.product_url as retail_url, r.price_usd as retail_price,
+               r.source as retail_source, r.orders_count as retail_orders,
+               s.id as supplier_id, s.title as supplier_title,
+               s.title_en as supplier_title_en, s.image_url as supplier_image,
+               s.product_url as supplier_url, s.cost_usd as supplier_cost,
+               s.source as supplier_source
+        from product_matches m
+        join products r on r.id = m.retail_id
+        join products s on s.id = m.supplier_id
+        where m.status = $1
+        order by m.confidence desc, m.created_at desc
+        limit $2
+        """,
+        status,
+        limit,
+    )
+
+
+async def get_match(match_id: int) -> asyncpg.Record | None:
+    return await db.fetchrow(
+        "select m.*, r.price_usd as retail_price, s.cost_usd as supplier_cost "
+        "from product_matches m "
+        "join products r on r.id = m.retail_id "
+        "join products s on s.id = m.supplier_id "
+        "where m.id = $1",
+        match_id,
+    )
+
+
+async def set_match_status(match_id: int, status: str) -> None:
+    await db.execute(
+        "update product_matches set status = $2, reviewed_at = now() where id = $1",
+        match_id,
+        status,
+    )
+
+
+async def apply_supplier_cost(retail_id: str, cost_usd: float) -> None:
+    """Give a retail listing the confirmed supplier's real cost.
+
+    This is the whole point of matching: the retail row stops having an
+    unknown margin and starts having an observed one.
+    """
+    await db.execute(
+        "update products set cost_usd = $2, updated_at = now() where id = $1",
+        retail_id,
+        cost_usd,
+    )
+
+
 async def match_counts() -> dict[str, int]:
     rows = await db.fetch(
         "select status, count(*) as n from product_matches group by status"

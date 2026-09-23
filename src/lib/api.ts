@@ -115,6 +115,52 @@ export const billingApi = {
   }>("/billing/status"),
 };
 
+// ---- Matching ----
+
+export interface MatchSide {
+  id: string;
+  title: string;
+  title_en?: string | null;
+  image_url: string | null;
+  product_url: string;
+  price_usd?: number | null;
+  cost_usd?: number | null;
+  source: string;
+  orders_count?: number | null;
+}
+
+export interface MatchEvidence {
+  jaccard?: number;
+  shared_tokens?: string[];
+  distinctive_tokens?: string[];
+  price_ratio?: number;
+  supplier_title_en?: string | null;
+  generic_only?: boolean;
+  capped_at?: number;
+}
+
+export interface ProductMatch {
+  id: number;
+  confidence: number;
+  method: string;
+  status: "candidate" | "confirmed" | "rejected";
+  evidence: MatchEvidence;
+  /** What margin WOULD become if confirmed. Not applied until then. */
+  projected_margin_pct: number | null;
+  retail: MatchSide;
+  supplier: MatchSide;
+}
+
+export const matchesApi = {
+  list: (status: string = "candidate", limit = 50) =>
+    api.get<{ items: ProductMatch[]; counts: Record<string, number> }>(
+      `/matches/?status=${status}&limit=${limit}`
+    ),
+  confirm: (id: number) =>
+    api.post<{ message: string; margin_score: number | null }>(`/matches/${id}/confirm`),
+  reject: (id: number) => api.post<{ message: string }>(`/matches/${id}/reject`),
+};
+
 export interface Me {
   id: string;
   email: string;

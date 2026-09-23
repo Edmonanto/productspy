@@ -180,7 +180,7 @@ export default function LandingPage() {
                     <Star key={i} size={14} className="text-yellow-400 fill-yellow-400" />
                   ))}
                 </div>
-                <p className="text-zinc-300 text-sm leading-relaxed">"{t.text}"</p>
+                <p className="text-zinc-300 text-sm leading-relaxed">&ldquo;{t.text}&rdquo;</p>
                 <div>
                   <p className="text-white text-sm font-semibold">{t.name}</p>
                   <p className="text-zinc-500 text-xs">{t.role}</p>

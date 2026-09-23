@@ -32,7 +32,7 @@ export default function ScoreDistributionChart({ data }: Props) {
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
       <div className="flex items-center justify-between mb-5">
         <h3 className="text-white font-semibold text-sm">Score Distribution</h3>
-        <span className="text-zinc-600 text-xs">Today's products</span>
+        <span className="text-zinc-600 text-xs">Today&apos;s products</span>
       </div>
       <ResponsiveContainer width="100%" height={160}>
         <BarChart data={data} barCategoryGap="20%">
