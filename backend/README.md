@@ -94,7 +94,57 @@ as "no results today".
 Pricing is pay-per-event and set by the actor author — check the actor's page
 for the current rate before scheduling frequent runs.
 
-### 1688 notes
+### TikTok Shop (`TIKTOK_*`)
+
+The strongest source for this product: `sold_count` and its change over time
+feed **demand and trend — 55% of the overall score** — and it is the only
+source here reporting a **real USD retail price** rather than a derived one.
+
+* `TIKTOK_KEYWORDS` is the catalogue; one search call returns up to ~30
+  products for ¥0.05. Result counts vary a lot by keyword (30 for `cat`, 4
+  for `cat bed`), so use several.
+* `TIKTOK_SELLER_IDS` pulls a specific shop's catalogue — same payload shape.
+* Detail enrichment is capped (`TIKTOK_ENRICH_TOP`, default 0): one call per
+  product, and it overlays the true sold_count and the live sale price.
+* **No supplier cost.** TikTok never exposes it, so `cost_usd` stays `None`
+  and margin scores neutral rather than zero (see Scoring).
+* Prices are only trusted when quoted in USD; a localised storefront is
+  dropped rather than misread as dollars.
+* `charged_yuan`/`balance_yuan` are logged on every call so spend is visible.
+
+> The `product/reviews` endpoint is **not used** — it returns
+> `{"code":"error","msg":"调用失败"}` for every parameter combination tried,
+> and reviews are already embedded in the detail response under `review_info`.
+> The aggregator is also intermittently flaky on otherwise-valid requests, so
+> each call is retried once.
+
+### 1688 via aggregator (no approval)
+
+`AGG1688_*` points at a third-party reseller that proxies 1688's internal
+mtop API, so it needs only a token — no Open Platform account. Verified
+end-to-end against the live endpoints: one keyword search returns ~60 offers
+for one unit of quota.
+
+* **`AGG1688_KEYWORDS` is the catalogue.** One search call per keyword.
+* **Detail enrichment is opt-in and capped** (`AGG1688_ENRICH_TOP`, default 0)
+  because detail costs one call *per product* and would drain quota in a run.
+  It overlays the real tiered/MOQ price, which is better than the search price.
+* **P4P results are dropped by default.** They are paid placement, so counting
+  them as demand would let advertisers buy their way up our rankings. In the
+  live check this took 60 raw results down to 50 organic ones.
+* Titles arrive with the matched keyword wrapped in `<font>` tags, and sold
+  counts are Chinese strings (`已售1.3万+件` = 13,000 — naive parsing reads
+  that as 1). Both are handled; `tests/fixtures/` holds trimmed copies of real
+  responses so an upstream schema change fails a test instead of silently
+  ingesting nothing.
+* The provider logs `left_nums` after each search — watch it for quota burn.
+
+> ⚠️ These endpoints are **plain HTTP on bare IPs**. The token and the
+> response travel unencrypted, and the operator is unknown. Keep tokens in
+> env, rotate them if they leak, and treat this as a bootstrap source rather
+> than something to build a paid product on permanently.
+
+### 1688 notes (official Open Platform)
 
 1688 is Alibaba's **domestic Chinese wholesale** marketplace, so its auth
 differs from AliExpress in three ways — do not copy that client:
@@ -137,8 +187,13 @@ run's response before trusting the schedule.
   part no provider sells you: after ~2 weeks of runs, "orders grew 40%
   week-over-week" is computed from `product_snapshots`, not bought.
 
-Any signal we lack returns a neutral **50**, never a flattering 100 — an
-unknown must not outrank a product with proven numbers. `trend` therefore stays
+Any signal we lack returns a neutral **50** — never a flattering 100, and
+equally never a punishing 0. An unknown must not outrank a product with
+proven numbers, nor be buried beneath one. This matters because sources
+disagree on what they publish: TikTok gives retail with no supplier cost,
+1688 the reverse. Scoring a missing cost as *zero margin* would rank every
+TikTok product below every 1688 one for a reason that has nothing to do with
+the product. A genuine zero — price at or below cost — still scores 0. `trend` therefore stays
 neutral until history reaches `TREND_WINDOW_DAYS` back.
 
 `ai_summary` is one Claude call per product during ingestion (`app/summarize.py`),

@@ -1,0 +1,297 @@
+{
+ "code": "success",
+ "api": "mtop.1688.item.search.info",
+ "left_nums": 96,
+ "data": {
+  "data": {
+   "OFFER": {
+    "items": [
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01jrved61IN5O6CqLja_!!2215986330880-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "https://detailp4p.1688.com/buyer/offerdetail/724364863244.html?cbu_ad_adgroup_id=1527672673&cbu_ad_sessionid=6e1a8c2230054e62a7c392381e833683&_p_isad=1&hotSaleSkuId=5375606212674&trace_log=bid&uuid=3e8b13c2794d41b7a57415cb788951b3",
+       "block": "P4P",
+       "bookedCount": "2511",
+       "offerId": 724364863244,
+       "city": "惠州市",
+       "title": "Polo衫工作服定制t恤夏季工衣短袖广告衫文化衫<font color=red>衣服</font>刺绣印字logo",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "28",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "matKey": "sale_count",
+        "modelType": "map",
+        "text": "全网7900+件"
+       },
+       "offerRepurchaseRate": "12%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01H5KPE01IMd7kIYNoM_!!2210813410879-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=840138217750&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=5603911268131&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3",
+       "block": "BUSINESS",
+       "bookedCount": "1281",
+       "offerId": 840138217750,
+       "city": "揭阳市",
+       "title": "秋冬季加绒加厚卫裤灯芯绒裤子男士潮流运动长裤直筒宽松美式休闲",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "14",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "text": "已售2200+件"
+       },
+       "offerRepurchaseRate": "46%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01uNARcI2C3VDMfM2aE_!!2219368788418-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=1039701527597&sortType=&pageId=&abBizDataType=cbuOffer&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3&skuId=6060623964181",
+       "block": "BUSINESS",
+       "bookedCount": "13",
+       "offerId": 1039701527597,
+       "city": "揭阳市",
+       "title": "黑色美式复古休闲裤男高街抽绳春夏宽松嘻哈条纹阔腿裤子男款夏",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "12",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "text": "已售20+件"
+       },
+       "offerRepurchaseRate": "66%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01C5Q7Lr1t346V3Zu95_!!2218336655845-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=989332963980&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=6124609379411&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3",
+       "block": "BUSINESS",
+       "bookedCount": "38",
+       "offerId": 989332963980,
+       "city": "揭阳市",
+       "title": "秋冬休闲运动裤男士2025春秋韩版宽松束脚卫裤青年直筒加绒长裤子",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "12",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "text": "已售90+件"
+       },
+       "offerRepurchaseRate": "7%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01bwjfdL2C3VDIIap6u_!!2219368788418-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=1039711601335&sortType=&pageId=&abBizDataType=cbuOffer&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3&skuId=6233876694920",
+       "block": "NORMAL",
+       "bookedCount": "50",
+       "offerId": 1039711601335,
+       "city": "揭阳市",
+       "title": "运动裤男潮流宽松慵懒夏季垂感直筒季青少年松弛感裤男士休闲裤子",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "17",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "text": "已售70+件"
+       },
+       "offerRepurchaseRate": "6%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01Fcj4mF27UukIQVBDB_!!2217115147801-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=892785068911&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=5907766987144&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3",
+       "block": "NORMAL",
+       "bookedCount": "3678",
+       "offerId": 892785068911,
+       "city": "揭阳市",
+       "title": "男款夏季薄款男士休闲长裤垂感西裤阔腿直筒宽松运动透气冰丝裤子",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "8",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "text": "已售1.3万+件"
+       },
+       "offerRepurchaseRate": "45%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01pS3wJm1foK9CpOGdv_!!2211554074053-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=746461499044&sortType=&pageId=&abBizDataType=cbuOffer&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3&skuId=5970680930918",
+       "block": "NORMAL",
+       "bookedCount": "895",
+       "offerId": 746461499044,
+       "city": "揭阳市",
+       "title": "商场倒闭清仓捡漏~专柜撤回尾单大牌外贸男装耐磨长袖衬衫男外套",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "19.9",
+        "priceType": "NORMAL",
+        "priceDecimal": ".9",
+        "priceDescription": "",
+        "priceInteger": "19"
+       },
+       "afterPrice": {
+        "text": "已售700+件"
+       },
+       "offerRepurchaseRate": "26%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01r3v3ra2C3V7MFQ3nO_!!2219368788418-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=891571371323&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=5738492456731&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3",
+       "block": "NORMAL",
+       "bookedCount": "2009",
+       "offerId": 891571371323,
+       "city": "揭阳市",
+       "title": "裤子男春秋垂感ins设计感痞帅高街运动裤宽松直筒阔腿休闲长裤潮",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "9",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "text": "已售2400+件"
+       },
+       "offerRepurchaseRate": "17%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN011IZWxJ2C3VDA3XcIa_!!2219368788418-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=1033906267371&sortType=&pageId=&abBizDataType=cbuOffer&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3&skuId=6050246840740",
+       "block": "NORMAL",
+       "bookedCount": "1149",
+       "offerId": 1033906267371,
+       "city": "揭阳市",
+       "title": "夏季薄款运动长裤跨境三条杠阔腿休闲速干冰丝裤男士裤子直筒宽松",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "13",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "text": "已售1300+件"
+       },
+       "offerRepurchaseRate": "12%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01zLQdhq1FhIHqGGeEn_!!2220560040518-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=1026229701902&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=6035799876239&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3",
+       "block": "NORMAL",
+       "bookedCount": "633",
+       "offerId": 1026229701902,
+       "city": "潮州市",
+       "title": "现货氧气美女设计感蕾丝碎花U领短袖上衣修身小众T恤",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "16",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "text": "已售1100+件"
+       },
+       "offerRepurchaseRate": "2%",
+       "isP4P": false
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01BodGLG1JG3BNIbrno_!!2221202231000-0-cib.jpg",
+       "province": "广东",
+       "linkUrl": "https://detailp4p.1688.com/buyer/offerdetail/1012824820441.html?cbu_ad_adgroup_id=1537375230&cbu_ad_sessionid=6e1a8c2230054e62a7c392381e833683&_p_isad=1&trace_log=p4p&uuid=3e8b13c2794d41b7a57415cb788951b3&skuId=6179049975253",
+       "block": "P4P",
+       "bookedCount": "26",
+       "offerId": 1012824820441,
+       "city": "深圳市",
+       "title": "秉高80支圆领纯色短袖t恤男装夏季透气半袖休闲男士上衣薄款修身",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "38",
+        "priceType": "NORMAL",
+        "priceDescription": ""
+       },
+       "afterPrice": {
+        "text": "已售50+件"
+       },
+       "offerRepurchaseRate": "",
+       "isP4P": true
+      }
+     },
+     {
+      "data": {
+       "offerPicUrl": "https://cbu01.alicdn.com/img/ibank/O1CN01oICqym2C4sML4Qne3_!!2207691068421-0-cib.jpg",
+       "province": "浙江",
+       "linkUrl": "http://detail.m.1688.com/page/index.html?offerId=974487122324&sortType=&pageId=&abBizDataType=cbuOffer&hotSaleSkuId=5984289849105&trace_log=normal&uuid=3e8b13c2794d41b7a57415cb788951b3",
+       "block": "NORMAL",
+       "bookedCount": "3267",
+       "offerId": 974487122324,
+       "city": "嘉兴市",
+       "title": "跨境重磅380克刺绣男士卫衣2026秋冬新款圆领休闲打底长袖卫衣男",
+       "priceInfo": {
+        "priceDescriptionColor": "#FF4000",
+        "price": "38.25",
+        "priceType": "TTTM",
+        "priceDecimal": ".25",
+        "priceDescription": "限时价",
+        "priceInteger": "38"
+       },
+       "afterPrice": {
+        "matKey": "sale_count",
+        "modelType": "map",
+        "text": "全网4200+件"
+       },
+       "offerRepurchaseRate": "8%",
+       "isP4P": false
+      }
+     }
+    ]
+   }
+  }
+ }
+}

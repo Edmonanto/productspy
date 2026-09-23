@@ -1,0 +1,37 @@
+{
+ "api": "mtop.1688.detail.info",
+ "left_num": 98,
+ "data": {
+  "item": {
+   "price": "3.97",
+   "saledCount": 71,
+   "offerTitle": "【带芽发货】进口重瓣花毛茛种球洋牡丹芹叶牡丹耐寒浓香花卉",
+   "companyName": "济南高新区阁昆种子经销部（个体工商户）",
+   "defaultOfferImg": "https://cbu01.alicdn.com/img/ibank/O1CN01FiwfXy1x4DSuhQOXQ_!!2215791086389-0-cib.jpg"
+  },
+  "price": {
+   "priceModel": {
+    "originalPriceDisplay": "3.97-17.86",
+    "originalPrices": [
+     {
+      "displayStyle": "line_price",
+      "price": "3.97",
+      "beginAmount": 1
+     }
+    ],
+    "priceDisplayType": "skuPrice",
+    "currentPrices": [
+     {
+      "price": "3.97",
+      "beginAmount": 1
+     }
+    ],
+    "onePiecePriceExp": false
+   }
+  },
+  "title": {
+   "selledNumber": "71",
+   "wantBuy": "16"
+  }
+ }
+}

@@ -29,9 +29,16 @@ TREND_CEILING = 0.50
 
 
 def margin_score(price_usd: float | None, cost_usd: float | None) -> int:
-    """0-100 from gross margin. 70%+ margin saturates at 100."""
-    if not price_usd or cost_usd is None or price_usd <= 0 or cost_usd < 0:
-        return 0
+    """0-100 from gross margin. 70%+ margin saturates at 100.
+
+    An *unknown* margin returns the neutral midpoint, not 0. Sources differ in
+    what they expose — TikTok reports retail with no supplier cost, 1688 the
+    reverse — and scoring a missing input as zero margin would permanently
+    bury every product from a source that simply doesn't publish that field.
+    A real zero (price at or below cost) still scores 0.
+    """
+    if price_usd is None or cost_usd is None or price_usd <= 0 or cost_usd < 0:
+        return UNKNOWN
     margin = (price_usd - cost_usd) / price_usd
     if margin <= 0:
         return 0
