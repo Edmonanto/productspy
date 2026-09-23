@@ -1,0 +1,63 @@
+{
+ "code": "success",
+ "api": "jhzy.amazon.search.keyword",
+ "charged_yuan": "0.05",
+ "data": {
+  "site": "DE",
+  "data": {
+   "keyword": "usb c cable",
+   "page": 1,
+   "count": 22,
+   "items": [
+    {
+     "asin": "B0GX5WF5B9",
+     "title": "LISEN 240W USB C Kabel, PD 3.1 USB C Ladekabel, USB C auf USB C Kabel Set",
+     "price_text": "10,99 €",
+     "rating_text": "4,6 von 5 Sternen",
+     "reviews_text": "(1809)",
+     "image": "https://m.media-amazon.com/images/I/81IAQ5MXGcL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0CHYDJW36",
+     "title": "LISEN 60W USB C Kabel, [4er Pack, 0,5M 1M 1M 2M] USB C auf USB C Kabel Set",
+     "price_text": "7,99 €",
+     "rating_text": "4,5 von 5 Sternen",
+     "reviews_text": "(20.893)",
+     "image": "https://m.media-amazon.com/images/I/81ZMsZkQz0L._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0DLTX9HSS",
+     "title": "USB-C-Kabel, 2 m, USB C 3.2 Gen2 × 2 240 W, 48 V/5 A, Video 5K bei 60 Hz, 4 K bei 144 Hz, USB-Datenkabel Typ C 20 Gbit/s für Thunderbolt 3/4, iPhone16, iPhone15, Switch, Macbook, USB C Monitor",
+     "price_text": "14,44 €",
+     "rating_text": "4,6 von 5 Sternen",
+     "reviews_text": "(611)",
+     "image": "https://m.media-amazon.com/images/I/61KmXP3zahL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0BR3L78XN",
+     "title": "INIU 240W USB C Kabel, [2Stück 2m] PD Schnellladekabel USB C auf USBC Kabel",
+     "price_text": "9,49 €",
+     "rating_text": "4,7 von 5 Sternen",
+     "reviews_text": "(17.651)",
+     "image": "https://m.media-amazon.com/images/I/814lZbU+YYL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B08D6NCQ1Z",
+     "title": "UGREEN USB C Kabel 100W Ladekabel USB-C PD 3.0 Schnellladekabel",
+     "price_text": "13,99 €",
+     "rating_text": "4,7 von 5 Sternen",
+     "reviews_text": "(32.648)",
+     "image": "https://m.media-amazon.com/images/I/71f6Kt9coBL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0DXDTX47W",
+     "title": "Anker 240W USB C auf USB C kabel PD 3.1 [2 Stück 1,8m]",
+     "price_text": "14,99 €",
+     "rating_text": "4,8 von 5 Sternen",
+     "reviews_text": "(6942)",
+     "image": "https://m.media-amazon.com/images/I/71uvfb9TpWL._AC_UY218_.jpg"
+    }
+   ]
+  }
+ }
+}

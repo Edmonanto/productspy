@@ -38,9 +38,18 @@ As soon as `products` has rows, the dashboard stops falling back to
 
 ```bash
 pytest tests/ -q
+pip install -r requirements-dev.txt   # adds pglast for the SQL grammar checks
 ```
 
 The database layer is stubbed, so no Postgres is required.
+
+`tests/test_sql_integrity.py` covers the gap that stubbing leaves: because no
+query executes during the suite, the first real run of this SQL would
+otherwise be the first production ingestion. It statically checks that every
+query references columns the migrations actually create, that `$N`
+placeholders match the arguments passed, and — via `pglast`, bindings to
+PostgreSQL's own parser — that every migration and query is valid Postgres.
+The grammar checks skip cleanly when `pglast` isn't installed.
 
 ## Endpoint status
 
@@ -93,6 +102,43 @@ as "no results today".
 
 Pricing is pay-per-event and set by the actor author — check the actor's page
 for the current rate before scheduling frequent runs.
+
+### Amazon (`AMAZON_*`)
+
+The **retail price anchor**. 1688 gives a real wholesale cost but no retail
+price; Amazon gives an observed retail price for the same class of product.
+
+* `AMAZON_SITES` is a list of marketplaces (`US,UK,DE`) crossed with
+  `AMAZON_KEYWORDS`, so three sites x three keywords is nine calls.
+* **ASINs are namespaced by site** (`US:B09G9FPHY6`). The same ASIN exists on
+  several marketplaces at different prices, so without the site in the
+  identity the US and DE rows collide on `(source, external_id)`.
+* **No sales count.** Amazon does not publish one, so `orders_count` stays
+  `None`. Review count is a popularity proxy, not units sold — substituting
+  it would fabricate demand.
+* Non-USD prices are converted via `USD_PER_GBP` / `USD_PER_EUR`. A currency
+  with no configured rate has its price **dropped**, because an unconverted
+  price is worse than none: margin would read 229 EUR as 229 USD.
+
+**Locale is the trap.** The API returns display strings, not numbers, and the
+German format inverts the separators:
+
+| | price | rating | reviews |
+| --- | --- | --- | --- |
+| US | `$501.60` | `4.5 out of 5 stars` | `(75,618)` / `(11.9K)` |
+| UK | `£8.99` | `4.6 out of 5 stars` | `(45.4K)` |
+| DE | `229,99€` | `4,6 von 5 Sternen` | `(36.976)` |
+
+In DE a dot groups thousands, so a naive `float()` reads `36.976` as 36.976
+reviews instead of 36,976 — a 1000x error — and reads `10,99 €` as 1099 or
+nothing. Parsing is site-aware and the tests pin both readings of the same
+string.
+
+> **Scoring caveat.** With no cost and no sales count, every Amazon product
+> scores the neutral 50 on demand, margin and competition, so they all rank
+> identically. Amazon earns its place as a price *reference* for
+> cross-platform matching — which does not exist yet. Until it does, expect
+> Amazon rows to sit in an undifferentiated block.
 
 ### TikTok Shop (`TIKTOK_*`)
 

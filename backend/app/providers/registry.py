@@ -8,6 +8,7 @@ from . import base
 from .aggregator1688 import Aggregator1688Provider
 from .alibaba1688 import Alibaba1688Provider
 from .aliexpress import AliExpressProvider
+from .amazon import AmazonProvider
 from .apify import ApifyProvider
 from .tiktok_shop import TikTokShopProvider
 from .. import config
@@ -32,6 +33,10 @@ def enabled_providers() -> list[base.Provider]:
     tiktok = TikTokShopProvider()
     if tiktok.configured:
         providers.append(tiktok)
+
+    amazon = AmazonProvider()
+    if amazon.configured:
+        providers.append(amazon)
 
     # One Apify actor per source; unset actor ids are simply skipped.
     for actor_id, source in (
