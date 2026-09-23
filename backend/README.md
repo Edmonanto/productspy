@@ -94,7 +94,33 @@ as "no results today".
 Pricing is pay-per-event and set by the actor author — check the actor's page
 for the current rate before scheduling frequent runs.
 
-### 1688 notes
+### 1688 via aggregator (no approval)
+
+`AGG1688_*` points at a third-party reseller that proxies 1688's internal
+mtop API, so it needs only a token — no Open Platform account. Verified
+end-to-end against the live endpoints: one keyword search returns ~60 offers
+for one unit of quota.
+
+* **`AGG1688_KEYWORDS` is the catalogue.** One search call per keyword.
+* **Detail enrichment is opt-in and capped** (`AGG1688_ENRICH_TOP`, default 0)
+  because detail costs one call *per product* and would drain quota in a run.
+  It overlays the real tiered/MOQ price, which is better than the search price.
+* **P4P results are dropped by default.** They are paid placement, so counting
+  them as demand would let advertisers buy their way up our rankings. In the
+  live check this took 60 raw results down to 50 organic ones.
+* Titles arrive with the matched keyword wrapped in `<font>` tags, and sold
+  counts are Chinese strings (`已售1.3万+件` = 13,000 — naive parsing reads
+  that as 1). Both are handled; `tests/fixtures/` holds trimmed copies of real
+  responses so an upstream schema change fails a test instead of silently
+  ingesting nothing.
+* The provider logs `left_nums` after each search — watch it for quota burn.
+
+> ⚠️ These endpoints are **plain HTTP on bare IPs**. The token and the
+> response travel unencrypted, and the operator is unknown. Keep tokens in
+> env, rotate them if they leak, and treat this as a bootstrap source rather
+> than something to build a paid product on permanently.
+
+### 1688 notes (official Open Platform)
 
 1688 is Alibaba's **domestic Chinese wholesale** marketplace, so its auth
 differs from AliExpress in three ways — do not copy that client:

@@ -69,6 +69,26 @@ ALIBABA1688_API_NAME = os.environ.get(
 ALIBABA1688_KEYWORDS = os.environ.get("ALIBABA1688_KEYWORDS", "")
 ALIBABA1688_CATEGORY_ID = os.environ.get("ALIBABA1688_CATEGORY_ID", "")
 
+# 1688 via third-party aggregator (works without Open Platform approval).
+# NOTE: these endpoints are plain HTTP on bare IPs, so the token and the
+# response travel unencrypted. Keep the tokens in env, never in code.
+AGG1688_SEARCH_URL = os.environ.get("AGG1688_SEARCH_URL", "")
+AGG1688_SEARCH_TOKEN = os.environ.get("AGG1688_SEARCH_TOKEN", "")
+AGG1688_DETAIL_URL = os.environ.get("AGG1688_DETAIL_URL", "")
+AGG1688_DETAIL_TOKEN = os.environ.get("AGG1688_DETAIL_TOKEN", "")
+# Search terms define the catalogue — one search call returns ~60 offers.
+AGG1688_KEYWORDS = os.environ.get("AGG1688_KEYWORDS", "")
+# Detail is one call per product, so enrichment is capped. 0 disables it.
+AGG1688_ENRICH_TOP = int(os.environ.get("AGG1688_ENRICH_TOP", "0"))
+# P4P results are paid placement, not organic demand.
+AGG1688_INCLUDE_ADS = os.environ.get("AGG1688_INCLUDE_ADS", "").lower() == "true"
+AGG1688_TIMEOUT = int(os.environ.get("AGG1688_TIMEOUT", "60"))
+
+
+def agg1688_keywords() -> list[str]:
+    return [k.strip() for k in AGG1688_KEYWORDS.split(",") if k.strip()]
+
+
 # 1688 quotes wholesale CNY. Converting to USD and deriving an indicative
 # retail price keeps margin scoring meaningful on wholesale-only listings.
 CNY_PER_USD = float(os.environ.get("CNY_PER_USD", "7.15"))
