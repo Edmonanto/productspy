@@ -23,10 +23,17 @@ uuid.
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env        # fill in DATABASE_URL + SUPABASE_JWT_SECRET
-python -m app.migrate      # applies every migration, idempotent
+cp .env.example .env
+python -m app.migrate
 uvicorn app.main:app --reload --port 8000
 ```
+
+Fill `DATABASE_URL` and `SUPABASE_JWT_SECRET` in `.env` before running migrate.
+
+> Commands in this README carry no trailing `#` comments on purpose. zsh — the
+> default macOS shell — does **not** treat `#` as a comment interactively, so a
+> pasted `cp .env.example .env  # fill this in` runs `cp` with every following
+> word as an argument and fails with `cp: <word>: Not a directory`.
 
 Interactive docs at http://localhost:8000/docs, health at `/health`.
 
@@ -37,9 +44,11 @@ As soon as `products` has rows, the dashboard stops falling back to
 ## Tests
 
 ```bash
+pip install -r requirements-dev.txt
 pytest tests/ -q
-pip install -r requirements-dev.txt   # adds pglast for the SQL grammar checks
 ```
+
+`requirements-dev.txt` adds `pglast` for the SQL grammar checks.
 
 The database layer is stubbed, so no Postgres is required.
 
