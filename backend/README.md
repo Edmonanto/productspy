@@ -38,9 +38,18 @@ As soon as `products` has rows, the dashboard stops falling back to
 
 ```bash
 pytest tests/ -q
+pip install -r requirements-dev.txt   # adds pglast for the SQL grammar checks
 ```
 
 The database layer is stubbed, so no Postgres is required.
+
+`tests/test_sql_integrity.py` covers the gap that stubbing leaves: because no
+query executes during the suite, the first real run of this SQL would
+otherwise be the first production ingestion. It statically checks that every
+query references columns the migrations actually create, that `$N`
+placeholders match the arguments passed, and — via `pglast`, bindings to
+PostgreSQL's own parser — that every migration and query is valid Postgres.
+The grammar checks skip cleanly when `pglast` isn't installed.
 
 ## Endpoint status
 
