@@ -94,6 +94,30 @@ as "no results today".
 Pricing is pay-per-event and set by the actor author — check the actor's page
 for the current rate before scheduling frequent runs.
 
+### TikTok Shop (`TIKTOK_*`)
+
+The strongest source for this product: `sold_count` and its change over time
+feed **demand and trend — 55% of the overall score** — and it is the only
+source here reporting a **real USD retail price** rather than a derived one.
+
+* `TIKTOK_KEYWORDS` is the catalogue; one search call returns up to ~30
+  products for ¥0.05. Result counts vary a lot by keyword (30 for `cat`, 4
+  for `cat bed`), so use several.
+* `TIKTOK_SELLER_IDS` pulls a specific shop's catalogue — same payload shape.
+* Detail enrichment is capped (`TIKTOK_ENRICH_TOP`, default 0): one call per
+  product, and it overlays the true sold_count and the live sale price.
+* **No supplier cost.** TikTok never exposes it, so `cost_usd` stays `None`
+  and margin scores neutral rather than zero (see Scoring).
+* Prices are only trusted when quoted in USD; a localised storefront is
+  dropped rather than misread as dollars.
+* `charged_yuan`/`balance_yuan` are logged on every call so spend is visible.
+
+> The `product/reviews` endpoint is **not used** — it returns
+> `{"code":"error","msg":"调用失败"}` for every parameter combination tried,
+> and reviews are already embedded in the detail response under `review_info`.
+> The aggregator is also intermittently flaky on otherwise-valid requests, so
+> each call is retried once.
+
 ### 1688 via aggregator (no approval)
 
 `AGG1688_*` points at a third-party reseller that proxies 1688's internal
@@ -163,8 +187,13 @@ run's response before trusting the schedule.
   part no provider sells you: after ~2 weeks of runs, "orders grew 40%
   week-over-week" is computed from `product_snapshots`, not bought.
 
-Any signal we lack returns a neutral **50**, never a flattering 100 — an
-unknown must not outrank a product with proven numbers. `trend` therefore stays
+Any signal we lack returns a neutral **50** — never a flattering 100, and
+equally never a punishing 0. An unknown must not outrank a product with
+proven numbers, nor be buried beneath one. This matters because sources
+disagree on what they publish: TikTok gives retail with no supplier cost,
+1688 the reverse. Scoring a missing cost as *zero margin* would rank every
+TikTok product below every 1688 one for a reason that has nothing to do with
+the product. A genuine zero — price at or below cost — still scores 0. `trend` therefore stays
 neutral until history reaches `TREND_WINDOW_DAYS` back.
 
 `ai_summary` is one Claude call per product during ingestion (`app/summarize.py`),

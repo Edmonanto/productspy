@@ -220,7 +220,7 @@ def test_billing_checkout_fails_cleanly_when_provider_unconfigured(client, monke
 # ── scoring (pure) ──────────────────────────────────────────────────────────
 @pytest.mark.parametrize(
     "price,cost,expected",
-    [(100.0, 30.0, 100), (100.0, 65.0, 50), (100.0, 100.0, 0), (None, 5.0, 0), (0.0, 0.0, 0)],
+    [(100.0, 30.0, 100), (100.0, 65.0, 50), (100.0, 100.0, 0), (None, 5.0, scoring.UNKNOWN), (0.0, 0.0, scoring.UNKNOWN)],
 )
 def test_margin_score(price, cost, expected):
     assert scoring.margin_score(price, cost) == expected

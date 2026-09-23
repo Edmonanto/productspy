@@ -1,0 +1,53 @@
+{
+ "code": "success",
+ "api": "jhzy.tiktok.shop.product.detail",
+ "charged_yuan": 0.05,
+ "data": {
+  "product_info": {
+   "product_model": {
+    "product_id": "1731547258171658742",
+    "seller_id": "7495527762152557046",
+    "sold_count": "9195",
+    "name": "CHICME Hooded Long Sleeve Sweatshirt and Casual Wide Leg Sweatpants Set"
+   },
+   "review_model": {
+    "product_overall_score": 4.6,
+    "product_review_count": "1104"
+   },
+   "seller_model": {
+    "shop_name": "chicme"
+   },
+   "promotion_model": {
+    "promotion_product_price": {
+     "min_price": {
+      "sku_id": "1731547445010010614",
+      "symbol_position": 1,
+      "show_currency_space": false,
+      "currency_show_mode": 1,
+      "currency_name": "USD",
+      "currency_symbol": "$",
+      "sale_price_decimal": "49.99",
+      "origin_price_decimal": "55.99",
+      "sale_price_format": "49.99",
+      "origin_price_format": "55.99",
+      "discount_format": "11%",
+      "discount_decimal": "0.11",
+      "price_prefix": "From",
+      "reduce_price_format": "Saving $6.00",
+      "single_product_price_format": "49.99",
+      "single_product_price_decimal": "49.99",
+      "sale_price_integer_part_format": "49",
+      "sale_price_decimal_part_format": "99",
+      "decimal_point_symbol": ".",
+      "promotion_deduction_details": {
+       "seller_subtotal_deduction": "12.00",
+       "seller_subtotal_deduction_decimal": "12"
+      },
+      "raw_origin_price_decimal": "55.99",
+      "raw_origin_price_format": "55.99"
+     }
+    }
+   }
+  }
+ }
+}

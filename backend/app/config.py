@@ -89,6 +89,30 @@ def agg1688_keywords() -> list[str]:
     return [k.strip() for k in AGG1688_KEYWORDS.split(",") if k.strip()]
 
 
+# TikTok Shop via jhzyapi aggregator. The strongest demand/trend source, and
+# the only one here reporting a real USD retail price. Each response reports
+# charged_yuan/balance_yuan, which the provider logs.
+TIKTOK_API_BASE = os.environ.get(
+    "TIKTOK_API_BASE", "https://jhzyapi.com/api/tiktok/v1/shop"
+)
+TIKTOK_TOKEN = os.environ.get("TIKTOK_TOKEN", "")
+# Search terms define the catalogue; one call returns ~30 products.
+TIKTOK_KEYWORDS = os.environ.get("TIKTOK_KEYWORDS", "")
+# Optional: pull a specific seller's catalogue (same payload shape as search).
+TIKTOK_SELLER_IDS = os.environ.get("TIKTOK_SELLER_IDS", "")
+# Detail is one call per product, so enrichment is capped. 0 disables it.
+TIKTOK_ENRICH_TOP = int(os.environ.get("TIKTOK_ENRICH_TOP", "0"))
+TIKTOK_TIMEOUT = int(os.environ.get("TIKTOK_TIMEOUT", "60"))
+
+
+def tiktok_keywords() -> list[str]:
+    return [k.strip() for k in TIKTOK_KEYWORDS.split(",") if k.strip()]
+
+
+def tiktok_seller_ids() -> list[str]:
+    return [s.strip() for s in TIKTOK_SELLER_IDS.split(",") if s.strip()]
+
+
 # 1688 quotes wholesale CNY. Converting to USD and deriving an indicative
 # retail price keeps margin scoring meaningful on wholesale-only listings.
 CNY_PER_USD = float(os.environ.get("CNY_PER_USD", "7.15"))

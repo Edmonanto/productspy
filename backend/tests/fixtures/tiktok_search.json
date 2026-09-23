@@ -1,0 +1,252 @@
+{
+ "code": "success",
+ "api": "jhzy.tiktok.shop.search",
+ "charged_yuan": "0.05",
+ "balance_yuan": "18.75",
+ "data": {
+  "count": 30,
+  "has_more": false,
+  "products": [
+   {
+    "product_id": "1730577180614234286",
+    "title": "VEVOR Large 4-tier Cat Cage,  41 x 28 x 55\", Detachable Metal Wire Cat Enclosure, with 4 Front Doors Hammock Ramp ladders, Indoor & Outdoor Crate Exercise Place Ideal for Kitty, Small Animals, Black",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/bd4b7ba18c2a4701b239433837741627~tplv-fhlh96nyum-crop-webp:1600:1600.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 1600,
+     "height": 1600
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "88.14"
+    },
+    "sold_count": 68,
+    "rating": {
+     "score": 4.1,
+     "review_count": "7"
+    },
+    "seller": {
+     "seller_id": "7495303663644608686",
+     "shop_name": "VEVOR Store"
+    },
+    "sku_count": 1
+   },
+   {
+    "product_id": "1732321774954320036",
+    "title": "Potaroma 3-Pack Catnip Chew Toys - 15000mg A+ Premium Natural Catnip, Baby-Grade Bite-Resistant Cotton Fabric, Elastic Fill, Interactive Kicker for Indoor Cats (Indoor Kitty Lifestyle, Kind Gestures, 3-Pack for Longer Play)",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/cc1a15b5e45644969e47edf08c9657b1~tplv-fhlh96nyum-crop-webp:2000:2000.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 2000,
+     "height": 2000
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "13.98"
+    },
+    "sold_count": 7567,
+    "rating": {
+     "score": 4.7,
+     "review_count": "1045"
+    },
+    "seller": {
+     "seller_id": "7495813075786500260",
+     "shop_name": "Potaroma LLC"
+    },
+    "sku_count": 2
+   },
+   {
+    "product_id": "1732243171490435521",
+    "title": "HairballGo Freeze-Dried Cat Grass Crunchy Bits for Hairball Control & Digestive Health - Chicken, Natural Barley Grass, Plant Fiber, Bamboo Cellulose - Grain-Free Kitty Treats with Hair Strengthening & Healthy Fur Support #backtoschool",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/360a744e5d57463c96534578852a72fa~tplv-fhlh96nyum-crop-webp:2000:2000.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 2000,
+     "height": 2000
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "14.87"
+    },
+    "sold_count": 10151,
+    "rating": {
+     "score": 4.3,
+     "review_count": "1316"
+    },
+    "seller": {
+     "seller_id": "7495703461522082241",
+     "shop_name": "Potaroma Pets"
+    },
+    "sku_count": 2
+   },
+   {
+    "product_id": "1732470073749245998",
+    "title": "Costoffs 82.5\" Large Cat Tree with Double Condos, Hammock & Perches, Multi-Level Indoor Cat Tower for Multi-Cat Homes",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/07732a8322d34c5ba100bfeb63b702f8~tplv-fhlh96nyum-crop-webp:1254:1254.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 1254,
+     "height": 1254
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "259.99"
+    },
+    "sold_count": 110,
+    "rating": {
+     "score": 4.5,
+     "review_count": "19"
+    },
+    "seller": {
+     "seller_id": "7496309964280465454",
+     "shop_name": "Costoffs Shop"
+    },
+    "sku_count": 4
+   },
+   {
+    "product_id": "1732086039485648942",
+    "title": "Costoffs 54in Cat Tree Tower Condo - Indoor Feline Activity Center with Vertical Scratcher, 2 Condos, 2 Dangling Balls, 3 Scratching Posts",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/3337e1391de54324b12a51dada9e26fd~tplv-fhlh96nyum-crop-webp:1254:1254.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 1254,
+     "height": 1254
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "53.99"
+    },
+    "sold_count": 412,
+    "rating": {
+     "score": 4.7,
+     "review_count": "53"
+    },
+    "seller": {
+     "seller_id": "7496309964280465454",
+     "shop_name": "Costoffs Shop"
+    },
+    "sku_count": 10
+   },
+   {
+    "product_id": "1731003417055367234",
+    "title": "Wellix Cat Treats for Indoor Cats Hairball Control Natural Salmon Healthy Cat Grass Treats Kitten Snacks Training Biscuits Catnip for Cats Dental Care 3.1/13oz,#sohochic",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/b81d5d8633a648c297c27ba28a3e542d~tplv-fhlh96nyum-crop-webp:2000:2000.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 2000,
+     "height": 2000
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "16.89"
+    },
+    "sold_count": 3235,
+    "rating": {
+     "score": 4.7,
+     "review_count": "487"
+    },
+    "seller": {
+     "seller_id": "7496065130391701570",
+     "shop_name": "Wellix"
+    },
+    "sku_count": 5
+   },
+   {
+    "product_id": "1732316153677517232",
+    "title": "Potaroma 6-Pack Durable for Gnashers Bite-Resistant Natural Silvervine Cat Chew Sticks with Textured Rope, Gall Fruit, Fresh Breath, Teeth Cleaning Dental Grooming Supplies for Kittens & Cats, Calm Relaxation",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/b71c58e6b69b446da7b0fcb22e806dcb~tplv-fhlh96nyum-crop-webp:1500:1500.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 1500,
+     "height": 1500
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "12.99"
+    },
+    "sold_count": 836,
+    "rating": {
+     "score": 4.4,
+     "review_count": "84"
+    },
+    "seller": {
+     "seller_id": "7494111707814593968",
+     "shop_name": "PawFirst Shop"
+    },
+    "sku_count": 1
+   },
+   {
+    "product_id": "1732244868750021452",
+    "title": "TAYACICY Automatic Cat Litter Box for Cats, Open-Top Self-Cleaning Litter Box with App Remote Control, 16.5\" Wide Entry, Double-Layer Detect Dual Safety Tech, 10.5L Sealed Waste Bin, Cream White",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/e5679d3486a347dab5ae2db9e6914486~tplv-fhlh96nyum-crop-webp:1600:1600.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 1600,
+     "height": 1600
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "326.99"
+    },
+    "sold_count": 239,
+    "rating": {
+     "score": 4.4,
+     "review_count": "35"
+    },
+    "seller": {
+     "seller_id": "7494158993528620876",
+     "shop_name": "TAYACICY Home"
+    },
+    "sku_count": 2
+   },
+   {
+    "product_id": "1729384335006274068",
+    "title": "Michu Natural Clumping Tofu Cat Litter  5.5lb/88oz cat litter",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/d3f36887ed2f46f0b74e7e074d627959~tplv-fhlh96nyum-crop-webp:1000:1000.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 1000,
+     "height": 1000
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "20.14"
+    },
+    "sold_count": 20592,
+    "rating": {
+     "score": 4.6,
+     "review_count": "1568"
+    },
+    "seller": {
+     "seller_id": "7495043557053663764",
+     "shop_name": "Michu Pet"
+    },
+    "sku_count": 16
+   },
+   {
+    "product_id": "1729919594933424703",
+    "title": "JUST TRY Feline Grass Treats Salmon Flavor  Cat Grass for Hairball Control, Digestive Health Support Healthy Cat Training Treats for Indoor Cats 14.1 OZ #sohochic",
+    "image": {
+     "url": "https://p16-oec-general-useast5.ttcdn-us.com/tos-useast5-i-omjb5zjo8w-tx/cf0d700e75424e34963e07a807449925~tplv-fhlh96nyum-crop-webp:1254:1254.webp?dr=12190&t=555f072d&ps=933b5bde&shp=8dbd94bf&shcp=a6e80448&idc=useast5&from=2378011839",
+     "width": 1254,
+     "height": 1254
+    },
+    "price": {
+     "currency": "USD",
+     "symbol": "$",
+     "current": "24.99"
+    },
+    "sold_count": 62674,
+    "rating": {
+     "score": 4.6,
+     "review_count": "8287"
+    },
+    "seller": {
+     "seller_id": "7495894812005861951",
+     "shop_name": "Just Try Pet US"
+    },
+    "sku_count": 12
+   }
+  ]
+ }
+}

@@ -58,7 +58,7 @@ def test_trend_handles_zero_previous_without_dividing_by_zero():
 # ── margin / competition ────────────────────────────────────────────────────
 @pytest.mark.parametrize(
     "price,cost,expected",
-    [(100.0, 30.0, 100), (100.0, 65.0, 50), (100.0, 100.0, 0), (None, 5.0, 0)],
+    [(100.0, 30.0, 100), (100.0, 65.0, 50), (100.0, 100.0, 0), (None, 5.0, scoring.UNKNOWN)],
 )
 def test_margin_score(price, cost, expected):
     assert scoring.margin_score(price, cost) == expected
@@ -154,3 +154,29 @@ def test_apify_maps_varied_field_names():
 def test_apify_skips_items_missing_identity():
     provider = ApifyProvider(actor_id="x/y", source="amazon", token="t")
     assert provider.parse([{"price": 10}, "not-a-dict", {"title": "no id"}]) == []
+
+
+# ── unknown vs genuine zero ─────────────────────────────────────────────────
+def test_unknown_margin_is_neutral_not_zero():
+    """A source that doesn't publish cost must not be buried.
+
+    TikTok reports retail with no supplier cost; 1688 the reverse. Scoring a
+    missing input as zero margin would permanently rank every TikTok product
+    below every 1688 one, for a reason that has nothing to do with the product.
+    """
+    assert scoring.margin_score(24.99, None) == scoring.UNKNOWN
+    assert scoring.margin_score(None, 4.20) == scoring.UNKNOWN
+
+
+def test_genuine_zero_margin_still_scores_zero():
+    """Price at or below cost is a real finding, not missing data."""
+    assert scoring.margin_score(10.0, 10.0) == 0
+    assert scoring.margin_score(10.0, 25.0) == 0
+
+
+def test_tiktok_shaped_product_is_not_penalised_for_missing_cost():
+    product = make_product(price_usd=13.0, cost_usd=None, ad_signals=[])
+    score = scoring.score_product(product, orders_count=279, previous_orders=None)
+    assert score.margin_score == scoring.UNKNOWN
+    # demand is real and strong; overall should reflect that, not be dragged to ~25
+    assert score.overall_score > 45
