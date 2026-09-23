@@ -128,7 +128,7 @@ def test_needs_token_and_at_least_one_source():
 def test_registry_enables_tiktok(monkeypatch):
     from app.providers.registry import enabled_providers
     for k in ("ALIBABA1688_APP_KEY","ALIBABA1688_APP_SECRET","ALIEXPRESS_APP_KEY",
-              "ALIEXPRESS_APP_SECRET","APIFY_TOKEN","AGG1688_SEARCH_URL"):
+              "ALIEXPRESS_APP_SECRET","AGG1688_SEARCH_URL"):
         monkeypatch.setattr(config, k, "")
     monkeypatch.setattr(config, "TIKTOK_TOKEN", "t")
     monkeypatch.setattr(config, "TIKTOK_KEYWORDS", "cat")

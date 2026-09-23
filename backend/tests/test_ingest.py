@@ -5,7 +5,6 @@ import pytest
 
 from app import scoring
 from app.providers.aliexpress import AliExpressProvider, _sign
-from app.providers.apify import ApifyProvider
 from app.schemas import AdSignal, Product, Score
 
 NOW = datetime.now(timezone.utc)
@@ -136,24 +135,6 @@ def test_aliexpress_returns_empty_on_error_response():
 def test_aliexpress_skips_unconfigured():
     assert AliExpressProvider(app_key="", app_secret="").configured is False
 
-
-# ── Apify ───────────────────────────────────────────────────────────────────
-def test_apify_maps_varied_field_names():
-    provider = ApifyProvider(actor_id="x/y", source="amazon", token="t")
-    [product] = provider.parse([{
-        "asin": "B01", "title": "Desk Mat", "url": "https://a.com/B01",
-        "price": "$29.99", "sold": "1,200", "adCount": 15,
-    }])
-    assert product.external_id == "B01"
-    assert product.price_usd == 29.99      # strips $
-    assert product.orders_count == 1200    # strips comma
-    assert product.ad_count == 15
-    assert product.ad_platform == "amazon"
-
-
-def test_apify_skips_items_missing_identity():
-    provider = ApifyProvider(actor_id="x/y", source="amazon", token="t")
-    assert provider.parse([{"price": 10}, "not-a-dict", {"title": "no id"}]) == []
 
 
 # ── unknown vs genuine zero ─────────────────────────────────────────────────

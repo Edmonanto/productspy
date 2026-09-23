@@ -394,6 +394,89 @@ async def find_user_by_provider_id(
     return str(row["user_id"]) if row else None
 
 
+# ── Matching ────────────────────────────────────────────────────────────────
+async def untranslated_suppliers(source: str, limit: int) -> list[asyncpg.Record]:
+    """Supplier rows whose title has not been translated yet."""
+    return await db.fetch(
+        "select id, title from products "
+        "where source = $1 and title_en is null and title is not null "
+        "order by updated_at desc limit $2",
+        source,
+        limit,
+    )
+
+
+async def save_translation(product_id: str, title_en: str) -> None:
+    await db.execute(
+        "update products set title_en = $2, translated_at = now() where id = $1",
+        product_id,
+        title_en,
+    )
+
+
+async def retail_products_for_matching(limit: int) -> list[asyncpg.Record]:
+    """Retail listings with a real price, best demand first.
+
+    Matching spends effort where the answer is worth having, so the ordering
+    is by demand rather than by recency.
+    """
+    return await db.fetch(
+        "select id, title, price_usd, source, orders_count from products "
+        "where price_usd is not null and cost_usd is null "
+        "  and source <> '1688' "
+        "order by coalesce(orders_count, 0) desc limit $1",
+        limit,
+    )
+
+
+async def supplier_candidates(limit: int) -> list[asyncpg.Record]:
+    """Translated supplier listings with a real cost."""
+    return await db.fetch(
+        "select id, title, title_en, cost_usd from products "
+        "where source = '1688' and cost_usd is not null and title_en is not null "
+        "order by coalesce(orders_count, 0) desc limit $1",
+        limit,
+    )
+
+
+async def save_match(
+    retail_id: str,
+    supplier_id: str,
+    confidence: float,
+    method: str,
+    evidence: str,
+    status: str,
+) -> None:
+    """Record a match. Re-running refreshes the score but never resurrects a
+    pair a human already rejected."""
+    await db.execute(
+        """
+        insert into product_matches (retail_id, supplier_id, confidence,
+            method, evidence, status)
+        values ($1, $2, $3, $4, $5::jsonb, $6)
+        on conflict (retail_id, supplier_id) do update set
+            confidence = excluded.confidence,
+            method = excluded.method,
+            evidence = excluded.evidence,
+            status = case when product_matches.status = 'rejected'
+                          then 'rejected' else excluded.status end
+        """,
+        retail_id,
+        supplier_id,
+        confidence,
+        method,
+        evidence,
+        status,
+    )
+
+
+async def match_counts() -> dict[str, int]:
+    rows = await db.fetch(
+        "select status, count(*) as n from product_matches group by status"
+    )
+    return {r["status"]: int(r["n"]) for r in rows}
+
+
 # ── Webhook idempotency ─────────────────────────────────────────────────────
 async def claim_billing_event(provider: str, event_id: str, event_type: str) -> bool:
     """Record an event; return False if we have already seen it.
