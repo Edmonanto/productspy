@@ -1,0 +1,63 @@
+{
+ "code": "success",
+ "api": "jhzy.amazon.search.keyword",
+ "charged_yuan": "0.05",
+ "data": {
+  "site": "US",
+  "data": {
+   "keyword": "usb c cable",
+   "page": 1,
+   "count": 22,
+   "items": [
+    {
+     "asin": "B0CG1LGWR6",
+     "title": "LISEN USB C to USB C Cable, 240W Fast Charging Type C Charger Cord (6.6FT)",
+     "price_text": "$8.99",
+     "rating_text": "4.5 out of 5 stars",
+     "reviews_text": "(11.9K)",
+     "image": "https://m.media-amazon.com/images/I/81afg0W0O8L._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0CFQ5T5F6",
+     "title": "LISEN USB C to USB C Cable 60W for iPhone 18 Pro Duo Charging Cable, 5-Pack",
+     "price_text": "$8.97",
+     "rating_text": "4.6 out of 5 stars",
+     "reviews_text": "(16.4K)",
+     "image": "https://m.media-amazon.com/images/I/8136-BraWSL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B088NRLMPV",
+     "title": "Anker USB C to USB C Cable, 60W Fast Charging Cable (2-Pack, 6 ft, Black)",
+     "price_text": "$9.99",
+     "rating_text": "4.7 out of 5 stars",
+     "reviews_text": "(88.5K)",
+     "image": "https://m.media-amazon.com/images/I/71IE9dLBduL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0CFQ5T5F6",
+     "title": "LISEN USB C to USB C Cable 60W for iPhone 18 Pro Duo Charging Cable, 5-Pack",
+     "price_text": "$8.97",
+     "rating_text": "4.6 out of 5 stars",
+     "reviews_text": "(16.4K)",
+     "image": "https://m.media-amazon.com/images/I/8136-BraWSL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0HG4Y6PX5",
+     "title": "Android Auto USB C Cable 3ft, USB A to USB C Car Charging Cord for CarPlay",
+     "price_text": "$5.99",
+     "rating_text": "",
+     "reviews_text": "",
+     "image": "https://m.media-amazon.com/images/I/814vuS1MweL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0CG1LGWR6",
+     "title": "LISEN USB C to USB C Cable, 240W Fast Charging Type C Charger Cord (6.6FT)",
+     "price_text": "$8.99",
+     "rating_text": "4.5 out of 5 stars",
+     "reviews_text": "(11.9K)",
+     "image": "https://m.media-amazon.com/images/I/81afg0W0O8L._AC_UY218_.jpg"
+    }
+   ]
+  }
+ }
+}

@@ -113,6 +113,43 @@ def tiktok_seller_ids() -> list[str]:
     return [s.strip() for s in TIKTOK_SELLER_IDS.split(",") if s.strip()]
 
 
+# Amazon via jhzyapi, across marketplaces. The retail price anchor: 1688
+# gives cost with no retail, Amazon gives retail with no cost.
+AMAZON_API_BASE = os.environ.get(
+    "AMAZON_API_BASE", "https://jhzyapi.com/api/amazon/v1"
+)
+AMAZON_TOKEN = os.environ.get("AMAZON_TOKEN", "")
+AMAZON_KEYWORDS = os.environ.get("AMAZON_KEYWORDS", "")
+AMAZON_SITES = os.environ.get("AMAZON_SITES", "US")
+AMAZON_TIMEOUT = int(os.environ.get("AMAZON_TIMEOUT", "60"))
+
+# FX to USD. Non-USD marketplaces are priced in their own currency, and an
+# unconverted price is worse than none — margin would read 229 EUR as 229 USD.
+USD_PER_GBP = float(os.environ.get("USD_PER_GBP", "1.27"))
+USD_PER_EUR = float(os.environ.get("USD_PER_EUR", "1.08"))
+USD_PER_CAD = float(os.environ.get("USD_PER_CAD", "0.73"))
+USD_PER_AUD = float(os.environ.get("USD_PER_AUD", "0.66"))
+
+
+def amazon_keywords() -> list[str]:
+    return [k.strip() for k in AMAZON_KEYWORDS.split(",") if k.strip()]
+
+
+def amazon_sites() -> list[str]:
+    return [s.strip().upper() for s in AMAZON_SITES.split(",") if s.strip()]
+
+
+def usd_rates() -> dict[str, float]:
+    """Multiplier from each currency to USD. Unlisted -> price dropped."""
+    return {
+        "USD": 1.0,
+        "GBP": USD_PER_GBP,
+        "EUR": USD_PER_EUR,
+        "CAD": USD_PER_CAD,
+        "AUD": USD_PER_AUD,
+    }
+
+
 # 1688 quotes wholesale CNY. Converting to USD and deriving an indicative
 # retail price keeps margin scoring meaningful on wholesale-only listings.
 CNY_PER_USD = float(os.environ.get("CNY_PER_USD", "7.15"))

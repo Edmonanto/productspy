@@ -1,0 +1,44 @@
+{
+ "code": "success",
+ "api": "jhzy.amazon.product.detail",
+ "data": {
+  "site": "DE",
+  "data": {
+   "id": "B09G9FPHY6",
+   "asin": "B09G9FPHY6",
+   "title": "Apple iPad (9th Generation): with A13 Bionic chip, 10.2-inch Retina Display, 64GB, Wi-Fi, 12MP front/8MP Back Camera, Touch ID, All-Day Battery Life – Space Gray",
+   "price_text": "229,99€",
+   "rating_text": "4,8 von 5 Sternen",
+   "review_count_text": "(36.976)",
+   "brand": "Besuche den Apple-Store",
+   "link": "https://www.amazon.de/dp/B09G9FPHY6",
+   "shipping": {
+    "amount": null,
+    "currency": "EUR",
+    "is_unconditionally_free": false,
+    "condition_applies": false,
+    "text": ""
+   },
+   "categories": [
+    "Computer & Zubehör",
+    "Tablet PCs"
+   ],
+   "images": [
+    "https://m.media-amazon.com/images/I/31+KEhn35VL._AC_US40_.jpg",
+    "https://m.media-amazon.com/images/I/41A67yeDecL._AC_US40_.jpg",
+    "https://m.media-amazon.com/images/I/31zWSAS-EAL._AC_US40_.jpg",
+    "https://m.media-amazon.com/images/I/31wFxVqwUsL._AC_US40_.jpg",
+    "https://m.media-amazon.com/images/I/317LiqK1rpL._AC_US40_.jpg",
+    "https://m.media-amazon.com/images/I/61NGnpjoRDL._AC_SL1500_.jpg",
+    "https://m.media-amazon.com/images/I/61NGnpjoRDL._AC_SX679_.jpg",
+    "https://m.media-amazon.com/images/I/61NGnpjoRDL._AC_SX569_.jpg",
+    "https://m.media-amazon.com/images/I/61NGnpjoRDL._AC_SX522_.jpg",
+    "https://m.media-amazon.com/images/I/61NGnpjoRDL._AC_SX466_.jpg",
+    "https://m.media-amazon.com/images/I/61NGnpjoRDL._AC_SY450_.jpg",
+    "https://m.media-amazon.com/images/I/61NGnpjoRDL._AC_SX425_.jpg",
+    "https://m.media-amazon.com/images/I/61NGnpjoRDL._AC_SY355_.jpg",
+    "https://m.media-amazon.com/images/I/61NGnpjoRDL._AC_SY300_SX300_QL70_ML2_.jpg"
+   ]
+  }
+ }
+}

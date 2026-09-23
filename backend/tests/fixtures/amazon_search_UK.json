@@ -1,0 +1,63 @@
+{
+ "code": "success",
+ "api": "jhzy.amazon.search.keyword",
+ "charged_yuan": "0.05",
+ "data": {
+  "site": "UK",
+  "data": {
+   "keyword": "usb c cable",
+   "page": 1,
+   "count": 22,
+   "items": [
+    {
+     "asin": "B07BC6S83T",
+     "title": "JSAUX USB C Cable for iPhone 18 Pro Carplay, Samsung Galaxy, 2m 2-Pack, Red",
+     "price_text": "£8.99",
+     "rating_text": "4.6 out of 5 stars",
+     "reviews_text": "(45.4K)",
+     "image": "https://m.media-amazon.com/images/I/81gZOUOvUxL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0CLNNP421",
+     "title": "USB C to USB C Charger Cable 3M, 60W Braided Long Apple USBC Fast Charging Cable 10ft for iPhone 18/17 Pro/17e/16e/16 Pro Max/15 Plus, Duo, MacBook, iPad Pro Air/Mini",
+     "price_text": "£11.99",
+     "rating_text": "4.5 out of 5 stars",
+     "reviews_text": "(287)",
+     "image": "https://m.media-amazon.com/images/I/61Com6ehrbL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0DTQ95X65",
+     "title": "USB C to USB C Cable for IPhone 18/17/16/15, Fast Charger USB C for IPhone 18 Pro Max/Duo/Fold/17Air/16/Plus/16E/17e,Charging Lead for iPad Pro 10/11th,Google Pixel 11/10/9/8/7/6,Samsung Galaxy Z Flip",
+     "price_text": "£6.99",
+     "rating_text": "4.3 out of 5 stars",
+     "reviews_text": "(1.2K)",
+     "image": "https://m.media-amazon.com/images/I/41-vgik+kLL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B088NRLMPV",
+     "title": "Anker USB C to USB C Charger Cable, 60W (3A) New Nylon (6 ft/1.8m, 2-Pack)",
+     "price_text": "£9.49",
+     "rating_text": "4.6 out of 5 stars",
+     "reviews_text": "(85.7K)",
+     "image": "https://m.media-amazon.com/images/I/71qtyvZl41L._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B0DXDTX47W",
+     "title": "Anker 240W Zolo USB C to USB C Cable (2Pack,1.8m), USB C Charger Cable",
+     "price_text": "£9.99",
+     "rating_text": "4.7 out of 5 stars",
+     "reviews_text": "(6.8K)",
+     "image": "https://m.media-amazon.com/images/I/7118kMkU5rL._AC_UY218_.jpg"
+    },
+    {
+     "asin": "B07DD5YHMH",
+     "title": "Anker USB C Charger Cable, 2-Pack 3 ft (0.9 m) USB to USB C Cable",
+     "price_text": "£6.49",
+     "rating_text": "4.6 out of 5 stars",
+     "reviews_text": "(150.7K)",
+     "image": "https://m.media-amazon.com/images/I/71b2ahim+-L._AC_UY218_.jpg"
+    }
+   ]
+  }
+ }
+}
