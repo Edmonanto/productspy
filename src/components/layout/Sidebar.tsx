@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  TrendingUp, Bookmark, Search, LayoutDashboard,
+  TrendingUp, Bookmark, Search, LayoutDashboard, GitCompareArrows,
   CreditCard, Settings, Zap, LogOut, X, Menu
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/trending", icon: TrendingUp, label: "Trending" },
   { href: "/dashboard/search", icon: Search, label: "Search" },
   { href: "/dashboard/watchlist", icon: Bookmark, label: "Watchlist" },
+  { href: "/dashboard/matches", icon: GitCompareArrows, label: "Match review" },
 ];
 
 const BOTTOM_ITEMS = [

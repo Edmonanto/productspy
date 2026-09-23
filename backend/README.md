@@ -65,6 +65,8 @@ The grammar checks skip cleanly when `pglast` isn't installed.
 | `POST /billing/checkout` `portal` `cancel` | done — Stripe + PayPal |
 | `POST /billing/webhook/{stripe,paypal}` | done — signature-verified, idempotent |
 | `python -m app.ingest.worker` | done — scheduled ingestion + scoring + summaries |
+| `python -m app.matching.runner` | done — translate + match, writes candidates |
+| `GET /matches/` `POST /{id}/confirm` `reject` | done — review queue; confirm applies the cost |
 
 ## Ingestion (the engine)
 
@@ -280,6 +282,12 @@ Supplier titles are translated once via Claude (batched ~40 per call, cached
 on the row, needs `ANTHROPIC_API_KEY`) because 1688 titles are Chinese and
 keyword-stuffed. Without translation there is no text signal and nothing
 matches.
+
+Review happens at **/dashboard/matches**. Confirming applies the supplier's
+cost to the retail listing and rescores it immediately, so an unknown margin
+becomes an observed one without waiting for the next ingestion run. Rejecting
+is sticky. Listing never writes anything — the margin shown there is a
+preview labelled "if confirmed".
 
 > **Thresholds are provisional.** They are tuned against realistic fixtures,
 > not measured precision. The review queue exists partly to produce that

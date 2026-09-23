@@ -35,7 +35,7 @@ export default function ForgotPasswordPage() {
           </div>
           <div className="text-center">
             <h1 className="text-white font-bold text-2xl">Reset your password</h1>
-            <p className="text-zinc-500 text-sm mt-1">We'll send you a reset link</p>
+            <p className="text-zinc-500 text-sm mt-1">We&apos;ll send you a reset link</p>
           </div>
         </div>
 
@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
                 </p>
               </div>
               <p className="text-zinc-600 text-xs">
-                Didn't receive it? Check spam or{" "}
+                Didn&apos;t receive it? Check spam or{" "}
                 <button onClick={() => setSent(false)} className="text-violet-400 hover:text-violet-300">
                   try again
                 </button>
