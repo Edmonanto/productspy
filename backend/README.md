@@ -24,7 +24,7 @@ cd backend
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # fill in DATABASE_URL + SUPABASE_JWT_SECRET
-psql "$DATABASE_URL" -f migrations/001_init.sql
+python -m app.migrate      # applies every migration, idempotent
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -67,6 +67,26 @@ The grammar checks skip cleanly when `pglast` isn't installed.
 | `python -m app.ingest.worker` | done — scheduled ingestion + scoring + summaries |
 | `python -m app.matching.runner` | done — translate + match, writes candidates |
 | `GET /matches/` `POST /{id}/confirm` `reject` | done — review queue; confirm applies the cost |
+
+## Migrations
+
+```bash
+python -m app.migrate
+```
+
+Applies every file in `migrations/` in filename order and records each in a
+`schema_migrations` ledger. All the SQL is idempotent, so re-running is
+harmless — the ledger exists so a deploy reports *which* migrations it
+applied instead of silently re-executing everything.
+
+A migration whose content changed after being applied is re-applied with a
+warning rather than skipped: a checksum drift means the database and this
+checkout disagree, and that should be visible.
+
+It exits non-zero on failure, and the ingest cron chains it with `&&`, so a
+broken migration stops the run instead of letting the worker write against a
+stale schema. Render's `preDeployCommand` would be the natural home for this,
+but it needs a paid instance type and the API runs on the free plan.
 
 ## Ingestion (the engine)
 

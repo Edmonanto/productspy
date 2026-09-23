@@ -2,10 +2,10 @@
 # The Next.js frontend deploys separately on Vercel — it is not in here.
 #
 # This file MUST live at the repository root: Render only reads a Blueprint
-# from the root, regardless of where the service's rootDir points.
+# from the root, regardless of where a service's rootDir points.
 #
 # Both services read secrets from the "ProductSpy Env" env group, which must
-# be created and linked in the Render dashboard before the first deploy.
+# exist under that exact name before the first deploy.
 
 services:
   # ── API ───────────────────────────────────────────────────────────────
@@ -26,9 +26,15 @@ services:
       - fromGroup: ProductSpy Env
 
   # ── Ingestion worker ──────────────────────────────────────────────────
-  # Runs every 6 hours. Each run snapshots every product it sees, which is
-  # what trend scoring is computed from — so the schedule is the data asset,
-  # not just a refresh. Cron jobs are a paid Render feature.
+  # Every 6 hours. Each run snapshots every product it sees, which is what
+  # trend scoring is computed from — so the schedule is the data asset, not
+  # just a refresh.
+  #
+  # Migrations run first. They are idempotent and tracked in
+  # schema_migrations, so this costs nothing when the schema is current but
+  # guarantees ingestion never runs against a stale one. Render's
+  # preDeployCommand would be the natural home for this, but it requires a
+  # paid instance type and the API above is on the free plan.
   - type: cron
     name: productspy-ingest
     runtime: python
@@ -36,7 +42,27 @@ services:
     plan: starter
     schedule: "0 */6 * * *"
     buildCommand: pip install -r requirements.txt
-    startCommand: python -m app.ingest.worker
+    startCommand: python -m app.migrate && python -m app.ingest.worker
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.4"
+      - fromGroup: ProductSpy Env
+
+  # ── Matching worker ───────────────────────────────────────────────────
+  # Runs 30 minutes after each ingestion so it scores products that run just
+  # wrote, rather than racing it.
+  #
+  # Needs ANTHROPIC_API_KEY: 1688 titles are Chinese, and without translation
+  # there is no text signal, so the queue stays empty. Writes candidates only
+  # — no score changes until a human confirms at /dashboard/matches.
+  - type: cron
+    name: productspy-match
+    runtime: python
+    rootDir: backend
+    plan: starter
+    schedule: "30 */6 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m app.matching.runner
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.4"
