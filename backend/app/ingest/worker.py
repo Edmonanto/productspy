@@ -83,8 +83,8 @@ async def run(limit: int = config.INGEST_LIMIT) -> dict[str, int]:
     providers = enabled_providers()
     if not providers:
         log.error(
-            "No providers configured. Set ALIEXPRESS_APP_KEY/SECRET or "
-            "APIFY_TOKEN — see backend/README.md."
+            "No providers configured. Set TIKTOK_TOKEN, AMAZON_TOKEN or "
+            "AGG1688_SEARCH_TOKEN — see backend/README.md."
         )
         return {"fetched": 0, "upserted": 0, "scored": 0, "summarized": 0}
 

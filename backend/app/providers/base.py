@@ -2,7 +2,7 @@
 
 A provider fetches raw products from one source. Everything downstream
 (normalising, upserting, snapshotting, scoring) is provider-agnostic, so
-swapping AliExpress for Apify — or adding Keepa later — is a config change.
+swapping one source for another — or adding a new marketplace — is a config change.
 """
 from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable

@@ -247,6 +247,44 @@ written only when a product has none, so re-runs cost nothing. Set
 `ANTHROPIC_API_KEY` to enable it; without it, ingestion runs and summaries stay
 empty. Model via `ANTHROPIC_MODEL` (default `claude-opus-5`).
 
+## Matching (cross-platform, v1)
+
+```bash
+python -m app.matching.runner
+```
+
+Links a retail listing (TikTok/Amazon: real price, no cost) to a supplier
+listing (1688: real cost, no retail), so margin can come from two observed
+numbers instead of the `cost x WHOLESALE_MARKUP` guess.
+
+**A wrong match is worse than no match** — it would report a confident margin
+on a pairing that doesn't exist, and a subscriber could order against it.
+Everything below follows from that:
+
+* **v1 never auto-confirms.** Confidence is hard-capped at 0.75 against a
+  0.85 confirm threshold, so every v1 match lands in a review queue and no
+  score changes automatically. Auto-confirm needs image evidence, which v1
+  does not have — the cap makes that structural, not a tuning choice.
+* **Price ratio is a veto, never evidence.** A retail/cost ratio outside
+  1.5-15x kills the match; a plausible ratio alone never creates one.
+* **Shared tokens must be distinctive.** "Premium Pet Bed" and "new pet bed"
+  share 100% of their content words and mean nothing. Category words are
+  derived from the supplier corpus by document frequency rather than a
+  hand-curated list, so the notion tracks your catalogue.
+* **Evidence is stored on every match** — shared tokens, scores, the
+  translated title. A bad margin months from now has to be debuggable.
+* Rejecting a match is sticky: re-running refreshes scores but never
+  resurrects a pair a human already rejected.
+
+Supplier titles are translated once via Claude (batched ~40 per call, cached
+on the row, needs `ANTHROPIC_API_KEY`) because 1688 titles are Chinese and
+keyword-stuffed. Without translation there is no text signal and nothing
+matches.
+
+> **Thresholds are provisional.** They are tuned against realistic fixtures,
+> not measured precision. The review queue exists partly to produce that
+> measurement before v2 raises confidence high enough to auto-apply margins.
+
 ## Billing
 
 Stripe and PayPal, selected per checkout by the `provider` query param the
