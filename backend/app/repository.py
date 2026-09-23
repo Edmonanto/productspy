@@ -11,7 +11,7 @@ from .schemas import AdSignal, Product, Score, Subscription, Supplier
 _PRODUCT_SELECT = """
     select
         p.id, p.title, p.image_url, p.product_url, p.category,
-        p.price_usd, p.cost_usd, p.source,
+        p.price_usd, p.cost_usd, p.source, p.external_id, p.images, p.sales_count,
         s.overall_score, s.demand_score, s.margin_score,
         s.competition_score, s.trend_score, s.ai_summary,
         coalesce(sup.items, '[]'::json) as suppliers,
@@ -62,6 +62,9 @@ def _to_product(row: asyncpg.Record) -> Product:
         price_usd=float(row["price_usd"]) if row["price_usd"] is not None else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
         source=row["source"],
+        external_id=row["external_id"],
+        images=list(row["images"] or []),
+        sales_count=row["sales_count"],
         score=score,
         suppliers=suppliers,
         ad_signals=ad_signals,
@@ -99,29 +102,194 @@ async def trending(
     return [_to_product(r) for r in rows], int(total or 0)
 
 
-async def search(q: str, min_score: int = 40, limit: int = 40) -> tuple[list[Product], int]:
-    rows = await db.fetch(
-        f"{_PRODUCT_SELECT} "
-        f"where p.title ilike '%' || $1 || '%' "
-        f"  and coalesce(s.overall_score, 0) >= $2 "
-        f"order by s.overall_score desc nulls last limit $3",
-        q,
-        min_score,
-        limit,
-    )
-    total = await db.fetchval(
-        "select count(*) from products p "
-        "left join product_scores s on s.product_id = p.id "
-        "where p.title ilike '%' || $1 || '%' and coalesce(s.overall_score, 0) >= $2",
-        q,
-        min_score,
-    )
-    return [_to_product(r) for r in rows], int(total or 0)
-
-
 async def get_product(product_id: str) -> Product | None:
-    row = await db.fetchrow(f"{_PRODUCT_SELECT} where p.id = $1", product_id)
+    row = await db.fetchrow(f"{_PRODUCT_SELECT} where p.id = $1::uuid", product_id)
     return _to_product(row) if row else None
+
+
+async def get_product_by_external(source: str, external_id: str) -> Product | None:
+    row = await db.fetchrow(
+        f"{_PRODUCT_SELECT} where p.source = $1 and p.external_id = $2", source, external_id
+    )
+    return _to_product(row) if row else None
+
+
+async def products_by_external_ids(source: str, external_ids: list[str]) -> list[Product]:
+    """Products for these ids, in the given order (search result ranking)."""
+    if not external_ids:
+        return []
+    rows = await db.fetch(
+        f"{_PRODUCT_SELECT} where p.source = $1 and p.external_id = any($2::text[])",
+        source,
+        external_ids,
+    )
+    by_id = {r["external_id"]: _to_product(r) for r in rows}
+    return [by_id[e] for e in external_ids if e in by_id]
+
+
+# ── 1688 ingest ─────────────────────────────────────────────────────────────
+async def upsert_product(
+    *,
+    source: str,
+    external_id: str,
+    title: str,
+    image_url: str | None,
+    product_url: str,
+    category: str | None,
+    price_cny: float | None,
+    cost_usd: float | None,
+    price_usd: float | None,
+    sales_count: int | None,
+    repurchase_rate: float | None,
+    is_ad: bool | None,
+    details: dict[str, Any],
+) -> str:
+    """Insert or refresh a product; returns its id.
+
+    A re-seen product keeps its category if this sighting has none (a user's
+    free-text search should not wipe the worker's category), and `details` is
+    merged so search-level fields never erase detail-level ones.
+    """
+    import json
+
+    product_id = await db.fetchval(
+        """
+        insert into products (source, external_id, title, image_url, product_url,
+            category, price_cny, cost_usd, price_usd, sales_count, repurchase_rate,
+            is_ad, details, updated_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+                coalesce($12::boolean, false), $13::jsonb, now())
+        on conflict (source, external_id) do update set
+            title           = excluded.title,
+            image_url       = coalesce(excluded.image_url, products.image_url),
+            product_url     = excluded.product_url,
+            category        = coalesce(excluded.category, products.category),
+            price_cny       = coalesce(excluded.price_cny, products.price_cny),
+            cost_usd        = coalesce(excluded.cost_usd, products.cost_usd),
+            price_usd       = coalesce(excluded.price_usd, products.price_usd),
+            sales_count     = coalesce(excluded.sales_count, products.sales_count),
+            repurchase_rate = coalesce(excluded.repurchase_rate, products.repurchase_rate),
+            is_ad           = coalesce($12::boolean, products.is_ad),
+            details         = products.details || excluded.details,
+            updated_at      = now()
+        returning id
+        """,
+        source, external_id, title, image_url, product_url, category, price_cny,
+        cost_usd, price_usd, sales_count, repurchase_rate, is_ad, json.dumps(details),
+    )
+    return str(product_id)
+
+
+async def apply_detail(
+    product_id: str, *, images: list[str], details: dict[str, Any]
+) -> None:
+    import json
+
+    await db.execute(
+        """
+        update products set
+            images = $2::text[],
+            details = details || $3::jsonb,
+            detail_fetched_at = now(),
+            updated_at = now()
+        where id = $1::uuid
+        """,
+        product_id, images, json.dumps(details),
+    )
+
+
+async def detail_fetched_at(product_id: str) -> Any:
+    return await db.fetchval(
+        "select detail_fetched_at from products where id = $1::uuid", product_id
+    )
+
+
+async def upsert_supplier(
+    product_id: str,
+    *,
+    platform: str,
+    supplier_name: str,
+    supplier_url: str,
+    unit_cost_usd: float,
+    shipping_days: int,
+    rating: float,
+) -> None:
+    await db.execute(
+        """
+        insert into suppliers (product_id, platform, supplier_name, supplier_url,
+            unit_cost_usd, shipping_days, rating)
+        values ($1::uuid, $2, $3, $4, $5, $6, $7)
+        on conflict (product_id, platform) do update set
+            supplier_name = excluded.supplier_name,
+            supplier_url  = excluded.supplier_url,
+            unit_cost_usd = excluded.unit_cost_usd,
+            shipping_days = case when excluded.shipping_days > 0
+                                 then excluded.shipping_days else suppliers.shipping_days end,
+            rating        = excluded.rating
+        """,
+        product_id, platform, supplier_name, supplier_url, unit_cost_usd, shipping_days, rating,
+    )
+
+
+async def record_snapshot(product_id: str, sales_count: int | None, price_cny: float | None) -> None:
+    """One row per product per UTC day; the latest sighting that day wins."""
+    await db.execute(
+        """
+        insert into product_snapshots (product_id, sales_count, price_cny)
+        values ($1::uuid, $2, $3)
+        on conflict (product_id, captured_on) do update set
+            sales_count = coalesce(excluded.sales_count, product_snapshots.sales_count),
+            price_cny   = coalesce(excluded.price_cny, product_snapshots.price_cny)
+        """,
+        product_id, sales_count, price_cny,
+    )
+
+
+async def scoring_inputs(product_id: str) -> asyncpg.Record | None:
+    """Raw signals for scoring, plus the last 30 days of snapshots."""
+    return await db.fetchrow(
+        """
+        select p.sales_count, p.repurchase_rate, p.cost_usd,
+               p.details ->> 'location' as location,
+               coalesce((
+                   select json_agg(json_build_object('day', x.captured_on, 'sales', x.sales_count))
+                   from product_snapshots x
+                   where x.product_id = p.id
+                     and x.captured_on >= (now() at time zone 'utc')::date - 30
+               ), '[]'::json) as snapshots
+        from products p where p.id = $1::uuid
+        """,
+        product_id,
+    )
+
+
+# ── Search cache ────────────────────────────────────────────────────────────
+async def cached_search(keyword: str, page: int, max_age_hours: float) -> asyncpg.Record | None:
+    return await db.fetchrow(
+        """
+        select total_found, has_more, offer_ids from search_cache
+        where keyword = $1 and page = $2
+          and fetched_at > now() - make_interval(secs => $3)
+        """,
+        keyword, page, max_age_hours * 3600,
+    )
+
+
+async def store_search(
+    keyword: str, page: int, total_found: int, has_more: bool, offer_ids: list[str]
+) -> None:
+    await db.execute(
+        """
+        insert into search_cache (keyword, page, total_found, has_more, offer_ids, fetched_at)
+        values ($1, $2, $3, $4, $5::text[], now())
+        on conflict (keyword, page) do update set
+            total_found = excluded.total_found,
+            has_more    = excluded.has_more,
+            offer_ids   = excluded.offer_ids,
+            fetched_at  = now()
+        """,
+        keyword, page, total_found, has_more, offer_ids,
+    )
 
 
 async def save_score(product_id: str, score: Score) -> None:

@@ -8,7 +8,7 @@ import ProductCard from "@/components/products/ProductCard";
 import Topbar from "@/components/layout/Topbar";
 import { SlidersHorizontal, RefreshCw } from "lucide-react";
 
-const SOURCES = ["all", "aliexpress", "tiktok", "amazon"];
+const SOURCES = ["all", "1688"];
 const CATEGORIES = ["all", "beauty", "electronics", "fashion", "home", "pets", "fitness"];
 
 export default function TrendingPage() {

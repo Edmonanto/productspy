@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from .. import quota, repository
 from ..auth import CurrentUser, current_user
 from ..schemas import WatchlistItem, WatchlistResponse
+from ..services import catalog
 
 router = APIRouter(prefix="/watchlist", tags=["watchlist"])
 
@@ -23,13 +24,14 @@ async def list_watchlist(user: CurrentUser = Depends(current_user)) -> Watchlist
 async def add_to_watchlist(
     product_id: str, user: CurrentUser = Depends(current_user)
 ) -> dict[str, str]:
-    if await repository.get_product(product_id) is None:
+    product = await catalog.get_product(product_id)
+    if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
 
     subscription, _ = await repository.subscription(user.id)
     await quota.enforce_watchlist_limit(user.id, subscription.plan)
 
-    await repository.watchlist_add(user.id, product_id)
+    await repository.watchlist_add(user.id, product.id)
     return {"message": "Added to watchlist"}
 
 

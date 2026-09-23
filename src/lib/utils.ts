@@ -37,6 +37,7 @@ export function estimatedMargin(price: number | null, cost: number | null): stri
 
 export function sourceIcon(source: string): string {
   const map: Record<string, string> = {
+    "1688": "🏭",
     aliexpress: "🛒",
     tiktok: "🎵",
     amazon: "📦",

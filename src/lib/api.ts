@@ -54,6 +54,9 @@ export interface Product {
   price_usd: number | null;
   cost_usd: number | null;
   source: string;
+  external_id?: string | null; // 1688 offer id
+  images?: string[];
+  sales_count?: number | null;
   score: {
     overall_score: number;
     demand_score: number;

@@ -41,6 +41,9 @@ class Product(BaseModel):
     price_usd: float | None
     cost_usd: float | None
     source: str
+    external_id: str | None = None     # 1688 offer id
+    images: list[str] = []
+    sales_count: int | None = None
     score: Score | None
     suppliers: list[Supplier] = []
     ad_signals: list[AdSignal] = []

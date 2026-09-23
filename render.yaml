@@ -1,0 +1,81 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Dashboard -> New -> Blueprint -> pick this repo. Render creates everything
+# below and prompts once for each `sync: false` value (secrets never live here).
+#
+# Postgres stays on Supabase (auth already lives there), so no Render database.
+# Region is Singapore: the 1688 data endpoints are hosted in mainland China and
+# Singapore is Render's closest region to them.
+
+envVarGroups:
+  # Shared by the API and the ingest cron so both hit the same DB and tokens.
+  - name: productspy-backend
+    envVars:
+      - key: DATABASE_URL          # Supabase -> Project Settings -> Database (pooler URI)
+        sync: false
+      - key: ALI1688_SEARCH_TOKEN
+        sync: false
+      - key: ALI1688_DETAIL_TOKEN
+        sync: false
+      - key: CNY_TO_USD
+        value: "0.14"
+
+services:
+  # ── FastAPI backend ──────────────────────────────────────────────────────
+  - type: web
+    name: productspy-api
+    runtime: docker
+    region: singapore
+    plan: free                     # free instances sleep after 15 min idle; use starter for production
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths: ["backend/**"]
+    envVars:
+      - fromGroup: productspy-backend
+      - key: SUPABASE_JWT_SECRET   # Supabase -> Project Settings -> API -> JWT Secret
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://productspy.pro,https://www.productspy.pro,https://productspy-web.onrender.com
+
+  # ── Next.js frontend ─────────────────────────────────────────────────────
+  # NEXT_PUBLIC_* values are compiled into the bundle: Render passes env vars
+  # to the Docker build as build args, so changing one needs a redeploy.
+  - type: web
+    name: productspy-web
+    runtime: docker
+    region: singapore
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    autoDeploy: true
+    buildFilter:
+      ignoredPaths: ["backend/**"]
+    envVars:
+      - key: PORT
+        value: "3000"
+      - key: NEXT_PUBLIC_API_URL   # e.g. https://productspy-api.onrender.com/api/v1
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_ANON_KEY
+        sync: false
+
+  # ── 1688 ingest (fills /products/trending) ───────────────────────────────
+  # One search call per seed keyword in app/config.py TRENDING_KEYWORDS per run.
+  # The 1688 tokens are metered, so this runs once a day; raise with care.
+  - type: cron
+    name: productspy-ingest
+    runtime: docker
+    region: singapore
+    plan: starter                  # Render cron jobs have no free tier
+    schedule: "0 2 * * *"          # 02:00 UTC daily
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    dockerCommand: python -m app.worker
+    buildFilter:
+      paths: ["backend/**"]
+    envVars:
+      - fromGroup: productspy-backend

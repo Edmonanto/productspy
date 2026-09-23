@@ -7,10 +7,12 @@ from datetime import datetime, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from app import db, quota, repository, scoring
+from app import db, repository, scoring
 from app.auth import CurrentUser, current_user
 from app.main import app
 from app.schemas import AdSignal, Product, Score, Subscription
+from app.services import catalog
+from app.sources.ali1688 import Ali1688Error
 
 USER = CurrentUser(id="11111111-1111-1111-1111-111111111111", email="e@x.com",
                    name="Edmond", avatar_url=None)
@@ -107,7 +109,7 @@ def test_trending_shape(client, monkeypatch):
     assert p["score"]["overall_score"] == 80
 
 
-def test_search_consumes_quota(client, monkeypatch):
+def _search_setup(monkeypatch, search):
     monkeypatch.setattr(repository, "subscription", lambda uid: _free_plan())
     calls = {"inc": 0}
 
@@ -118,15 +120,39 @@ def test_search_consumes_quota(client, monkeypatch):
         calls["inc"] += 1
         return 1
 
-    async def search(*a, **k):
-        return [PRODUCT], 1
-
     monkeypatch.setattr(repository, "searches_used_today", used)
     monkeypatch.setattr(repository, "increment_search", inc)
-    monkeypatch.setattr(repository, "search", search)
+    monkeypatch.setattr(catalog, "search", search)
+    return calls
 
-    assert client.get("/api/v1/products/search?q=collar").status_code == 200
+
+def test_search_consumes_quota(client, monkeypatch):
+    async def search(*a, **k):
+        return [PRODUCT], 2000
+
+    calls = _search_setup(monkeypatch, search)
+    body = client.get("/api/v1/products/search?q=衣服").json()
+    assert body["products"][0]["id"] == PRODUCT.id
     assert calls["inc"] == 1
+
+
+def test_search_filters_by_min_score(client, monkeypatch):
+    async def search(*a, **k):
+        return [PRODUCT], 2000  # overall 80
+
+    _search_setup(monkeypatch, search)
+    assert client.get("/api/v1/products/search?q=x&min_score=90").json()["total"] == 0
+
+
+def test_search_upstream_failure_is_502_and_free(client, monkeypatch):
+    async def search(*a, **k):
+        raise Ali1688Error("token次数不足")
+
+    calls = _search_setup(monkeypatch, search)
+    res = client.get("/api/v1/products/search?q=x")
+    assert res.status_code == 502
+    assert "detail" in res.json()
+    assert calls["inc"] == 0  # user is not charged for our provider's failure
 
 
 def test_search_blocked_when_quota_exhausted(client, monkeypatch):
@@ -142,31 +168,41 @@ def test_search_blocked_when_quota_exhausted(client, monkeypatch):
     assert "limit" in res.json()["detail"].lower()
 
 
-def test_product_404(client, monkeypatch):
+def test_product_404_for_garbage_id(client):
+    # Neither a uuid nor a 1688 offer id: rejected without touching the DB.
+    assert client.get("/api/v1/products/nope").status_code == 404
+
+
+def test_product_404_when_missing(client, monkeypatch):
     async def get_product(_pid):
         return None
 
     monkeypatch.setattr(repository, "get_product", get_product)
-    assert client.get("/api/v1/products/nope").status_code == 404
+    assert client.get(f"/api/v1/products/{PRODUCT.id}").status_code == 404
 
 
 def test_rescore_persists(client, monkeypatch):
     saved = {}
 
     async def get_product(_pid):
-        return PRODUCT
+        return PRODUCT  # source "aliexpress": no 1688 detail refresh
+
+    async def scoring_inputs(_pid):
+        return {"sales_count": 7900, "repurchase_rate": 0.12, "cost_usd": 1.5,
+                "location": "广东 惠州市", "snapshots": "[]"}
 
     async def save_score(pid, score):
         saved["pid"], saved["score"] = pid, score
 
     monkeypatch.setattr(repository, "get_product", get_product)
+    monkeypatch.setattr(repository, "scoring_inputs", scoring_inputs)
     monkeypatch.setattr(repository, "save_score", save_score)
 
     body = client.post(f"/api/v1/products/{PRODUCT.id}/rescore").json()
-    assert "score" in body
     assert saved["pid"] == PRODUCT.id
-    # margin = (24.99-4.20)/24.99 = 83% -> saturates at 100
-    assert body["score"]["margin_score"] == 100
+    assert body["score"]["margin_score"] == 100    # $1.50 unit cost
+    assert body["score"]["trend_score"] == 50      # no snapshot history yet
+    assert "7,900+ sold on 1688" in body["score"]["ai_summary"]
 
 
 # ── watchlist ───────────────────────────────────────────────────────────────
@@ -200,22 +236,10 @@ def test_billing_checkout_not_implemented(client):
     assert "detail" in res.json()  # frontend surfaces error.detail
 
 
-# ── scoring (pure) ──────────────────────────────────────────────────────────
-@pytest.mark.parametrize(
-    "price,cost,expected",
-    [(100.0, 30.0, 100), (100.0, 65.0, 50), (100.0, 100.0, 0), (None, 5.0, 0), (0.0, 0.0, 0)],
-)
-def test_margin_score(price, cost, expected):
-    assert scoring.margin_score(price, cost) == expected
-
-
+# ── scoring (pure; 1688 components are in test_ali1688.py) ──────────────────
 def test_competition_score_inverts_ad_volume():
     now = datetime.now(timezone.utc)
     few = [AdSignal(platform="tiktok", ad_count=10, last_seen_at=now)]
     many = [AdSignal(platform="tiktok", ad_count=400, last_seen_at=now)]
     assert scoring.competition_score(few) > scoring.competition_score(many)
     assert scoring.competition_score([]) == 50  # unknown -> neutral
-
-
-def test_overall_weights_sum_to_one():
-    assert abs(sum(scoring.WEIGHTS.values()) - 1.0) < 1e-9

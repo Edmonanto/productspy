@@ -22,8 +22,8 @@ async def build_quota(user_id: str, plan: str) -> Quota:
     return Quota(plan=plan, limit=limit, used=used, remaining=remaining)
 
 
-async def consume_search(user_id: str, plan: str) -> None:
-    """Charge one search against the daily quota, or reject with 429."""
+async def ensure_search_available(user_id: str, plan: str) -> None:
+    """Reject with 429 when today's searches are spent. Does not charge."""
     limit = search_limit(plan)
     if limit == config.UNLIMITED:
         return
@@ -37,7 +37,6 @@ async def consume_search(user_id: str, plan: str) -> None:
                 "Upgrade for more searches."
             ),
         )
-    await repository.increment_search(user_id)
 
 
 async def enforce_watchlist_limit(user_id: str, plan: str) -> None:
