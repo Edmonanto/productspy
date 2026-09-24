@@ -58,8 +58,12 @@ async def rescore_product(
     orders = await repository.current_orders(product_id)
     previous = await repository.orders_at(product_id, config.TREND_WINDOW_DAYS)
 
+    baseline = await repository.orders_baseline(product.source)
     score = scoring.score_product(
-        product, orders_count=orders, previous_orders=previous
+        product,
+        orders_count=orders,
+        previous_orders=previous,
+        demand_baseline=baseline,
     )
     await repository.save_score(product_id, score)
     return RescoreResponse(score=score)

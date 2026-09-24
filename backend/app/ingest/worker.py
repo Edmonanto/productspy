@@ -20,6 +20,9 @@ async def ingest_provider(provider, limit: int) -> dict[str, int]:
     stats = {"fetched": 0, "upserted": 0, "scored": 0, "summarized": 0}
     run_id = await repository.start_run(provider.name)
     error: str | None = None
+    # Demand is ranked within a source, so each source needs its own
+    # distribution. Read once per run and reused for every product below.
+    baselines: dict[str, list[int]] = {}
 
     try:
         raw_products = await provider.fetch(limit)
@@ -50,8 +53,15 @@ async def ingest_provider(provider, limit: int) -> dict[str, int]:
                 previous = await repository.orders_at(
                     product_id, config.TREND_WINDOW_DAYS
                 )
+                if raw.source not in baselines:
+                    baselines[raw.source] = await repository.orders_baseline(
+                        raw.source
+                    )
                 score = scoring.score_product(
-                    product, orders_count=raw.orders_count, previous_orders=previous
+                    product,
+                    orders_count=raw.orders_count,
+                    previous_orders=previous,
+                    demand_baseline=baselines[raw.source],
                 )
 
                 # Only pay for a summary when there isn't one yet.

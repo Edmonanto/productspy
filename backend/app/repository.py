@@ -216,6 +216,23 @@ async def orders_at(product_id: str, days_ago: int) -> int | None:
     )
 
 
+async def orders_baseline(source: str) -> list[int]:
+    """Sorted orders_count for one source — the distribution demand ranks in.
+
+    Read once per source per run: the list is small (one int per product) and
+    scoring every product against it individually would be a query apiece.
+    """
+    rows = await db.fetch(
+        """
+        select orders_count from products
+         where source = $1 and orders_count is not null and orders_count > 0
+         order by orders_count
+        """,
+        source,
+    )
+    return [r["orders_count"] for r in rows]
+
+
 async def current_orders(product_id: str) -> int | None:
     return await db.fetchval(
         "select orders_count from products where id = $1", product_id

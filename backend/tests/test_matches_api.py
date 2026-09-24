@@ -121,11 +121,14 @@ def test_confirm_applies_cost_and_rescores(client, monkeypatch):
     async def save_score(pid, score):
         state["score"] = score
 
+    async def orders_baseline(source):
+        return []
+
     for name, fn in [
         ("get_match", get_match), ("apply_supplier_cost", apply_supplier_cost),
         ("set_match_status", set_status), ("get_product", get_product),
         ("current_orders", current_orders), ("orders_at", orders_at),
-        ("save_score", save_score),
+        ("save_score", save_score), ("orders_baseline", orders_baseline),
     ]:
         monkeypatch.setattr(repository, name, fn)
 
