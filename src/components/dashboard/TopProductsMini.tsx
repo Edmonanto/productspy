@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Product } from "@/lib/api";
-import { DEMO_PRODUCTS } from "@/lib/demo-products";
 import { formatPrice, scoreColor, scoreLabel, sourceIcon } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
 
@@ -12,8 +11,7 @@ interface Props {
 }
 
 export default function TopProductsMini({ products, loading }: Props) {
-  const isDemo = products.length === 0 && !loading;
-  const displayProducts = isDemo ? DEMO_PRODUCTS : products;
+  const isEmpty = products.length === 0 && !loading;
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
@@ -42,11 +40,13 @@ export default function TopProductsMini({ products, loading }: Props) {
         </div>
       ) : (
         <>
-          {isDemo && (
-            <p className="text-[10px] text-violet-400/70 mb-2">✨ Sample data — real products load once scraper runs</p>
+          {isEmpty && (
+            <p className="text-xs text-zinc-500 py-2">
+              No scored products yet — the ingestion job populates this.
+            </p>
           )}
         <div className="space-y-2">
-          {displayProducts.slice(0, 7).map((p, i) => {
+          {products.slice(0, 7).map((p, i) => {
             const score = p.score?.overall_score ?? 0;
             return (
               <Link key={p.id} href={`/dashboard/products/${p.id}`}>

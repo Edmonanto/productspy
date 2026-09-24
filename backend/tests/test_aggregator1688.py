@@ -155,3 +155,16 @@ def test_requires_url_token_and_keywords():
     assert Aggregator1688Provider(search_url="u", search_token="", keywords=["a"]).configured is False
     assert Aggregator1688Provider(search_url="u", search_token="t", keywords=[]).configured is False
     assert Aggregator1688Provider(search_url="u", search_token="t", keywords=["a"]).configured is True
+
+
+def test_province_is_not_stored_as_a_category():
+    """1688's payload carries the supplier's province, not a product category.
+
+    Storing it in `category` gave every 1688 row a value like 浙江, which no
+    category filter in the dashboard could ever match — so selecting any
+    category returned nothing, and the frontend silently swapped in demo
+    products.
+    """
+    products = provider().parse_search(SEARCH)
+    assert products, "fixture should yield offers"
+    assert all(p.category is None for p in products)
