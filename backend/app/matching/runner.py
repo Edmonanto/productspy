@@ -92,14 +92,31 @@ async def run() -> dict[str, int]:
         await db.disconnect()
 
 
+def exit_code(stats: dict[str, int], translation_enabled: bool) -> int:
+    """Nonzero only when a run that *should* have matched something didn't.
+
+    Stage 1 needs ANTHROPIC_API_KEY. Without it nothing is translated, so
+    stage 2 has no suppliers to compare against and zero candidates is the
+    configured outcome, not a fault — failing the cron every six hours for it
+    would train us to ignore the one signal that means something. With the key
+    set, an empty run is a real anomaly (broken ingestion, a provider outage,
+    thresholds drifted too high) and should turn the cron red.
+    """
+    if not translation_enabled:
+        log.info(
+            "matching: ANTHROPIC_API_KEY unset — translation and matching are "
+            "off. Set it in the environment to enable the review queue."
+        )
+        return 0
+    return 0 if stats.get("candidates") else 1
+
+
 def main() -> int:
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )
     stats = asyncio.run(run())
-    # A run that matched nothing is usually a missing ANTHROPIC_API_KEY or an
-    # empty catalogue, both worth surfacing in the cron history.
-    return 0 if stats.get("candidates") else 1
+    return exit_code(stats, translation_enabled=bool(config.ANTHROPIC_API_KEY))
 
 
 if __name__ == "__main__":
