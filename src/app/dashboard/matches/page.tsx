@@ -203,7 +203,7 @@ export default function MatchesPage() {
     <div className="flex flex-col h-full">
       <Topbar title="Match review" />
 
-      <div className="p-6 space-y-5">
+      <div className="p-4 sm:p-6 space-y-5">
         <p className="text-sm text-zinc-400 max-w-2xl">
           Each pair links a listing you can sell against to a supplier you can buy
           from. Confirming applies the supplier&apos;s real cost, replacing an

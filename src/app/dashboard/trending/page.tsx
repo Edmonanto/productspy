@@ -33,7 +33,7 @@ export default function TrendingPage() {
     <div className="flex flex-col h-full">
       <Topbar title="Trending Products" />
 
-      <div className="p-6 space-y-6 flex-1">
+      <div className="p-4 sm:p-6 space-y-6 flex-1">
         {/* Filters */}
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">

@@ -50,7 +50,7 @@ export default function ProductDetailPage() {
     return (
       <div className="flex flex-col h-full">
         <Topbar title="Product Detail" />
-        <div className="p-6 animate-pulse space-y-4">
+        <div className="p-4 sm:p-6 animate-pulse space-y-4">
           <div className="h-8 w-64 bg-zinc-800 rounded" />
           <div className="h-96 bg-zinc-800 rounded-xl" />
         </div>
@@ -70,7 +70,7 @@ export default function ProductDetailPage() {
     <div className="flex flex-col h-full">
       <Topbar title="Product Detail" />
 
-      <div className="p-6 max-w-6xl mx-auto w-full space-y-6">
+      <div className="p-4 sm:p-6 max-w-6xl mx-auto w-full space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
@@ -116,7 +116,7 @@ export default function ProductDetailPage() {
         </div>
 
         {/* Main grid */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left: image + stats */}
           <div className="space-y-4">
             <div className="aspect-square bg-zinc-800 rounded-xl overflow-hidden">

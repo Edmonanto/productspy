@@ -119,7 +119,7 @@ export default function BillingPage() {
     <div className="flex flex-col min-h-full">
       <Topbar title="Billing" />
 
-      <div className="p-6 max-w-5xl mx-auto w-full space-y-8">
+      <div className="p-4 sm:p-6 max-w-5xl mx-auto w-full space-y-8">
 
         {/* Status banner */}
         {message && (
@@ -239,7 +239,7 @@ export default function BillingPage() {
         {/* Pricing grid */}
         <div>
           <h3 className="text-white font-semibold mb-4">Choose a plan</h3>
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {PLANS.map((plan) => {
               const isCurrent = plan.id === currentPlan;
               const isProcessing = selectedPlan === plan.id && loading;
