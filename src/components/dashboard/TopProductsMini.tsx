@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Product } from "@/lib/api";
 import { formatPrice, scoreColor, scoreLabel, sourceIcon } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
+import ProductImage from "@/components/products/ProductImage";
 
 interface Props {
   products: Product[];
@@ -58,13 +59,16 @@ export default function TopProductsMini({ products, loading }: Props) {
 
                   {/* Image */}
                   <div className="w-10 h-10 rounded-lg bg-zinc-800 overflow-hidden shrink-0">
-                    {p.image_url ? (
-                      <img src={p.image_url} alt={p.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-lg">
-                        {sourceIcon(p.source)}
-                      </div>
-                    )}
+                    <ProductImage
+                      src={p.image_url}
+                      alt={p.title}
+                      className="w-full h-full object-cover"
+                      fallback={
+                        <div className="w-full h-full flex items-center justify-center text-lg">
+                          {sourceIcon(p.source)}
+                        </div>
+                      }
+                    />
                   </div>
 
                   {/* Info */}

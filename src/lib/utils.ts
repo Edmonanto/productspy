@@ -40,6 +40,7 @@ export function sourceIcon(source: string): string {
     aliexpress: "🛒",
     tiktok: "🎵",
     amazon: "📦",
+    "1688": "🏭",
   };
   return map[source] || "🌐";
 }

@@ -8,6 +8,7 @@ import {
 import Topbar from "@/components/layout/Topbar";
 import { matchesApi, ProductMatch } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import ProductImage from "@/components/products/ProductImage";
 
 const TABS = [
   { key: "candidate", label: "Needs review" },
@@ -45,11 +46,12 @@ function Side({
   return (
     <div className="flex-1 min-w-0 flex gap-3">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      {image ? (
-        <img src={image} alt="" className="w-16 h-16 rounded-lg object-cover bg-zinc-800 shrink-0" />
-      ) : (
-        <div className="w-16 h-16 rounded-lg bg-zinc-800 shrink-0" />
-      )}
+      <ProductImage
+        src={image}
+        alt=""
+        className="w-16 h-16 rounded-lg object-cover bg-zinc-800 shrink-0"
+        fallback={<div className="w-16 h-16 rounded-lg bg-zinc-800 shrink-0" />}
+      />
       <div className="min-w-0">
         <span className={cn("text-[10px] font-semibold uppercase tracking-wide", tone)}>
           {label}
