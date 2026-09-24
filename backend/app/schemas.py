@@ -40,6 +40,7 @@ class Product(BaseModel):
     category: str | None
     price_usd: float | None
     cost_usd: float | None
+    price_is_derived: bool = False
     source: str
     score: Score | None
     suppliers: list[Supplier] = []

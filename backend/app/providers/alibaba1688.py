@@ -160,8 +160,10 @@ class Alibaba1688Provider:
                 round(cost_cny / config.CNY_PER_USD, 2) if cost_cny else None
             )
             # No retail price on a wholesale listing — derive an indicative
-            # one so margin scoring has something to work with. Flagged in
-            # the README as an assumption, not a real market price.
+            # one so the UI has something to show. It is flagged as derived so
+            # margin scoring treats it as unknown rather than excellent: the
+            # markup is a constant, so the margin it implies is the same for
+            # every offer and says nothing about this one.
             price_usd = (
                 round(cost_usd * config.WHOLESALE_MARKUP, 2) if cost_usd else None
             )
@@ -184,6 +186,7 @@ class Alibaba1688Provider:
                     image_url=str(image) if image else None,
                     category=_first(item, "categoryName", "category"),
                     price_usd=price_usd,
+                    price_is_derived=price_usd is not None,
                     cost_usd=cost_usd,
                     orders_count=_as_int(
                         _first(item, "saleQuantity", "soldQuantity", "tradeQuantity")

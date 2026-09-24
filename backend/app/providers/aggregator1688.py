@@ -176,6 +176,9 @@ class Aggregator1688Provider:
                         round(cost_usd * config.WHOLESALE_MARKUP, 2)
                         if cost_usd else None
                     ),
+                    # Computed from cost, not published by 1688 — see
+                    # scoring.margin_score.
+                    price_is_derived=cost_usd is not None,
                     cost_usd=cost_usd,
                     orders_count=orders,
                 )
@@ -219,6 +222,7 @@ class Aggregator1688Provider:
                     product.price_usd = round(
                         product.cost_usd * config.WHOLESALE_MARKUP, 2
                     )
+                    product.price_is_derived = True
 
         sold = _walk(data, "item", "saledCount")
         if isinstance(sold, int) and sold > (product.orders_count or 0):
