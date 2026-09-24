@@ -6,6 +6,7 @@ import { Product, watchlistApi } from "@/lib/api";
 import { formatPrice, estimatedMargin, sourceIcon } from "@/lib/utils";
 import ScoreBadge from "./ScoreBadge";
 import { useState } from "react";
+import ProductImage from "./ProductImage";
 
 interface Props {
   product: Product;
@@ -47,17 +48,16 @@ export default function ProductCard({ product, inWatchlist = false }: Props) {
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-600 transition-all hover:shadow-lg hover:shadow-black/30 group cursor-pointer">
         {/* Image */}
         <div className="relative aspect-square bg-zinc-800 overflow-hidden">
-          {product.image_url ? (
-            <img
-              src={product.image_url}
-              alt={product.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-4xl">
-              {sourceIcon(product.source)}
-            </div>
-          )}
+          <ProductImage
+            src={product.image_url}
+            alt={product.title}
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            fallback={
+              <div className="w-full h-full flex items-center justify-center text-4xl">
+                {sourceIcon(product.source)}
+              </div>
+            }
+          />
 
           {/* Score badge overlay */}
           <div className="absolute top-2 left-2">

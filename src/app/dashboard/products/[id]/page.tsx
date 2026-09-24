@@ -13,6 +13,7 @@ import {
   TrendingUp, ShoppingBag, Star
 } from "lucide-react";
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, ResponsiveContainer } from "recharts";
+import ProductImage from "@/components/products/ProductImage";
 
 export default function ProductDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -119,13 +120,16 @@ export default function ProductDetailPage() {
           {/* Left: image + stats */}
           <div className="space-y-4">
             <div className="aspect-square bg-zinc-800 rounded-xl overflow-hidden">
-              {product.image_url ? (
-                <img src={product.image_url} alt={product.title} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-6xl">
-                  {sourceIcon(product.source)}
-                </div>
-              )}
+              <ProductImage
+                src={product.image_url}
+                alt={product.title}
+                className="w-full h-full object-cover"
+                fallback={
+                  <div className="w-full h-full flex items-center justify-center text-6xl">
+                    {sourceIcon(product.source)}
+                  </div>
+                }
+              />
             </div>
 
             {/* Quick stats */}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { WatchlistItem } from "@/lib/api";
 import { scoreColor, formatPrice, sourceIcon } from "@/lib/utils";
 import { Bookmark, ArrowRight } from "lucide-react";
+import ProductImage from "@/components/products/ProductImage";
 
 interface Props {
   items: WatchlistItem[];
@@ -54,13 +55,16 @@ export default function WatchlistMini({ items, loading }: Props) {
               <Link key={product.id} href={`/dashboard/products/${product.id}`}>
                 <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-800 transition-colors group">
                   <div className="w-9 h-9 rounded-lg bg-zinc-800 overflow-hidden shrink-0">
-                    {product.image_url ? (
-                      <img src={product.image_url} alt={product.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        {sourceIcon(product.source)}
-                      </div>
-                    )}
+                    <ProductImage
+                      src={product.image_url}
+                      alt={product.title}
+                      className="w-full h-full object-cover"
+                      fallback={
+                        <div className="w-full h-full flex items-center justify-center">
+                          {sourceIcon(product.source)}
+                        </div>
+                      }
+                    />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-zinc-200 text-xs font-medium truncate group-hover:text-white">
