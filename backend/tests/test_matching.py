@@ -210,3 +210,35 @@ def test_narrow_generic_overlap_is_still_rejected():
     result = score_pair("Cat Bed Soft Warm", "pet cat bed cozy",
                         30.0, 8.0, generic={"cat", "bed", "pet"})
     assert result.confidence == 0.0
+
+
+# ── cron exit code ──────────────────────────────────────────────────────────
+# The cron's exit status is the only matching signal visible in Render's job
+# history, so it has to mean one thing: "a run that should have produced
+# matches produced none". Anything else trains us to ignore red.
+from app.matching.runner import exit_code
+
+
+def test_missing_api_key_is_configured_off_not_failure():
+    """No ANTHROPIC_API_KEY means translation is disabled by configuration.
+
+    Stage 1 can't run, so stage 2 has nothing to compare against and zero
+    candidates is the expected result. Failing every six hours for a setting
+    the operator chose would bury the genuine failures in noise.
+    """
+    assert exit_code({"candidates": 0, "translated": 0}, translation_enabled=False) == 0
+
+
+def test_empty_run_with_key_set_is_a_failure():
+    """With translation enabled, matching nothing is a real anomaly."""
+    assert exit_code({"candidates": 0, "translated": 0}, translation_enabled=True) == 1
+
+
+def test_successful_run_succeeds_either_way():
+    for enabled in (True, False):
+        assert exit_code({"candidates": 7}, translation_enabled=enabled) == 0
+
+
+def test_missing_candidates_key_is_treated_as_zero():
+    assert exit_code({}, translation_enabled=True) == 1
+    assert exit_code({}, translation_enabled=False) == 0
