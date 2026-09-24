@@ -171,7 +171,10 @@ class Aggregator1688Provider:
                     product_url=f"https://detail.1688.com/offer/{offer_id}.html",
                     source=self.source,
                     image_url=item.get("offerPicUrl"),
-                    category=item.get("province"),
+                    # Not a category: 1688 returns the supplier's province
+                    # here. Storing 浙江/广东 as a product category made the
+                    # dashboard's category filter match nothing at all.
+                    category=None,
                     price_usd=(
                         round(cost_usd * config.WHOLESALE_MARKUP, 2)
                         if cost_usd else None

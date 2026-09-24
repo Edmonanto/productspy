@@ -3,32 +3,31 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { productsApi, Product } from "@/lib/api";
-import { DEMO_PRODUCTS } from "@/lib/demo-products";
 import ProductCard from "@/components/products/ProductCard";
 import Topbar from "@/components/layout/Topbar";
 import { SlidersHorizontal, RefreshCw } from "lucide-react";
 
-const SOURCES = ["all", "aliexpress", "tiktok", "amazon"];
-const CATEGORIES = ["all", "beauty", "electronics", "fashion", "home", "pets", "fitness"];
+// The sources ingestion actually writes. "aliexpress" was listed here and has
+// never produced a row; "1688" is the largest source and was missing, so
+// filtering by it was impossible and picking aliexpress always returned none.
+const SOURCES = ["all", "1688", "tiktok", "amazon"];
 
 export default function TrendingPage() {
   const [source, setSource] = useState("all");
-  const [category, setCategory] = useState("all");
   const [minScore, setMinScore] = useState(50);
 
   const { data, isLoading, mutate } = useSWR(
-    ["trending", source, category, minScore],
+    ["trending", source, minScore],
     () => productsApi.trending({
-      source,
-      category: category === "all" ? "" : category,
+      source: source === "all" ? "" : source,
       min_score: minScore,
       limit: 40,
     }),
     { refreshInterval: 1_800_000 } // refresh every 30 min
   );
 
-  const apiProducts: Product[] = data?.products ?? [];
-  const products: Product[] = apiProducts.length > 0 ? apiProducts : DEMO_PRODUCTS;
+  const products: Product[] = data?.products ?? [];
+  const isEmpty = !isLoading && products.length === 0;
 
   return (
     <div className="flex flex-col h-full">
@@ -61,25 +60,6 @@ export default function TrendingPage() {
 
           <div className="w-px h-5 bg-zinc-700" />
 
-          {/* Category */}
-          <div className="flex gap-1.5 flex-wrap">
-            {CATEGORIES.map((c) => (
-              <button
-                key={c}
-                onClick={() => setCategory(c)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium capitalize transition-colors
-                  ${category === c
-                    ? "bg-zinc-600 text-white"
-                    : "bg-zinc-800 text-zinc-400 hover:text-white"
-                  }`}
-              >
-                {c}
-              </button>
-            ))}
-          </div>
-
-          <div className="w-px h-5 bg-zinc-700" />
-
           {/* Min score */}
           <div className="flex items-center gap-2">
             <span className="text-zinc-500 text-xs">Min score:</span>
@@ -104,11 +84,19 @@ export default function TrendingPage() {
           </button>
         </div>
 
-        {/* Demo notice */}
-        {apiProducts.length === 0 && !isLoading && (
-          <div className="flex items-center gap-2 bg-violet-600/10 border border-violet-600/20 rounded-lg px-4 py-2.5 text-xs text-violet-300">
-            <span>✨</span>
-            <span>Showing sample products — your scraper will populate real data every 30 minutes once connected.</span>
+        {/* Nothing matched. Say so — never substitute invented products. */}
+        {isEmpty && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-400">
+            No products match these filters.{" "}
+            <button
+              onClick={() => {
+                setSource("all");
+                setMinScore(0);
+              }}
+              className="text-violet-400 hover:text-violet-300 underline"
+            >
+              Reset filters
+            </button>
           </div>
         )}
 
