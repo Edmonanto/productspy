@@ -1,27 +1,80 @@
 import Link from "next/link";
-import { Zap, TrendingUp, Shield, Search, ArrowRight, Check, Star } from "lucide-react";
+import { Zap, TrendingUp, GitCompareArrows, LineChart, ArrowRight, Check } from "lucide-react";
+import ProductImage from "@/components/products/ProductImage";
 
 const FEATURES = [
   {
     icon: TrendingUp,
-    title: "Real-time trend detection",
-    desc: "Scrapes TikTok Shop, AliExpress, and Amazon daily. Know what's trending before it peaks.",
+    title: "Three sources, every six hours",
+    desc: "TikTok Shop for retail price and units sold, 1688 for real wholesale cost, Amazon as a retail price anchor. Ingested on a schedule, not on demand.",
   },
   {
     icon: Zap,
-    title: "AI product scoring",
-    desc: "Every product gets a 0–100 score across demand, margin, competition, and trend momentum.",
+    title: "Scored 0-100, and told why",
+    desc: "Demand, margin, trend and competition, weighted and shown separately. A signal we don't have scores neutral instead of being guessed at — so a high score means evidence, not optimism.",
   },
   {
-    icon: Search,
-    title: "Supplier matching",
-    desc: "Auto-links each product to the best AliExpress and CJ suppliers with cost + shipping data.",
+    icon: GitCompareArrows,
+    title: "Retail matched to supplier",
+    desc: "Pairs a retail listing with the 1688 offer behind it, so margin comes from two observed numbers. Every match goes to a review queue — nothing is applied to your data automatically.",
   },
   {
-    icon: Shield,
-    title: "Ad signal tracking",
-    desc: "See if a product already has active TikTok or Meta ads — proof of market demand.",
+    icon: LineChart,
+    title: "Trend from our own history",
+    desc: "Order velocity is measured across our own snapshots over time rather than bought from a provider, so it reflects what actually moved.",
   },
+];
+
+// A real slice of the catalogue, captured from the live database. Prices and
+// scores are the stored values; 1688 has no retail price, so the figure shown
+// for it is derived from cost and labelled as an estimate.
+const SHOWCASE = [
+  {
+    source: "amazon",
+    title: "Whiskers & Friends Cat Bed for Indoor Cats & Small Dogs, Fluffy",
+    price: "$24.95",
+    derived: false,
+    score: 50,
+    image: "https://m.media-amazon.com/images/I/71ea24NOlQL._AC_UL320_.jpg",
+  },
+  {
+    source: "1688",
+    title: "兰猫宠王剑麻黄麻猫抓板猫窝一体简约大型猫咪免安装宠物用品",
+    price: "$6.66",
+    derived: true,
+    score: 64,
+    image: "https://cbu01.alicdn.com/img/ibank/O1CN01h4ciFS1wVPW7ISNMN_!!2222710966313-0-cib.jpg",
+  },
+  {
+    source: "amazon",
+    title: "Love's cabin Round Donut Cat and Dog Cushion Bed, 20in",
+    price: "$15.99",
+    derived: false,
+    score: 50,
+    image: "https://m.media-amazon.com/images/I/91ohn1BKStL._AC_UL320_.jpg",
+  },
+  {
+    source: "1688",
+    title: "冬季保暖贝壳半封闭猫窝宠物猫床半包围狗窝狗床封闭式猫咪窝",
+    price: "$16.77",
+    derived: true,
+    score: 64,
+    image: "https://cbu01.alicdn.com/img/ibank/O1CN01Qo3Mme1wQp5HJhDjG_!!2206895696303-0-cib.jpg",
+  },
+];
+
+const SOURCE_LABEL: Record<string, string> = {
+  "1688": "🏭 1688",
+  amazon: "📦 amazon",
+  tiktok: "🎵 tiktok",
+};
+
+// How the composite is actually weighted — see backend/app/scoring.py.
+const SCORE_PARTS = [
+  { label: "Demand", weight: "30%", desc: "Units sold, ranked against the product's own marketplace rather than across them." },
+  { label: "Margin", weight: "30%", desc: "Retail minus supplier cost, counted only when both numbers were observed." },
+  { label: "Trend", weight: "25%", desc: "Change in order velocity across our own snapshot history." },
+  { label: "Competition", weight: "15%", desc: "Advertiser volume. Not yet collected, so it currently scores neutral for everything." },
 ];
 
 const PLANS = [
@@ -29,15 +82,23 @@ const PLANS = [
     name: "Free",
     price: "$0",
     desc: "Try it out",
-    features: ["5 searches/day", "Basic score", "No alerts"],
+    features: ["5 searches/day", "Full product scores", "Watchlist (10 products)"],
     cta: "Get started",
+    highlight: false,
+  },
+  {
+    name: "Starter",
+    price: "$29",
+    desc: "For one store",
+    features: ["50 searches/day", "Full product scores", "Unlimited watchlist", "Email alerts"],
+    cta: "Start with Starter",
     highlight: false,
   },
   {
     name: "Pro",
     price: "$79",
     desc: "For serious dropshippers",
-    features: ["Unlimited searches", "Full AI scoring", "Ad signal detection", "Supplier matching", "Email alerts", "Watchlist"],
+    features: ["Unlimited searches", "Full product scores", "Supplier matching", "Email alerts", "Priority support"],
     cta: "Start free trial",
     highlight: true,
   },
@@ -45,16 +106,10 @@ const PLANS = [
     name: "Agency",
     price: "$199",
     desc: "For teams & agencies",
-    features: ["Everything in Pro", "5 seats", "White-label reports", "API access", "Priority support"],
+    features: ["Everything in Pro", "5 team seats", "White-label reports", "API access", "Dedicated support"],
     cta: "Contact us",
     highlight: false,
   },
-];
-
-const TESTIMONIALS = [
-  { name: "Alex R.", role: "Dropshipper", text: "Found 3 winning products in my first week. ROI paid for itself day one.", stars: 5 },
-  { name: "Maria T.", role: "Agency Owner", text: "We use it for all our clients. The AI scoring is scary accurate.", stars: 5 },
-  { name: "Jason K.", role: "E-commerce founder", text: "Replaced 4 other tools. ProductSpy Pro does it all.", stars: 5 },
 ];
 
 export default function LandingPage() {
@@ -97,14 +152,14 @@ export default function LandingPage() {
           </span>
         </h1>
         <p className="text-zinc-400 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-          ProductSpy Pro scans TikTok, AliExpress, and Amazon daily — then scores every product with AI so you know exactly what to sell and when.
+          ProductSpy Pro ingests TikTok Shop, 1688 and Amazon every six hours, scores every product on demand, margin and trend, and matches retail listings to the supplier behind them.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link href="/signup" className="w-full sm:w-auto flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm shadow-lg shadow-violet-900/30">
             Start for free <ArrowRight size={16} />
           </Link>
-          <Link href="/dashboard" className="w-full sm:w-auto flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold px-6 py-3 rounded-xl transition-colors text-sm border border-zinc-700">
-            View demo
+          <Link href="/login" className="w-full sm:w-auto flex items-center justify-center gap-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-semibold px-6 py-3 rounded-xl transition-colors text-sm border border-zinc-700">
+            Sign in
           </Link>
         </div>
         <p className="text-zinc-600 text-xs">No credit card required · Free plan available · Cancel anytime</p>
@@ -118,29 +173,38 @@ export default function LandingPage() {
             <span className="text-zinc-600 text-xs ml-2">productspy.pro/dashboard</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-            {[
-              { title: "LED Dog Collar", score: 87, margin: "72%" },
-              { title: "Magnetic Phone Stand", score: 81, margin: "65%" },
-              { title: "Portable Mini Projector", score: 76, margin: "58%" },
-              { title: "Posture Corrector Belt", score: 73, margin: "61%" },
-            ].map((p) => (
-              <div key={p.title} className="bg-zinc-800/80 rounded-xl p-3 space-y-2 border border-zinc-700/50">
-                <div className="aspect-square bg-gradient-to-br from-zinc-700 to-zinc-800 rounded-lg mb-2" />
+            {SHOWCASE.map((p) => (
+              <div key={p.title} className="bg-zinc-800/80 rounded-xl p-3 space-y-2 border border-zinc-700/50 text-left">
+                <div className="aspect-square rounded-lg overflow-hidden bg-zinc-700/60">
+                  <ProductImage
+                    src={p.image}
+                    alt={p.title}
+                    className="w-full h-full object-cover"
+                    fallback={<div className="w-full h-full bg-gradient-to-br from-zinc-700 to-zinc-800" />}
+                  />
+                </div>
+                <p className="text-[10px] text-zinc-500">{SOURCE_LABEL[p.source]}</p>
                 <p className="text-xs text-zinc-300 font-medium line-clamp-2">{p.title}</p>
                 <div className="flex items-center justify-between">
                   <span className="text-emerald-400 font-bold text-xs bg-emerald-500/10 px-1.5 py-0.5 rounded">{p.score}</span>
-                  <span className="text-zinc-500 text-xs">{p.margin}</span>
+                  <span className="text-zinc-500 text-xs">
+                    {p.derived && <span className="text-zinc-600">est. </span>}{p.price}
+                  </span>
                 </div>
               </div>
             ))}
           </div>
+          <p className="text-zinc-600 text-[11px] mt-3 px-2">
+            Real listings and stored scores from the catalogue. 1688 publishes no
+            retail price, so its figure is derived from cost and marked as an estimate.
+          </p>
         </div>
       </section>
 
       {/* Social proof bar */}
       <section className="border-y border-zinc-800/60 py-6 bg-zinc-900/30">
         <div className="max-w-5xl mx-auto px-4 sm:px-8 flex flex-wrap items-center justify-center gap-4 sm:gap-12 text-zinc-500 text-xs sm:text-sm font-medium">
-          {["10,000+ products tracked", "500+ active dropshippers", "3 marketplaces", "Updated every 30 min"].map((s) => (
+          {["TikTok Shop · 1688 · Amazon", "Refreshed every 6 hours", "Four scoring signals", "Supplier matches reviewed, never auto-applied"].map((s) => (
             <span key={s} className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
               {s}
@@ -168,26 +232,31 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials */}
+      {/* How the score is built */}
       <section className="bg-zinc-900/40 border-y border-zinc-800/60 py-16 sm:py-20">
         <div className="max-w-5xl mx-auto px-4 sm:px-8">
-          <h2 className="text-2xl sm:text-3xl font-bold text-center mb-10">Trusted by dropshippers worldwide</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-            {TESTIMONIALS.map((t) => (
-              <div key={t.name} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
-                <div className="flex gap-0.5">
-                  {Array.from({ length: t.stars }).map((_, i) => (
-                    <Star key={i} size={14} className="text-yellow-400 fill-yellow-400" />
-                  ))}
+          <div className="text-center mb-10">
+            <h2 className="text-2xl sm:text-3xl font-bold mb-3">What the score is made of</h2>
+            <p className="text-zinc-500 text-sm max-w-2xl mx-auto">
+              One number is easy to distrust, so here is the whole of it. Each part
+              is shown separately in the dashboard alongside the total.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+            {SCORE_PARTS.map((part) => (
+              <div key={part.label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-2">
+                <div className="flex items-baseline justify-between gap-3">
+                  <h3 className="text-white font-semibold">{part.label}</h3>
+                  <span className="text-violet-400 text-sm font-bold">{part.weight}</span>
                 </div>
-                <p className="text-zinc-300 text-sm leading-relaxed">&ldquo;{t.text}&rdquo;</p>
-                <div>
-                  <p className="text-white text-sm font-semibold">{t.name}</p>
-                  <p className="text-zinc-500 text-xs">{t.role}</p>
-                </div>
+                <p className="text-zinc-500 text-sm leading-relaxed">{part.desc}</p>
               </div>
             ))}
           </div>
+          <p className="text-zinc-600 text-xs text-center mt-6 max-w-2xl mx-auto">
+            Where a signal is missing it scores the neutral midpoint rather than zero,
+            so a product is never buried for a number its marketplace simply doesn&apos;t publish.
+          </p>
         </div>
       </section>
 
@@ -197,7 +266,7 @@ export default function LandingPage() {
           <h2 className="text-2xl sm:text-3xl font-bold mb-3">Simple, transparent pricing</h2>
           <p className="text-zinc-500 text-sm">Cancel anytime. No lock-in.</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
           {PLANS.map((plan) => (
             <div key={plan.name} className={`rounded-2xl p-5 sm:p-6 space-y-5 border transition-all ${
               plan.highlight
@@ -215,7 +284,7 @@ export default function LandingPage() {
               </div>
               <div>
                 <span className="text-4xl font-extrabold text-white">{plan.price}</span>
-                <span className="text-zinc-500 text-sm">/mo</span>
+                {plan.price !== "$0" && <span className="text-zinc-500 text-sm">/mo</span>}
               </div>
               <ul className="space-y-2.5">
                 {plan.features.map((f) => (
@@ -242,7 +311,8 @@ export default function LandingPage() {
         <div className="bg-gradient-to-r from-violet-900/40 to-indigo-900/30 border border-violet-800/40 rounded-2xl p-8 sm:p-12 text-center space-y-5">
           <h2 className="text-2xl sm:text-3xl font-bold">Ready to find your next winning product?</h2>
           <p className="text-zinc-400 text-sm sm:text-base max-w-xl mx-auto">
-            Join 500+ dropshippers using ProductSpy Pro to source smarter and scale faster.
+            Start on the free plan, see the scores and the evidence behind them,
+            and upgrade only if it earns it.
           </p>
           <Link href="/signup" className="inline-flex items-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-8 py-3.5 rounded-xl transition-colors text-sm shadow-lg shadow-violet-900/40">
             Start for free — no card required <ArrowRight size={16} />
