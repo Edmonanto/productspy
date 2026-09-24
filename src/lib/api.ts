@@ -53,6 +53,10 @@ export interface Product {
   category: string | null;
   price_usd: number | null;
   cost_usd: number | null;
+  /** True when price_usd was computed from cost rather than published by the
+   *  source (1688 lists wholesale only). Such a price is an estimate, and the
+   *  margin it implies is the markup constant, not a property of the product. */
+  price_is_derived?: boolean;
   source: string;
   score: {
     overall_score: number;

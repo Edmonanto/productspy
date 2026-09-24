@@ -48,7 +48,11 @@ def schema() -> dict[str, set[str]]:
             if column.isidentifier():
                 tables[table].add(column)
 
-    for match in re.finditer(r"alter table (\w+) add column if not exists (\w+)", sql):
+    # Whitespace-tolerant: a wrapped ALTER is still a column. Missing one here
+    # fails the column check below with a misleading "does not exist".
+    for match in re.finditer(
+        r"alter table\s+(\w+)\s+add column if not exists\s+(\w+)", sql
+    ):
         tables[match.group(1)].add(match.group(2))
 
     return dict(tables)

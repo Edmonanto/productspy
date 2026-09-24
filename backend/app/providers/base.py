@@ -20,6 +20,9 @@ class RawProduct:
     category: str | None = None
     price_usd: float | None = None   # retail price we'd sell at
     cost_usd: float | None = None    # supplier cost — drives margin_score
+    # True when price_usd was computed from cost rather than published by
+    # the source. Such a price carries no margin information.
+    price_is_derived: bool = False
     orders_count: int | None = None  # units sold — drives demand_score
     rating: float | None = None
     ad_count: int | None = None      # advertisers seen — drives competition_score

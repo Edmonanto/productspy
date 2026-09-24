@@ -12,7 +12,7 @@ from .schemas import AdSignal, Product, Score, Subscription, Supplier
 _PRODUCT_SELECT = """
     select
         p.id, p.title, p.image_url, p.product_url, p.category,
-        p.price_usd, p.cost_usd, p.source,
+        p.price_usd, p.cost_usd, p.price_is_derived, p.source,
         s.overall_score, s.demand_score, s.margin_score,
         s.competition_score, s.trend_score, s.ai_summary,
         coalesce(sup.items, '[]'::json) as suppliers,
@@ -62,6 +62,7 @@ def _to_product(row: asyncpg.Record) -> Product:
         category=row["category"],
         price_usd=float(row["price_usd"]) if row["price_usd"] is not None else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+        price_is_derived=bool(row["price_is_derived"]),
         source=row["source"],
         score=score,
         suppliers=suppliers,
@@ -131,9 +132,9 @@ async def upsert_product(raw: "RawProduct") -> str:
         await db.fetchval(
             """
             insert into products (title, image_url, product_url, category,
-                price_usd, cost_usd, source, external_id, orders_count,
-                rating, provider, updated_at)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+                price_usd, cost_usd, price_is_derived, source, external_id,
+                orders_count, rating, provider, updated_at)
+            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
             on conflict (source, external_id) do update set
                 title = excluded.title,
                 image_url = coalesce(excluded.image_url, products.image_url),
@@ -141,6 +142,7 @@ async def upsert_product(raw: "RawProduct") -> str:
                 category = coalesce(excluded.category, products.category),
                 price_usd = excluded.price_usd,
                 cost_usd = excluded.cost_usd,
+                price_is_derived = excluded.price_is_derived,
                 orders_count = excluded.orders_count,
                 rating = excluded.rating,
                 updated_at = now()
@@ -152,6 +154,7 @@ async def upsert_product(raw: "RawProduct") -> str:
             raw.category,
             raw.price_usd,
             raw.cost_usd,
+            raw.price_is_derived,
             raw.source,
             raw.external_id,
             raw.orders_count,

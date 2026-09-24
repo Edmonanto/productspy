@@ -14,8 +14,8 @@ def make_product(**overrides) -> Product:
     base = dict(
         id="p1", title="LED Dog Collar", image_url=None,
         product_url="https://example.com/1", category="pets",
-        price_usd=24.99, cost_usd=4.20, source="aliexpress",
-        score=None, suppliers=[], ad_signals=[],
+        price_usd=24.99, cost_usd=4.20, price_is_derived=False,
+        source="aliexpress", score=None, suppliers=[], ad_signals=[],
     )
     base.update(overrides)
     return Product(**base)
@@ -161,3 +161,62 @@ def test_tiktok_shaped_product_is_not_penalised_for_missing_cost():
     assert score.margin_score == scoring.UNKNOWN
     # demand is real and strong; overall should reflect that, not be dragged to ~25
     assert score.overall_score > 45
+
+
+# ── derived vs observed price ───────────────────────────────────────────────
+def test_derived_price_scores_margin_as_unknown():
+    """A price computed as cost * markup carries no margin information.
+
+    1688 publishes no retail price, so ingestion derives one. Margin then
+    reduces to (m-1)/m for every row — the config constant restated. Scored as
+    observed it gave every 1688 listing 95/100 and 30% of the composite weight,
+    which put untranslated supplier listings above real retail winners.
+    """
+    assert scoring.margin_score(12.00, 4.00, price_is_derived=True) == scoring.UNKNOWN
+
+
+def test_identical_numbers_score_differently_by_provenance():
+    """The only difference is where the price came from."""
+    observed = scoring.margin_score(12.00, 4.00, price_is_derived=False)
+    derived = scoring.margin_score(12.00, 4.00, price_is_derived=True)
+    assert observed == 95
+    assert derived == scoring.UNKNOWN
+    assert observed != derived
+
+
+def test_every_derived_price_scores_the_same_regardless_of_markup():
+    """Whatever the markup, a derived margin is not a finding about a product."""
+    for markup in (2.0, 3.0, 5.0):
+        assert scoring.margin_score(4.0 * markup, 4.0, price_is_derived=True) == (
+            scoring.UNKNOWN
+        )
+
+
+def test_derived_flag_does_not_leak_into_other_components():
+    """Demand and trend describe real observed sales and must be untouched."""
+    derived = make_product(price_usd=12.0, cost_usd=4.0, price_is_derived=True)
+    observed = make_product(price_usd=12.0, cost_usd=4.0, price_is_derived=False)
+    a = scoring.score_product(derived, orders_count=5000, previous_orders=2500)
+    b = scoring.score_product(observed, orders_count=5000, previous_orders=2500)
+    assert a.demand_score == b.demand_score
+    assert a.trend_score == b.trend_score
+    assert a.competition_score == b.competition_score
+    assert a.margin_score == scoring.UNKNOWN and b.margin_score == 95
+
+
+def test_supplier_no_longer_outranks_retail_on_a_constant():
+    """The regression that motivated this: a wholesale listing with derived
+    margin must not beat a retail listing that genuinely sells more."""
+    supplier = make_product(source="1688", price_usd=12.0, cost_usd=4.0,
+                            price_is_derived=True)
+    retail = make_product(source="tiktok", price_usd=29.99, cost_usd=None)
+    s_score = scoring.score_product(supplier, orders_count=800, previous_orders=None)
+    r_score = scoring.score_product(retail, orders_count=9000, previous_orders=None)
+    assert r_score.overall_score > s_score.overall_score
+
+
+def test_confirmed_match_restores_a_real_margin():
+    """Once a match supplies an observed retail price, margin is knowable
+    again — the flag clears and the real number is scored."""
+    confirmed = make_product(price_usd=29.99, cost_usd=4.00, price_is_derived=False)
+    assert scoring.score_product(confirmed, 1000, None).margin_score > 90

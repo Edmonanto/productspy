@@ -34,7 +34,13 @@ export default function ProductCard({ product, inWatchlist = false }: Props) {
   };
 
   const score = product.score?.overall_score ?? 0;
-  const margin = estimatedMargin(product.price_usd, product.cost_usd);
+  // A derived price implies a fixed markup, so the margin it yields is the
+  // same for every such product. Showing it as a figure invites a buying
+  // decision on a number the source never published.
+  const derived = product.price_is_derived === true;
+  const margin = derived
+    ? "N/A"
+    : estimatedMargin(product.price_usd, product.cost_usd);
 
   return (
     <Link href={`/dashboard/products/${product.id}`}>
@@ -85,7 +91,7 @@ export default function ProductCard({ product, inWatchlist = false }: Props) {
 
           <div className="flex items-center justify-between text-xs">
             <div className="space-y-0.5">
-              <div className="text-zinc-500">Price</div>
+              <div className="text-zinc-500">{derived ? "Est. Price" : "Price"}</div>
               <div className="text-white font-semibold">{formatPrice(product.price_usd)}</div>
             </div>
             <div className="space-y-0.5 text-right">

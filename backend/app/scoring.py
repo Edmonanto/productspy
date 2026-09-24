@@ -28,7 +28,11 @@ DEMAND_CEILING = 10_000
 TREND_CEILING = 0.50
 
 
-def margin_score(price_usd: float | None, cost_usd: float | None) -> int:
+def margin_score(
+    price_usd: float | None,
+    cost_usd: float | None,
+    price_is_derived: bool = False,
+) -> int:
     """0-100 from gross margin. 70%+ margin saturates at 100.
 
     An *unknown* margin returns the neutral midpoint, not 0. Sources differ in
@@ -36,7 +40,18 @@ def margin_score(price_usd: float | None, cost_usd: float | None) -> int:
     reverse — and scoring a missing input as zero margin would permanently
     bury every product from a source that simply doesn't publish that field.
     A real zero (price at or below cost) still scores 0.
+
+    A *derived* price is the same kind of unknown. Where a source publishes no
+    retail price we compute one as cost * WHOLESALE_MARKUP, which makes margin
+    (m-1)/m for every such row — the config constant restated, identical across
+    the catalogue and independent of the product. Scoring that as an observed
+    margin handed every 1688 listing 95/100 and 30% of the composite weight,
+    ranking untranslated supplier listings above real retail winners. Margin
+    becomes knowable when a confirmed match supplies an observed retail price
+    to go with the observed cost.
     """
+    if price_is_derived:
+        return UNKNOWN
     if price_usd is None or cost_usd is None or price_usd <= 0 or cost_usd < 0:
         return UNKNOWN
     margin = (price_usd - cost_usd) / price_usd
@@ -105,7 +120,9 @@ def score_product(
     passing None simply leaves trend at the neutral midpoint.
     """
     demand = demand_score(orders_count)
-    margin = margin_score(product.price_usd, product.cost_usd)
+    margin = margin_score(
+        product.price_usd, product.cost_usd, product.price_is_derived
+    )
     competition = competition_score(product.ad_signals)
     trend = trend_score(orders_count, previous_orders)
 
