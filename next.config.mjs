@@ -8,6 +8,9 @@ const nextConfig = {
       { protocol: "https", hostname: "**.aliexpress.com" },
       { protocol: "https", hostname: "**.alicdn.com" },
       { protocol: "https", hostname: "**.tiktokcdn.com" },
+      // TikTok Shop serves product images from ttcdn-us.com, not
+      // tiktokcdn.com. Without this every TikTok image 400s.
+      { protocol: "https", hostname: "**.ttcdn-us.com" },
       { protocol: "https", hostname: "**.amazon.com" },
       { protocol: "https", hostname: "m.media-amazon.com" },
     ],
