@@ -66,14 +66,37 @@ export function thumbnail(url: string, px: number = THUMB_PX): string {
  * happens — measured on the deployed page, 0 of 40 images began loading over
  * 48 seconds, and flipping them to eager loaded every one immediately.
  */
+/** How long a thumbnail gets before we stop trusting it and try the master. */
+const THUMB_TIMEOUT_MS = 4000;
+
 export default function ProductImage({ src, alt, className, fallback }: Props) {
   const [stage, setStage] = useState<"thumb" | "original" | "failed">("thumb");
+  const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => setStage("thumb"), [src]);
+  useEffect(() => {
+    setStage("thumb");
+    setLoaded(false);
+  }, [src]);
+
+  const url = !src ? "" : stage === "thumb" ? thumbnail(src) : src;
+  const rewritten = stage === "thumb" && url !== src;
+
+  // A thumbnail URL is a pattern we inferred, not one the CDN promised. If it
+  // fails loudly, onError moves on. If it fails *quietly* — a decode the
+  // browser abandons, a response that never resolves — nothing fires and the
+  // card would sit empty forever. WebKit in particular can drop an image
+  // without reporting an error, and that is not reproducible from a desktop
+  // Chrome, so this does not rely on catching it: an unloaded thumbnail is
+  // abandoned on a timer and the original master URL is used instead.
+  useEffect(() => {
+    if (!src || !rewritten || loaded) return;
+    const timer = setTimeout(() => {
+      setStage((s) => (s === "thumb" ? "original" : s));
+    }, THUMB_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [src, rewritten, loaded]);
 
   if (!src || stage === "failed") return <>{fallback}</>;
-
-  const url = stage === "thumb" ? thumbnail(src) : src;
 
   return (
     <img
@@ -82,7 +105,8 @@ export default function ProductImage({ src, alt, className, fallback }: Props) {
       alt={alt}
       className={className}
       referrerPolicy="no-referrer"
-      onError={() => setStage(stage === "thumb" && url !== src ? "original" : "failed")}
+      onLoad={() => setLoaded(true)}
+      onError={() => setStage(rewritten ? "original" : "failed")}
     />
   );
 }
