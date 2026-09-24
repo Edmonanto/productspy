@@ -42,7 +42,7 @@ export default function DashboardPage() {
     <div className="flex flex-col min-h-full">
       <Topbar title="Overview" />
 
-      <div className="p-6 space-y-6 flex-1">
+      <div className="p-4 sm:p-6 space-y-6 flex-1">
 
         {/* Welcome banner */}
         <div className="bg-gradient-to-r from-violet-900/30 to-indigo-900/20 border border-violet-800/30 rounded-xl px-5 py-4 flex items-center justify-between">
