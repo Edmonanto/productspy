@@ -28,7 +28,10 @@ python -m app.migrate
 uvicorn app.main:app --reload --port 8000
 ```
 
-Fill `DATABASE_URL` and `SUPABASE_JWT_SECRET` in `.env` before running migrate.
+Fill `DATABASE_URL` and `SUPABASE_URL` in `.env` before running migrate.
+`SUPABASE_URL` is what tokens are verified against — Supabase signs them
+ES256 and the public key comes from that project's JWKS endpoint.
+`SUPABASE_JWT_SECRET` is only needed by projects still signing HS256.
 
 > Commands in this README carry no trailing `#` comments on purpose. zsh — the
 > default macOS shell — does **not** treat `#` as a comment interactively, so a
