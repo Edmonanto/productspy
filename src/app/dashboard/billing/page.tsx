@@ -37,7 +37,6 @@ const PLANS = [
     features: [
       "Unlimited searches",
       "Full AI scoring",
-      "Ad signal detection",
       "Supplier matching",
       "Email alerts",
       "Priority support",
