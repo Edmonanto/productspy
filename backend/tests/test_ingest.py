@@ -220,3 +220,84 @@ def test_confirmed_match_restores_a_real_margin():
     again — the flag clears and the real number is scored."""
     confirmed = make_product(price_usd=29.99, cost_usd=4.00, price_is_derived=False)
     assert scoring.score_product(confirmed, 1000, None).margin_score > 90
+
+
+# ── demand is ranked within a source, not across sources ────────────────────
+# Sources count different things. On the live catalogue the median orders_count
+# was 2100 for 1688 and 31 for TikTok — a 68x gap describing what the platforms
+# count, not which products sell. One absolute curve let wholesale volumes take
+# the entire leaderboard.
+WHOLESALE = sorted([20, 50, 100, 300, 500, 800, 1200, 1800, 2100, 2600,
+                    3200, 4000, 5000, 6500, 8000, 10000, 15000, 22000,
+                    40000, 100000])
+RETAIL = sorted([0, 1, 2, 3, 5, 7, 9, 12, 15, 18, 22, 27, 31, 38, 46,
+                 60, 85, 140, 400, 167972])
+
+
+def test_top_seller_on_each_platform_scores_alike():
+    """A platform's best product should rank near the top of its own
+    population, whatever absolute number that platform happens to print."""
+    top_wholesale = scoring.demand_score(100000, WHOLESALE)
+    top_retail = scoring.demand_score(167972, RETAIL)
+    assert top_wholesale > 90 and top_retail > 90
+    assert abs(top_wholesale - top_retail) <= 5
+
+
+def test_median_of_each_platform_lands_mid_scale():
+    """Whatever the platform's units, its middle product scores mid-scale."""
+    for baseline in (WHOLESALE, RETAIL):
+        median = baseline[len(baseline) // 2]
+        assert 40 <= scoring.demand_score(median, baseline) <= 60
+
+
+def test_absolute_volume_no_longer_decides_across_sources():
+    """The regression: a mediocre wholesale listing outscoring a strong retail
+    one purely because wholesale counts are bigger."""
+    mediocre_wholesale = scoring.demand_score(2100, WHOLESALE)
+    strong_retail = scoring.demand_score(400, RETAIL)
+    assert strong_retail > mediocre_wholesale
+    # ...whereas the absolute curve gets it backwards.
+    assert scoring.demand_score(2100) > scoring.demand_score(400)
+
+
+def test_ranking_is_monotonic_within_a_source():
+    scores = [scoring.demand_score(n, WHOLESALE) for n in (20, 500, 2100, 10000, 100000)]
+    assert scores == sorted(scores)
+
+
+def test_thin_baseline_falls_back_to_the_absolute_curve():
+    """Under DEMAND_MIN_CORPUS a distribution can't be read; guessing from
+    four data points would be worse than the curve."""
+    thin = [10, 20, 30, 40]
+    assert len(thin) < scoring.DEMAND_MIN_CORPUS
+    assert scoring.demand_score(5000, thin) == scoring.demand_score(5000)
+
+
+def test_no_baseline_behaves_exactly_as_before():
+    for n in (1, 100, 1_000, 10_000):
+        assert scoring.demand_score(n, None) == scoring.demand_score(n)
+
+
+def test_unknown_and_zero_keep_their_meaning_under_ranking():
+    assert scoring.demand_score(None, WHOLESALE) == scoring.UNKNOWN
+    assert scoring.demand_score(0, WHOLESALE) == 0
+
+
+def test_uniform_population_scores_midpoint_not_ceiling():
+    """Ties split. If every product sold 100 units, none of them is a winner."""
+    flat = [100] * 40
+    assert scoring.demand_score(100, flat) == 50
+
+
+def test_percentile_rank_handles_the_edges():
+    assert scoring.percentile_rank(1, []) == 0.5
+    assert scoring.percentile_rank(0, [10, 20, 30]) == 0.0
+    assert scoring.percentile_rank(99, [10, 20, 30]) == 1.0
+
+
+def test_score_product_threads_the_baseline_through():
+    product = make_product(source="tiktok", price_usd=29.99, cost_usd=None)
+    ranked = scoring.score_product(product, orders_count=400,
+                                   demand_baseline=RETAIL)
+    absolute = scoring.score_product(product, orders_count=400)
+    assert ranked.demand_score > absolute.demand_score

@@ -7,7 +7,9 @@ ingestion worker has been running long enough to have a comparison point.
 
 Weights are explicit so they are easy to tune.
 """
+import bisect
 import math
+from typing import Sequence
 
 from .schemas import AdSignal, Product, Score
 
@@ -22,8 +24,13 @@ WEIGHTS = {
 # "unknown" must never rank a product above one with proven numbers.
 UNKNOWN = 50
 
-# Units sold at which demand saturates (log scale).
+# Units sold at which demand saturates (log scale). Only used as a fallback:
+# see demand_score for why an absolute curve can't compare across sources.
 DEMAND_CEILING = 10_000
+# Below this many products with a known orders_count, a source's own
+# distribution is too thin to read a percentile from, so the absolute curve
+# stands in. Mirrors MIN_CORPUS_FOR_DF in the matcher.
+DEMAND_MIN_CORPUS = 20
 # Week-over-week growth that counts as a maximum trend signal.
 TREND_CEILING = 0.50
 
@@ -60,12 +67,46 @@ def margin_score(
     return max(0, min(100, round(margin / 0.70 * 100)))
 
 
-def demand_score(orders_count: int | None) -> int:
-    """0-100 from units sold, log-scaled so the top end doesn't dominate."""
+def percentile_rank(value: int, baseline: Sequence[int]) -> float:
+    """Fraction of `baseline` this value beats, counting ties as half.
+
+    `baseline` must be sorted ascending. Ties split so that every member of a
+    uniform population scores the midpoint rather than the ceiling.
+    """
+    n = len(baseline)
+    if n == 0:
+        return 0.5
+    below = bisect.bisect_left(baseline, value)
+    equal = bisect.bisect_right(baseline, value) - below
+    return (below + equal / 2) / n
+
+
+def demand_score(
+    orders_count: int | None, baseline: Sequence[int] | None = None
+) -> int:
+    """0-100 from units sold, ranked within the product's own source.
+
+    Sources count different things. 1688's 已售 figure is cumulative wholesale
+    units across resellers on a listing that may be years old; TikTok's is
+    retail units on one storefront listing. Measured on the live catalogue the
+    medians were 2100 and 31 — a 68x gap that reflects what the platforms
+    count, not which products sell. Put through one absolute curve, the
+    wholesale number wins structurally and 1688 takes the whole leaderboard.
+
+    So a product is ranked against its own platform's distribution: the top
+    seller on TikTok and the top seller on 1688 both score near 100, which is
+    the comparison that carries meaning across sources.
+
+    Without a baseline — or with one too thin to read (DEMAND_MIN_CORPUS) —
+    this falls back to the absolute log curve. A genuine zero still scores 0,
+    and an unknown count still scores neutral.
+    """
     if orders_count is None:
         return UNKNOWN
     if orders_count <= 0:
         return 0
+    if baseline is not None and len(baseline) >= DEMAND_MIN_CORPUS:
+        return max(0, min(100, round(percentile_rank(orders_count, baseline) * 100)))
     scaled = math.log10(orders_count + 1) / math.log10(DEMAND_CEILING + 1)
     return max(0, min(100, round(scaled * 100)))
 
@@ -113,13 +154,19 @@ def score_product(
     product: Product,
     orders_count: int | None = None,
     previous_orders: int | None = None,
+    demand_baseline: Sequence[int] | None = None,
 ) -> Score:
     """Compute all four components plus the weighted overall.
 
     `previous_orders` comes from the snapshot taken ~TREND_WINDOW_DAYS ago;
     passing None simply leaves trend at the neutral midpoint.
+
+    `demand_baseline` is the sorted orders_count distribution for this
+    product's own source. Every caller should pass it — a manual rescore and a
+    scheduled one must not disagree — but omitting it degrades to the absolute
+    curve rather than failing.
     """
-    demand = demand_score(orders_count)
+    demand = demand_score(orders_count, demand_baseline)
     margin = margin_score(
         product.price_usd, product.cost_usd, product.price_is_derived
     )

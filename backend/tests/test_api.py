@@ -165,10 +165,14 @@ def test_rescore_persists(client, monkeypatch):
     async def orders_at(_pid, _days):
         return 500  # doubled week-over-week
 
+    async def orders_baseline(_source):
+        return []  # too thin to rank in; demand falls back to the curve
+
     monkeypatch.setattr(repository, "get_product", get_product)
     monkeypatch.setattr(repository, "save_score", save_score)
     monkeypatch.setattr(repository, "current_orders", current_orders)
     monkeypatch.setattr(repository, "orders_at", orders_at)
+    monkeypatch.setattr(repository, "orders_baseline", orders_baseline)
 
     body = client.post(f"/api/v1/products/{PRODUCT.id}/rescore").json()
     assert "score" in body
