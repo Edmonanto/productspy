@@ -6,8 +6,23 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "")
 
 # Supabase JWT verification. Supabase signs access tokens with this shared
 # secret (Project Settings -> API -> JWT Secret) using HS256.
+# Supabase signs access tokens one of two ways:
+#
+#   - asymmetric (ES256/RS256), the current default. The token header carries
+#     a `kid`; the matching public key is published at the project's JWKS
+#     endpoint. Nothing secret is needed to verify one.
+#   - legacy HS256, using the shared secret below (Project Settings -> API ->
+#     JWT Secret). Still valid for projects that have not rotated.
+#
+# Both are accepted. The algorithm in the token header decides which path
+# runs, and an unexpected algorithm is refused rather than guessed at.
 SUPABASE_JWT_SECRET = os.environ.get("SUPABASE_JWT_SECRET", "")
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_JWKS_URL = os.environ.get("SUPABASE_JWKS_URL", "") or (
+    f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json" if SUPABASE_URL else ""
+)
 JWT_ALGORITHM = "HS256"
+ASYMMETRIC_ALGORITHMS = ("ES256", "RS256")
 JWT_AUDIENCE = "authenticated"
 
 # Comma-separated list of origins allowed to call this API.
