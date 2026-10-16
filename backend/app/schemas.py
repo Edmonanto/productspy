@@ -110,9 +110,15 @@ class SourceStatus(BaseModel):
     endpoints: list[EndpointUsage] = []
 
 
+class ScoreBucket(BaseModel):
+    range: str                     # "0–19" ... "80–100"
+    count: int
+
+
 class DataStatus(BaseModel):
     sources: list[SourceStatus]
     products: dict[str, int]       # catalogue size per source
+    score_distribution: list[ScoreBucket] = []
     last_updated_at: datetime | None
     is_admin: bool
 

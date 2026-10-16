@@ -8,19 +8,21 @@ import QuotaWidget from "@/components/dashboard/QuotaWidget";
 import ScoreDistributionChart from "@/components/dashboard/ScoreDistributionChart";
 import TopProductsMini from "@/components/dashboard/TopProductsMini";
 import WatchlistMini from "@/components/dashboard/WatchlistMini";
-import { usersApi, productsApi, watchlistApi, Me, Product, WatchlistItem } from "@/lib/api";
-
-// Placeholder score distribution until we have a real /stats endpoint
-const MOCK_DISTRIBUTION = [
-  { range: "0–20",  count: 12 },
-  { range: "21–40", count: 28 },
-  { range: "41–60", count: 54 },
-  { range: "61–80", count: 38 },
-  { range: "81–100",count: 16 },
-];
+import DataStatusCard from "@/components/dashboard/DataStatusCard";
+import {
+  usersApi, productsApi, watchlistApi, statusApi,
+  DataStatus, Me, Product, WatchlistItem,
+} from "@/lib/api";
+import { timeAgo } from "@/lib/utils";
 
 export default function DashboardPage() {
-  const { data: me, isLoading: meLoading } = useSWR<Me>("me", usersApi.me);
+  const { data: me } = useSWR<Me>("me", usersApi.me);
+
+  const { data: status, isLoading: statusLoading } = useSWR<DataStatus>(
+    "data-status",
+    statusApi.get,
+    { refreshInterval: 600_000 } // 10 min
+  );
 
   const { data: trendingData, isLoading: productsLoading } = useSWR(
     "dashboard-trending",
@@ -53,8 +55,9 @@ export default function DashboardPage() {
             </p>
             <p className="text-zinc-500 text-xs mt-0.5">
               {products.length > 0
-                ? `${products.length} products trending today. Top score: ${topScore}.`
-                : "Scraper runs every 6 hours — check back soon for fresh products."}
+                ? `${products.length} products trending. Top score: ${topScore}.` +
+                  (status?.last_updated_at ? ` Data updated ${timeAgo(status.last_updated_at)}.` : "")
+                : "Products update once a day — check back soon for fresh products."}
             </p>
           </div>
           <div className={`text-xs font-bold px-3 py-1.5 rounded-full capitalize border
@@ -117,7 +120,9 @@ export default function DashboardPage() {
           {/* Left col: top products */}
           <div className="lg:col-span-2 space-y-6">
             <TopProductsMini products={products} loading={productsLoading} />
-            <ScoreDistributionChart data={MOCK_DISTRIBUTION} />
+            {status && status.score_distribution.some((b) => b.count > 0) && (
+              <ScoreDistributionChart data={status.score_distribution} />
+            )}
           </div>
 
           {/* Right col: quota + watchlist */}
@@ -147,25 +152,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Scraper status */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-              <h3 className="text-white font-semibold text-sm mb-3">Scraper status</h3>
-              <div className="space-y-2.5">
-                {[
-                  { source: "AliExpress", status: "active", next: "in ~2h" },
-                  { source: "TikTok Shop", status: "active", next: "in ~3h" },
-                  { source: "AI Scoring",  status: "active", next: "at :30" },
-                ].map(({ source, status, next }) => (
-                  <div key={source} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span className="text-zinc-400">{source}</span>
-                    </div>
-                    <span className="text-zinc-600">Next run {next}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <DataStatusCard status={status} loading={statusLoading} />
           </div>
         </div>
       </div>

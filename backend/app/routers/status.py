@@ -11,9 +11,11 @@ from fastapi import APIRouter, Depends
 from .. import config, repository
 from ..auth import CurrentUser, current_user
 from ..providers.registry import enabled_providers
-from ..schemas import DataStatus, EndpointUsage, SourceStatus
+from ..schemas import DataStatus, EndpointUsage, ScoreBucket, SourceStatus
 
 router = APIRouter(prefix="/status", tags=["status"])
+
+_BUCKET_LABELS = ("0–19", "20–39", "40–59", "60–79", "80–100")
 
 
 def _state(run: dict[str, Any] | None, endpoints: list[EndpointUsage]) -> str:
@@ -60,9 +62,14 @@ def build_status(raw: dict[str, Any], caps: dict[str, dict[str, int]], is_admin:
         )
 
     successes = [s.last_success_at for s in sources if s.last_success_at]
+    buckets = raw.get("score_buckets", {})
     return DataStatus(
         sources=sources,
         products=raw["products"],
+        score_distribution=[
+            ScoreBucket(range=label, count=buckets.get(i, 0))
+            for i, label in enumerate(_BUCKET_LABELS)
+        ],
         last_updated_at=max(successes) if successes else None,
         is_admin=is_admin,
     )

@@ -178,3 +178,37 @@ export interface Me {
 export const usersApi = {
   me: () => api.get<Me>("/users/me"),
 };
+
+// ---- Data status (GET /status/) ----
+
+export type SourceState = "ok" | "low_credits" | "out_of_credits" | "failing" | "never_run";
+
+export interface EndpointUsage {
+  endpoint: string;
+  calls_today: number;
+  daily_cap: number | null;
+  balance: number | null;
+  out_of_credits: boolean;
+  last_error: string | null;
+}
+
+export interface SourceStatus {
+  provider: string;
+  state: SourceState;
+  last_run_at: string | null;
+  last_success_at: string | null;
+  last_error: string | null;  // admins only
+  endpoints: EndpointUsage[]; // admins only
+}
+
+export interface DataStatus {
+  sources: SourceStatus[];
+  products: Record<string, number>;
+  score_distribution: { range: string; count: number }[];
+  last_updated_at: string | null;
+  is_admin: boolean;
+}
+
+export const statusApi = {
+  get: () => api.get<DataStatus>("/status/"),
+};

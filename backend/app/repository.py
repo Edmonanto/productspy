@@ -373,10 +373,16 @@ async def data_status() -> dict[str, Any]:
         """
     )
     counts = await db.fetch("select source, count(*) as n from products group by source")
+    # Five 20-point buckets; 100 joins the top one rather than getting its own.
+    buckets = await db.fetch(
+        "select least(overall_score / 20, 4) as bucket, count(*) as n "
+        "from product_scores group by 1"
+    )
     return {
         "runs": [dict(r) for r in runs],
         "usage": [dict(u) for u in usage],
         "products": {r["source"]: int(r["n"]) for r in counts},
+        "score_buckets": {int(b["bucket"]): int(b["n"]) for b in buckets},
     }
 
 

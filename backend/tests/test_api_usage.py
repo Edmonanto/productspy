@@ -216,3 +216,11 @@ def test_search_patterns_one_per_word():
 def test_search_patterns_escape_wildcards():
     # A user typing % or _ must not turn the query into a match-everything.
     assert search_patterns("100% cotton_shirt") == ["%100\%%", "%cotton\_shirt%"]
+
+
+def test_status_score_distribution_fills_empty_buckets():
+    raw = {"runs": [], "usage": [], "products": {}, "score_buckets": {2: 5, 4: 1}}
+    status = build_status(raw, {}, is_admin=False)
+    assert [(b.range, b.count) for b in status.score_distribution] == [
+        ("0–19", 0), ("20–39", 0), ("40–59", 5), ("60–79", 0), ("80–100", 1),
+    ]
