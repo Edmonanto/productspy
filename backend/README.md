@@ -80,6 +80,7 @@ The grammar checks skip cleanly when `pglast` isn't installed.
 | `python -m app.matching.runner` | done — translate + match, writes candidates |
 | `GET /matches/` `POST /{id}/confirm` `reject` | done — review queue; confirm applies the cost |
 | `GET /status/` | done — data freshness per source; token balances and usage for `ADMIN_EMAILS` |
+| `POST /quotes/` `GET /quotes/` `POST /quotes/{id}/reply` | done — customer quote requests; admins reply |
 
 ## Migrations
 
@@ -244,6 +245,31 @@ Both tokens are prepaid per call, and the provider refuses with
 
 Budget maths: the ingest cron runs daily, so N keywords spend N search calls
 a day. Detail enrichment adds `AGG1688_ENRICH_TOP` calls per run.
+
+#### Product page detail (lazy, cached)
+
+`GET /products/{id}` on a 1688 product attaches `details`: price tiers by
+quantity, MOQ, units sold, weight, ships-from, dispatch time, seller, gallery,
+variants and attributes. It is fetched from the detail endpoint the first time
+the page is opened, stored in `products.details`, and reused for
+`DETAIL_TTL_DAYS` (7). The fetch draws on the same `AGG1688_DAILY_DETAIL_CALLS`
+cap as ingestion; when the cap is spent or the token is dry the page renders
+with whatever is stored. `AGG1688_DETAIL_ON_VIEW=false` stops page views from
+spending calls at all.
+
+The MOQ-tier price replaces the search-card price as `cost_usd` (and the
+derived `price_usd` follows). `shipping_estimate_usd` is
+`SHIPPING_USD_BASE + weight_kg x SHIPPING_USD_PER_KG` — only a pre-fill for
+the frontend profit calculator, which users override.
+
+#### Quote requests
+
+`POST /quotes/` lets a customer ask for an exact unit and shipping price for a
+quantity and destination; `GET /quotes/` lists their own. `ADMIN_EMAILS` see
+every request with `?all=true` and answer with `POST /quotes/{id}/reply`
+(unit price, shipping per unit, message, or close it). Capped at 20 requests
+per customer per day. There is no email notification yet — admins check
+`/dashboard/quotes`.
 
 > ⚠️ These endpoints are **plain HTTP on bare IPs**. The token and the
 > response travel unencrypted, and the operator is unknown. Keep tokens in

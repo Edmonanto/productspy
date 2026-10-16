@@ -295,6 +295,122 @@ async def finish_run(
     )
 
 
+# ── Product detail (sourcing data for the product page) ─────────────────────
+async def product_details(product_id: str) -> asyncpg.Record | None:
+    return await db.fetchrow(
+        "select external_id, details, details_fetched_at from products where id = $1",
+        product_id,
+    )
+
+
+async def save_details(
+    product_id: str, details: dict[str, Any], cost_usd: float | None
+) -> None:
+    """Store fetched detail; a MOQ-tier cost replaces the search-card cost.
+
+    A derived retail price is re-derived from the new cost so the two stay
+    consistent. A published retail price is never touched.
+    """
+    import json
+
+    await db.execute(
+        """
+        update products set
+            details = $2::jsonb,
+            details_fetched_at = now(),
+            cost_usd  = coalesce($3, cost_usd),
+            price_usd = case when price_is_derived and $3 is not null
+                             then round($3 * $4, 2) else price_usd end,
+            updated_at = now()
+        where id = $1
+        """,
+        product_id,
+        json.dumps(details),
+        cost_usd,
+        config.WHOLESALE_MARKUP,
+    )
+
+
+# ── Quote requests ──────────────────────────────────────────────────────────
+_QUOTE_COLUMNS = (
+    "id, user_id, user_email, product_id, product_title, quantity, "
+    "destination_country, target_price_usd, notes, status, quoted_unit_usd, "
+    "quoted_shipping_usd, reply, created_at, replied_at"
+)
+
+
+async def create_quote(
+    user_id: str,
+    user_email: str,
+    product_id: str,
+    product_title: str,
+    quantity: int,
+    destination_country: str,
+    target_price_usd: float | None,
+    notes: str,
+) -> asyncpg.Record:
+    return await db.fetchrow(
+        """
+        insert into quote_requests (user_id, user_email, product_id, product_title,
+            quantity, destination_country, target_price_usd, notes)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        returning id, user_id, user_email, product_id, product_title, quantity,
+            destination_country, target_price_usd, notes, status, quoted_unit_usd,
+            quoted_shipping_usd, reply, created_at, replied_at
+        """,
+        user_id, user_email, product_id, product_title, quantity,
+        destination_country, target_price_usd, notes,
+    )
+
+
+async def quotes_created_today(user_id: str) -> int:
+    return int(
+        await db.fetchval(
+            "select count(*) from quote_requests where user_id = $1 "
+            "and created_at >= (now() at time zone 'utc')::date",
+            user_id,
+        )
+        or 0
+    )
+
+
+async def list_quotes(user_id: str | None, limit: int = 100) -> list[asyncpg.Record]:
+    """A user's own quotes, or every quote when user_id is None (admins)."""
+    if user_id is None:
+        return await db.fetch(
+            f"select {_QUOTE_COLUMNS} from quote_requests "
+            "order by (status = 'open') desc, created_at desc limit $1",
+            limit,
+        )
+    return await db.fetch(
+        f"select {_QUOTE_COLUMNS} from quote_requests "
+        "where user_id = $1 order by created_at desc limit $2",
+        user_id,
+        limit,
+    )
+
+
+async def reply_quote(
+    quote_id: str,
+    status: str,
+    quoted_unit_usd: float | None,
+    quoted_shipping_usd: float | None,
+    reply: str,
+) -> asyncpg.Record | None:
+    return await db.fetchrow(
+        """
+        update quote_requests set
+            status = $2, quoted_unit_usd = $3, quoted_shipping_usd = $4,
+            reply = $5, replied_at = now()
+        where id = $1
+        returning id, user_id, user_email, product_id, product_title, quantity,
+            destination_country, target_price_usd, notes, status, quoted_unit_usd,
+            quoted_shipping_usd, reply, created_at, replied_at
+        """,
+        quote_id, status, quoted_unit_usd, quoted_shipping_usd, reply,
+    )
+
+
 # ── Metered API usage ───────────────────────────────────────────────────────
 async def api_calls_today(provider: str) -> dict[str, int]:
     """{endpoint: calls sent today (UTC)} for one provider."""

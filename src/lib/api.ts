@@ -69,6 +69,7 @@ export interface Product {
   } | null;
   suppliers: Supplier[];
   ad_signals: AdSignal[];
+  details?: ProductDetails | null; // product page only, 1688 sourcing data
 }
 
 export interface Supplier {
@@ -211,4 +212,70 @@ export interface DataStatus {
 
 export const statusApi = {
   get: () => api.get<DataStatus>("/status/"),
+};
+
+// ---- 1688 sourcing detail (GET /products/{id} only) ----
+
+export interface PriceTier {
+  min_qty: number;
+  price_cny: number;
+  price_usd: number;
+}
+
+export interface ProductDetails {
+  images: string[];
+  video_url: string | null;
+  price_tiers: PriceTier[];
+  moq: number | null;
+  unit: string | null;
+  units_sold: number | null;
+  weight_kg: number | null;
+  ships_from: string | null;
+  ships_within_days: number | null;
+  free_shipping_in_china: boolean;
+  seller_name: string | null;
+  seller_url: string | null;
+  variants: string[];
+  attributes: Record<string, string>;
+  fetched_at: string | null;
+  cny_per_usd: number;
+  shipping_estimate_usd: number | null;
+}
+
+// ---- Quote requests (/quotes) ----
+
+export interface Quote {
+  id: string;
+  user_email: string;
+  product_id: string | null;
+  product_title: string;
+  quantity: number;
+  destination_country: string;
+  target_price_usd: number | null;
+  notes: string;
+  status: "open" | "quoted" | "closed";
+  quoted_unit_usd: number | null;
+  quoted_shipping_usd: number | null;
+  reply: string;
+  created_at: string;
+  replied_at: string | null;
+}
+
+export interface QuoteCreate {
+  product_id: string;
+  quantity: number;
+  destination_country: string;
+  target_price_usd?: number | null;
+  notes?: string;
+}
+
+export const quotesApi = {
+  create: (body: QuoteCreate) => api.post<Quote>("/quotes/", body),
+  list: (all = false) => api.get<{ quotes: Quote[]; is_admin: boolean }>(`/quotes/${all ? "?all=true" : ""}`),
+  reply: (id: string, body: {
+    status: "quoted" | "closed";
+    quoted_unit_usd?: number | null;
+    quoted_shipping_usd?: number | null;
+    reply?: string;
+  }) => api.post<Quote>(`/quotes/${id}/reply`, body),
 };

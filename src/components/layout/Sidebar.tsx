@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   TrendingUp, Bookmark, Search, LayoutDashboard, GitCompareArrows,
-  CreditCard, Settings, Zap, LogOut, X, Menu
+  CreditCard, Settings, Zap, LogOut, X, Menu, Receipt
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { href: "/dashboard/trending", icon: TrendingUp, label: "Trending" },
   { href: "/dashboard/search", icon: Search, label: "Search" },
   { href: "/dashboard/watchlist", icon: Bookmark, label: "Watchlist" },
+  { href: "/dashboard/quotes", icon: Receipt, label: "Quotes" },
   { href: "/dashboard/matches", icon: GitCompareArrows, label: "Match review" },
 ];
 

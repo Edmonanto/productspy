@@ -11,6 +11,7 @@ import logging
 import sys
 
 from .. import config, db, repository, scoring, summarize
+from ..providers import metering
 from ..providers.registry import enabled_providers
 
 log = logging.getLogger("ingest")
@@ -25,13 +26,13 @@ async def ingest_provider(provider, limit: int) -> dict[str, int]:
     baselines: dict[str, list[int]] = {}
 
     try:
-        await _apply_budget(provider)
+        await metering.apply_budget(provider)
         try:
             raw_products = await provider.fetch(limit)
         finally:
             # Persist paid calls even if fetch blew up halfway: those calls
             # were made and charged either way.
-            await _record_usage(provider)
+            await metering.record_usage(provider)
 
         if getattr(provider, "out_of_credits", None):
             spent = ", ".join(sorted(provider.out_of_credits))
@@ -99,30 +100,6 @@ async def ingest_provider(provider, limit: int) -> dict[str, int]:
         stats["scored"], stats["summarized"], error,
     )
     return stats
-
-
-async def _apply_budget(provider) -> None:
-    """Lower a metered provider's per-endpoint allowance by today's usage.
-
-    Providers that aren't metered have no `daily_budgets` and are untouched.
-    """
-    budgets = getattr(provider, "daily_budgets", None)
-    if not budgets:
-        return
-    used = await repository.api_calls_today(provider.name)
-    provider.remaining = {ep: max(0, cap - used.get(ep, 0)) for ep, cap in budgets.items()}
-    log.info("%s: calls left today %s (caps %s)", provider.name, provider.remaining, budgets)
-
-
-async def _record_usage(provider) -> None:
-    calls = getattr(provider, "call_log", None)
-    if not calls:
-        return
-    try:
-        await repository.record_api_calls(provider.name, calls)
-    except Exception:
-        # Accounting must not turn a good run into a failed one.
-        log.exception("%s: could not record API usage", provider.name)
 
 
 async def translate_new_titles() -> int:

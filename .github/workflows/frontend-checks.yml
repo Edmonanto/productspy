@@ -1,0 +1,22 @@
+name: frontend checks
+
+on:
+  push:
+    paths-ignore: ["backend/**"]
+  pull_request:
+    paths-ignore: ["backend/**"]
+
+jobs:
+  lint-and-types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      # Type-check without a full build: `next build` needs the Supabase
+      # env vars, and type errors are what this job is here to catch.
+      - run: npx tsc --noEmit

@@ -298,6 +298,83 @@ class Aggregator1688Provider:
                     "1688-aggregator: detail %s unparseable: %s", product.external_id, exc
                 )
 
+    async def fetch_detail(self, offer_id: str) -> dict[str, Any] | None:
+        """One detail call for the product page. None when skipped or failed.
+
+        Raises OutOfCredits like any other metered call.
+        """
+        if not (self.detail_url and self.detail_token):
+            return None
+        async with httpx.AsyncClient(timeout=config.AGG1688_TIMEOUT) as client:
+            return await self._call(
+                client, "detail", self.detail_url,
+                {"itemId": offer_id, "token": self.detail_token},
+            )
+
+    @staticmethod
+    def parse_detail_info(body: dict[str, Any]) -> dict[str, Any] | None:
+        """The detail payload, reduced to what a sourcing decision needs.
+
+        Stored as products.details and served to the product page. Prices
+        stay in CNY here; USD is applied at read time with the current rate.
+        """
+        data = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(data, dict):
+            return None
+        item = data.get("item") or {}
+        delivery = data.get("delivery") or {}
+
+        tiers = []
+        for t in _walk(data, "price", "priceModel", "currentPrices") or []:
+            if not isinstance(t, dict):
+                continue
+            cny = parse_price(t.get("price"))
+            qty = t.get("beginAmount")
+            if cny and isinstance(qty, (int, float)):
+                tiers.append({"min_qty": int(qty), "price_cny": cny})
+        tiers.sort(key=lambda t: t["min_qty"])
+
+        # Per-SKU weights in kg; the heaviest variant is the safe shipping basis.
+        weights = [
+            w for w in (delivery.get("skuWeight") or {}).values()
+            if isinstance(w, (int, float)) and w > 0
+        ]
+        unit_weight = delivery.get("unitWeight")
+        if not weights and isinstance(unit_weight, (int, float)) and unit_weight > 0:
+            weights = [unit_weight]
+
+        sold = _walk(data, "title", "selledNumber")
+        if not isinstance(sold, int):
+            sold = item.get("saledCount") if isinstance(item.get("saledCount"), int) else None
+
+        ship_days = delivery.get("deliveryLimit")
+        return {
+            "images": [
+                u for u in (_walk(data, "mainPic", "offerImgList") or []) if isinstance(u, str)
+            ],
+            "video_url": _walk(data, "mainPic", "videoUrl") or None,
+            "price_tiers": tiers,
+            "moq": tiers[0]["min_qty"] if tiers else None,
+            "unit": item.get("offerUnit") or _walk(data, "price", "unit"),
+            "units_sold": sold,
+            "weight_kg": max(weights) if weights else None,
+            "ships_from": delivery.get("location"),
+            "ships_within_days": ship_days if isinstance(ship_days, int) else None,
+            # postFree is free *domestic* (within China) delivery, not to the buyer.
+            "free_shipping_in_china": bool(delivery.get("postFree")),
+            "seller_name": item.get("companyName") or item.get("sellerLoginId"),
+            "seller_url": item.get("winportUrl"),
+            "variants": [
+                s["name"] for s in (_walk(data, "mainPic", "skuImages") or [])
+                if isinstance(s, dict) and s.get("name")
+            ],
+            "attributes": {
+                str(p["name"]): str(p["value"])
+                for p in (_walk(data, "attribute", "propsList") or [])
+                if isinstance(p, dict) and p.get("name") and p.get("value") is not None
+            },
+        }
+
     def apply_detail(self, product: RawProduct, body: dict[str, Any]) -> RawProduct:
         """Overlay the detail call's better numbers onto a search result."""
         data = body.get("data")

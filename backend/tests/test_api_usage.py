@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from app import config, repository
-from app.ingest import worker
+from app.providers import metering
 from app.providers import aggregator1688
 from app.providers.aggregator1688 import Aggregator1688Provider, _balance, _error_message
 from app.providers.base import ApiCall
@@ -120,7 +120,7 @@ async def test_budget_is_lowered_by_todays_usage(monkeypatch):
 
     monkeypatch.setattr(repository, "api_calls_today", used)
     p = provider(["a"])
-    await worker._apply_budget(p)
+    await metering.apply_budget(p)
     assert p.remaining == {"search": 3, "detail": 10}
 
 
@@ -130,7 +130,7 @@ async def test_budget_never_goes_negative(monkeypatch):
 
     monkeypatch.setattr(repository, "api_calls_today", used)
     p = provider(["a"])
-    await worker._apply_budget(p)
+    await metering.apply_budget(p)
     assert p.remaining["search"] == 0
 
 
@@ -138,7 +138,7 @@ async def test_unmetered_providers_are_untouched():
     class Plain:
         name = "plain"
 
-    await worker._apply_budget(Plain())  # no daily_budgets: no DB call, no error
+    await metering.apply_budget(Plain())  # no daily_budgets: no DB call, no error
 
 
 async def test_usage_failure_does_not_fail_the_run(monkeypatch):
@@ -148,7 +148,7 @@ async def test_usage_failure_does_not_fail_the_run(monkeypatch):
     monkeypatch.setattr(repository, "record_api_calls", broken)
     p = provider(["a"])
     p.call_log = [ApiCall("search", ok=True)]
-    await worker._record_usage(p)  # logs, doesn't raise
+    await metering.record_usage(p)  # logs, doesn't raise
 
 
 # ── /status ─────────────────────────────────────────────────────────────────

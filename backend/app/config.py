@@ -110,6 +110,15 @@ AGG1688_TIMEOUT = int(os.environ.get("AGG1688_TIMEOUT", "60"))
 # 0 blocks the endpoint entirely.
 AGG1688_DAILY_SEARCH_CALLS = int(os.environ.get("AGG1688_DAILY_SEARCH_CALLS", "10"))
 AGG1688_DAILY_DETAIL_CALLS = int(os.environ.get("AGG1688_DAILY_DETAIL_CALLS", "10"))
+# Opening a 1688 product page fetches its detail (tiers, MOQ, weight, seller)
+# when missing or older than DETAIL_TTL_DAYS — one detail call, within the
+# daily cap above. Set AGG1688_DETAIL_ON_VIEW=false to never spend on views.
+AGG1688_DETAIL_ON_VIEW = os.environ.get("AGG1688_DETAIL_ON_VIEW", "true").lower() == "true"
+DETAIL_TTL_DAYS = float(os.environ.get("DETAIL_TTL_DAYS", "7"))
+# Rough China -> buyer small-parcel cost, used only to pre-fill the profit
+# calculator when the listing reports a weight. Users can override it.
+SHIPPING_USD_BASE = float(os.environ.get("SHIPPING_USD_BASE", "3.0"))
+SHIPPING_USD_PER_KG = float(os.environ.get("SHIPPING_USD_PER_KG", "10.0"))
 # Warn in /status when the provider reports fewer calls left than this.
 AGG1688_LOW_BALANCE = int(os.environ.get("AGG1688_LOW_BALANCE", "20"))
 

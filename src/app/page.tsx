@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Zap, TrendingUp, GitCompareArrows, LineChart, ArrowRight, Check } from "lucide-react";
+import { Zap, TrendingUp, Calculator, LineChart, ArrowRight, Check } from "lucide-react";
 import ProductImage from "@/components/products/ProductImage";
 
 const FEATURES = [
@@ -14,9 +14,9 @@ const FEATURES = [
     desc: "Demand, margin, trend and competition, weighted and shown separately. A signal we don't have scores neutral instead of being guessed at — so a high score means evidence, not optimism.",
   },
   {
-    icon: GitCompareArrows,
-    title: "Retail matched to supplier",
-    desc: "Pairs a retail listing with the 1688 offer behind it, so margin comes from two observed numbers. Every match goes to a review queue — nothing is applied to your data automatically.",
+    icon: Calculator,
+    title: "Know your profit before you order",
+    desc: "Wholesale price tiers and minimum order for every product, plus a calculator for landed cost, fees, ad spend, margin and monthly profit. Need an exact number? Request a quote for your quantity and country.",
   },
   {
     icon: LineChart,

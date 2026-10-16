@@ -4,8 +4,9 @@ These mirror the TypeScript interfaces in src/lib/api.ts exactly — field
 names and nullability included. Changing one side requires changing the other.
 """
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class Score(BaseModel):
@@ -32,6 +33,34 @@ class AdSignal(BaseModel):
     last_seen_at: datetime
 
 
+class PriceTier(BaseModel):
+    min_qty: int
+    price_cny: float
+    price_usd: float
+
+
+class ProductDetails(BaseModel):
+    """Sourcing detail from the 1688 detail endpoint (product page only)."""
+    images: list[str] = []
+    video_url: str | None = None
+    price_tiers: list[PriceTier] = []
+    moq: int | None = None
+    unit: str | None = None
+    units_sold: int | None = None
+    weight_kg: float | None = None
+    ships_from: str | None = None
+    ships_within_days: int | None = None
+    free_shipping_in_china: bool = False
+    seller_name: str | None = None
+    seller_url: str | None = None
+    variants: list[str] = []
+    attributes: dict[str, str] = {}
+    fetched_at: datetime | None = None
+    # Calculator inputs, so the frontend uses the backend's numbers.
+    cny_per_usd: float
+    shipping_estimate_usd: float | None = None  # from weight; an estimate
+
+
 class Product(BaseModel):
     id: str
     title: str
@@ -47,6 +76,8 @@ class Product(BaseModel):
     score: Score | None
     suppliers: list[Supplier] = []
     ad_signals: list[AdSignal] = []
+    # Only on GET /products/{id}; list endpoints leave it null.
+    details: ProductDetails | None = None
 
 
 class ProductList(BaseModel):
@@ -120,6 +151,43 @@ class DataStatus(BaseModel):
     products: dict[str, int]       # catalogue size per source
     score_distribution: list[ScoreBucket] = []
     last_updated_at: datetime | None
+    is_admin: bool
+
+
+class QuoteCreate(BaseModel):
+    product_id: str
+    quantity: int = Field(gt=0, le=1_000_000)
+    destination_country: str = Field(min_length=2, max_length=56)
+    target_price_usd: float | None = Field(default=None, gt=0, le=100_000)
+    notes: str = Field(default="", max_length=2000)
+
+
+class QuoteReply(BaseModel):
+    status: Literal["quoted", "closed"] = "quoted"
+    quoted_unit_usd: float | None = Field(default=None, ge=0, le=100_000)
+    quoted_shipping_usd: float | None = Field(default=None, ge=0, le=100_000)
+    reply: str = Field(default="", max_length=4000)
+
+
+class Quote(BaseModel):
+    id: str
+    user_email: str                # shown to admins; it's the requester's own email otherwise
+    product_id: str | None
+    product_title: str
+    quantity: int
+    destination_country: str
+    target_price_usd: float | None
+    notes: str
+    status: str                    # open | quoted | closed
+    quoted_unit_usd: float | None
+    quoted_shipping_usd: float | None
+    reply: str
+    created_at: datetime
+    replied_at: datetime | None
+
+
+class QuoteList(BaseModel):
+    quotes: list[Quote]
     is_admin: bool
 
 
