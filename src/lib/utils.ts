@@ -64,3 +64,8 @@ export function timeAgo(iso: string | null | undefined): string {
   if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
   return `${Math.floor(seconds / 86400)}d ago`;
 }
+
+/** 7900 -> "7.9k", 1250000 -> "1.3M". */
+export function compactCount(n: number): string {
+  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}

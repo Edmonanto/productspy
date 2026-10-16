@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Bookmark, ExternalLink } from "lucide-react";
 import { Product, watchlistApi } from "@/lib/api";
-import { formatPrice, estimatedMargin, sourceIcon, displayTitle } from "@/lib/utils";
+import { formatPrice, estimatedMargin, sourceIcon, displayTitle, compactCount } from "@/lib/utils";
 import ScoreBadge from "./ScoreBadge";
 import { useState } from "react";
 import ProductImage from "./ProductImage";
@@ -60,8 +60,16 @@ export default function ProductCard({ product, inWatchlist = false }: Props) {
           />
 
           {/* Score badge overlay */}
-          <div className="absolute top-2 left-2">
+          <div className="absolute top-2 left-2 flex flex-col items-start gap-1">
             <ScoreBadge score={score} />
+            {product.score && !product.score.trend_known && (
+              <span
+                title="Trend needs a week of sales history; until then it scores a neutral 50"
+                className="text-[10px] font-medium bg-zinc-900/80 backdrop-blur-sm text-sky-300 px-1.5 py-0.5 rounded"
+              >
+                New · collecting data
+              </span>
+            )}
           </div>
 
           {/* Watchlist button */}
@@ -94,12 +102,23 @@ export default function ProductCard({ product, inWatchlist = false }: Props) {
               <div className="text-zinc-500">{derived ? "Est. Price" : "Price"}</div>
               <div className="text-white font-semibold">{formatPrice(product.price_usd)}</div>
             </div>
-            <div className="space-y-0.5 text-right">
-              <div className="text-zinc-500">Est. Margin</div>
-              <div className={`font-semibold ${margin === "N/A" ? "text-zinc-500" : "text-emerald-400"}`}>
-                {margin}
+            {derived ? (
+              // 1688 publishes no retail price, so margin would just echo our
+              // markup. Units sold is a real number — show that instead.
+              <div className="space-y-0.5 text-right">
+                <div className="text-zinc-500">Sold</div>
+                <div className="text-zinc-300 font-semibold">
+                  {product.orders_count != null ? compactCount(product.orders_count) : "N/A"}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="space-y-0.5 text-right">
+                <div className="text-zinc-500">Est. Margin</div>
+                <div className={`font-semibold ${margin === "N/A" ? "text-zinc-500" : "text-emerald-400"}`}>
+                  {margin}
+                </div>
+              </div>
+            )}
             <div className="space-y-0.5 text-right">
               <div className="text-zinc-500">Cost</div>
               <div className="text-zinc-300">{formatPrice(product.cost_usd)}</div>

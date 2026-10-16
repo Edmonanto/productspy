@@ -15,10 +15,11 @@ async def get_trending(
     category: str = Query(""),
     min_score: int = Query(0, ge=0, le=100),
     limit: int = Query(40, ge=1, le=100),
+    sort: str = Query("score", pattern="^(score|orders|price_low|newest)$"),
     user: CurrentUser = Depends(current_user),
 ) -> ProductList:
     """Browsing trending products does not consume search quota."""
-    products, total = await repository.trending(source, category, min_score, limit)
+    products, total = await repository.trending(source, category, min_score, limit, sort)
     return ProductList(products=products, total=total)
 
 

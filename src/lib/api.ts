@@ -49,6 +49,7 @@ export interface Product {
   id: string;
   title: string;
   title_en?: string | null; // English name for 1688 products; null until translated
+  orders_count?: number | null; // units sold, as last reported by the source
   image_url: string | null;
   product_url: string;
   category: string | null;
@@ -66,6 +67,7 @@ export interface Product {
     competition_score: number;
     trend_score: number;
     ai_summary: string;
+    trend_known?: boolean; // false: no sales history yet, trend is a neutral default
   } | null;
   suppliers: Supplier[];
   ad_signals: AdSignal[];

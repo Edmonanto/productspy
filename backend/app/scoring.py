@@ -180,4 +180,5 @@ def score_product(
         competition_score=competition,
         trend_score=trend,
         ai_summary=product.score.ai_summary if product.score else "",
+        trend_known=orders_count is not None and previous_orders is not None,
     )

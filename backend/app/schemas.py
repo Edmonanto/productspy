@@ -16,6 +16,9 @@ class Score(BaseModel):
     competition_score: int
     trend_score: int
     ai_summary: str
+    # False while there is no snapshot ~TREND_WINDOW_DAYS old: trend_score
+    # is then the neutral default, not a measurement.
+    trend_known: bool = False
 
 
 class Supplier(BaseModel):
@@ -66,6 +69,7 @@ class Product(BaseModel):
     title: str
     # English rendering of a non-English (1688) title; null until translated.
     title_en: str | None = None
+    orders_count: int | None = None  # units sold, as last reported by the source
     image_url: str | None
     product_url: str
     category: str | None

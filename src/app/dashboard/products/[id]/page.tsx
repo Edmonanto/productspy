@@ -172,7 +172,7 @@ export default function ProductDetailPage() {
               {[
                 { label: "Supplier cost", value: formatPrice(product.cost_usd), icon: Package },
                 { label: product.price_is_derived ? "Suggested price" : "Sell price", value: formatPrice(product.price_usd), icon: ShoppingBag },
-                { label: "Units sold", value: details?.units_sold != null ? details.units_sold.toLocaleString() : "N/A", icon: TrendingUp },
+                { label: "Units sold", value: (details?.units_sold ?? product.orders_count)?.toLocaleString() ?? "N/A", icon: TrendingUp },
                 { label: "Score", value: score ? `${score.overall_score}/100` : "N/A", icon: Gauge },
               ].map(({ label, value, icon: Icon }) => (
                 <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-lg p-3">

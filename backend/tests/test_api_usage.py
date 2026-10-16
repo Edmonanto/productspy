@@ -224,3 +224,25 @@ def test_status_score_distribution_fills_empty_buckets():
     assert [(b.range, b.count) for b in status.score_distribution] == [
         ("0–19", 0), ("20–39", 0), ("40–59", 5), ("60–79", 0), ("80–100", 1),
     ]
+
+
+# ── #6: trend provenance and trending sort ──────────────────────────────────
+from app import scoring  # noqa: E402
+from app.schemas import Product as _Product  # noqa: E402
+
+
+def _p():
+    return _Product(id="p", title="t", image_url=None, product_url="u", category=None,
+                    price_usd=None, cost_usd=None, source="1688", score=None)
+
+
+def test_trend_known_only_with_history():
+    assert scoring.score_product(_p(), orders_count=100, previous_orders=None).trend_known is False
+    assert scoring.score_product(_p(), orders_count=None, previous_orders=80).trend_known is False
+    measured = scoring.score_product(_p(), orders_count=100, previous_orders=100)
+    # Flat sales and no history both score 50; only the flag tells them apart.
+    assert measured.trend_score == scoring.UNKNOWN and measured.trend_known is True
+
+
+def test_trending_sorts_are_whitelisted():
+    assert set(repository.TRENDING_SORTS) == {"score", "orders", "price_low", "newest"}

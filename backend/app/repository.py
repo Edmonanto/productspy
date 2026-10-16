@@ -14,7 +14,8 @@ _PRODUCT_SELECT = """
         p.id, p.title, p.image_url, p.product_url, p.category,
         p.price_usd, p.cost_usd, p.price_is_derived, p.source, p.title_en,
         s.overall_score, s.demand_score, s.margin_score,
-        s.competition_score, s.trend_score, s.ai_summary,
+        s.competition_score, s.trend_score, s.ai_summary, s.trend_known,
+        p.orders_count,
         coalesce(sup.items, '[]'::json) as suppliers,
         coalesce(ads.items, '[]'::json) as ad_signals
     from products p
@@ -49,6 +50,7 @@ def _to_product(row: asyncpg.Record) -> Product:
             competition_score=row["competition_score"],
             trend_score=row["trend_score"],
             ai_summary=row["ai_summary"] or "",
+            trend_known=bool(row["trend_known"]),
         )
 
     suppliers = [Supplier(**s) for s in json.loads(row["suppliers"])]
@@ -58,6 +60,7 @@ def _to_product(row: asyncpg.Record) -> Product:
         id=str(row["id"]),
         title=row["title"],
         title_en=row["title_en"],
+        orders_count=row["orders_count"],
         image_url=row["image_url"],
         product_url=row["product_url"],
         category=row["category"],
@@ -72,8 +75,19 @@ def _to_product(row: asyncpg.Record) -> Product:
 
 
 # ── Products ────────────────────────────────────────────────────────────────
+# Whitelisted ORDER BY clauses for /products/trending?sort=. Never interpolate
+# the raw parameter.
+TRENDING_SORTS = {
+    "score": "s.overall_score desc nulls last, p.updated_at desc",
+    "orders": "p.orders_count desc nulls last, s.overall_score desc nulls last",
+    "price_low": "p.cost_usd asc nulls last, s.overall_score desc nulls last",
+    "newest": "p.first_seen_at desc",
+}
+
+
 async def trending(
-    source: str = "", category: str = "", min_score: int = 0, limit: int = 40
+    source: str = "", category: str = "", min_score: int = 0, limit: int = 40,
+    sort: str = "score",
 ) -> tuple[list[Product], int]:
     where: list[str] = ["coalesce(s.overall_score, 0) >= $1"]
     args: list[Any] = [min_score]
@@ -90,7 +104,7 @@ async def trending(
 
     rows = await db.fetch(
         f"{_PRODUCT_SELECT} where {clause} "
-        f"order by s.overall_score desc nulls last, p.updated_at desc "
+        f"order by {TRENDING_SORTS.get(sort, TRENDING_SORTS['score'])} "
         f"limit ${len(args)}",
         *args,
     )
@@ -506,8 +520,9 @@ async def save_score(product_id: str, score: Score) -> None:
     await db.execute(
         """
         insert into product_scores (product_id, overall_score, demand_score,
-            margin_score, competition_score, trend_score, ai_summary, scored_at)
-        values ($1, $2, $3, $4, $5, $6, $7, now())
+            margin_score, competition_score, trend_score, ai_summary, trend_known,
+            scored_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, now())
         on conflict (product_id) do update set
             overall_score = excluded.overall_score,
             demand_score = excluded.demand_score,
@@ -515,6 +530,7 @@ async def save_score(product_id: str, score: Score) -> None:
             competition_score = excluded.competition_score,
             trend_score = excluded.trend_score,
             ai_summary = excluded.ai_summary,
+            trend_known = excluded.trend_known,
             scored_at = now()
         """,
         product_id,
@@ -524,6 +540,7 @@ async def save_score(product_id: str, score: Score) -> None:
         score.competition_score,
         score.trend_score,
         score.ai_summary,
+        score.trend_known,
     )
 
 
