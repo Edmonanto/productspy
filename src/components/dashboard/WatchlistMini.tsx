@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { WatchlistItem } from "@/lib/api";
-import { scoreColor, formatPrice, sourceIcon } from "@/lib/utils";
+import { scoreColor, formatPrice, sourceIcon, displayTitle } from "@/lib/utils";
 import { Bookmark, ArrowRight } from "lucide-react";
 import ProductImage from "@/components/products/ProductImage";
 
@@ -57,7 +57,7 @@ export default function WatchlistMini({ items, loading }: Props) {
                   <div className="w-9 h-9 rounded-lg bg-zinc-800 overflow-hidden shrink-0">
                     <ProductImage
                       src={product.image_url}
-                      alt={product.title}
+                      alt={displayTitle(product)}
                       className="w-full h-full object-cover"
                       fallback={
                         <div className="w-full h-full flex items-center justify-center">
@@ -68,7 +68,7 @@ export default function WatchlistMini({ items, loading }: Props) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-zinc-200 text-xs font-medium truncate group-hover:text-white">
-                      {product.title}
+                      {displayTitle(product)}
                     </p>
                     <p className="text-zinc-600 text-[10px]">
                       Saved {new Date(added_at).toLocaleDateString()}

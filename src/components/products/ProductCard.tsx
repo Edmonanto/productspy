@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Bookmark, ExternalLink } from "lucide-react";
 import { Product, watchlistApi } from "@/lib/api";
-import { formatPrice, estimatedMargin, sourceIcon } from "@/lib/utils";
+import { formatPrice, estimatedMargin, sourceIcon, displayTitle } from "@/lib/utils";
 import ScoreBadge from "./ScoreBadge";
 import { useState } from "react";
 import ProductImage from "./ProductImage";
@@ -50,7 +50,7 @@ export default function ProductCard({ product, inWatchlist = false }: Props) {
         <div className="relative aspect-square bg-zinc-800 overflow-hidden">
           <ProductImage
             src={product.image_url}
-            alt={product.title}
+            alt={displayTitle(product)}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             fallback={
               <div className="w-full h-full flex items-center justify-center text-4xl">
@@ -86,7 +86,7 @@ export default function ProductCard({ product, inWatchlist = false }: Props) {
         {/* Info */}
         <div className="p-3 space-y-2">
           <p className="text-zinc-200 text-sm font-medium leading-snug line-clamp-2">
-            {product.title}
+            {displayTitle(product)}
           </p>
 
           <div className="flex items-center justify-between text-xs">

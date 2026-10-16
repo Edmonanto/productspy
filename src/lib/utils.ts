@@ -44,3 +44,13 @@ export function sourceIcon(source: string): string {
   };
   return map[source] || "🌐";
 }
+
+/** English name when we have one (1688 titles are Chinese), else the original. */
+export function displayTitle(p: { title: string; title_en?: string | null }): string {
+  return p.title_en?.trim() || p.title;
+}
+
+/** The original title, when it differs from what displayTitle shows. */
+export function originalTitle(p: { title: string; title_en?: string | null }): string | null {
+  return p.title_en?.trim() && p.title_en.trim() !== p.title ? p.title : null;
+}

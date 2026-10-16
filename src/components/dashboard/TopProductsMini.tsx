@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { Product } from "@/lib/api";
-import { formatPrice, scoreColor, scoreLabel, sourceIcon } from "@/lib/utils";
+import { formatPrice, scoreColor, scoreLabel, sourceIcon, displayTitle } from "@/lib/utils";
 import { ArrowRight } from "lucide-react";
 import ProductImage from "@/components/products/ProductImage";
 
@@ -61,7 +61,7 @@ export default function TopProductsMini({ products, loading }: Props) {
                   <div className="w-10 h-10 rounded-lg bg-zinc-800 overflow-hidden shrink-0">
                     <ProductImage
                       src={p.image_url}
-                      alt={p.title}
+                      alt={displayTitle(p)}
                       className="w-full h-full object-cover"
                       fallback={
                         <div className="w-full h-full flex items-center justify-center text-lg">
@@ -74,7 +74,7 @@ export default function TopProductsMini({ products, loading }: Props) {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <p className="text-zinc-200 text-xs font-medium truncate group-hover:text-white">
-                      {p.title}
+                      {displayTitle(p)}
                     </p>
                     <div className="flex items-center gap-2 mt-0.5">
                       <span className="text-zinc-600 text-[10px] capitalize">{p.source}</span>

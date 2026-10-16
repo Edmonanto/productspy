@@ -12,7 +12,7 @@ from .schemas import AdSignal, Product, Score, Subscription, Supplier
 _PRODUCT_SELECT = """
     select
         p.id, p.title, p.image_url, p.product_url, p.category,
-        p.price_usd, p.cost_usd, p.price_is_derived, p.source,
+        p.price_usd, p.cost_usd, p.price_is_derived, p.source, p.title_en,
         s.overall_score, s.demand_score, s.margin_score,
         s.competition_score, s.trend_score, s.ai_summary,
         coalesce(sup.items, '[]'::json) as suppliers,
@@ -57,6 +57,7 @@ def _to_product(row: asyncpg.Record) -> Product:
     return Product(
         id=str(row["id"]),
         title=row["title"],
+        title_en=row["title_en"],
         image_url=row["image_url"],
         product_url=row["product_url"],
         category=row["category"],
@@ -101,21 +102,46 @@ async def trending(
     return [_to_product(r) for r in rows], int(total or 0)
 
 
+def search_patterns(q: str) -> list[str]:
+    """ILIKE patterns, one per word: 'Pet water fountain' -> ['%pet%', ...].
+
+    `%`, `_` and `\\` are escaped so user input can't act as a wildcard.
+    """
+    words = [w for w in q.lower().split() if w]
+    escaped = [w.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") for w in words]
+    return [f"%{w}%" for w in escaped]
+
+
 async def search(q: str, min_score: int = 40, limit: int = 40) -> tuple[list[Product], int]:
+    """A product matches when the whole phrase appears in either title (1688
+    titles are Chinese, so a Chinese query hits `title`), or when every word
+    of the query appears in the English rendering — "pet water fountain"
+    finds "automatic pet water fountain dispenser".
+
+    The predicate is written out in both queries, not shared, so the static
+    SQL checks can still count its placeholders.
+    """
+    q = q.strip()
+    patterns = search_patterns(q)
     rows = await db.fetch(
         f"{_PRODUCT_SELECT} "
-        f"where p.title ilike '%' || $1 || '%' "
-        f"  and coalesce(s.overall_score, 0) >= $2 "
-        f"order by s.overall_score desc nulls last limit $3",
+        f"where (p.title ilike '%' || $1 || '%' or p.title_en ilike '%' || $1 || '%' "
+        f"  or (cardinality($2::text[]) > 0 and p.title_en ilike all($2::text[]))) "
+        f"  and coalesce(s.overall_score, 0) >= $3 "
+        f"order by s.overall_score desc nulls last limit $4",
         q,
+        patterns,
         min_score,
         limit,
     )
     total = await db.fetchval(
         "select count(*) from products p "
         "left join product_scores s on s.product_id = p.id "
-        "where p.title ilike '%' || $1 || '%' and coalesce(s.overall_score, 0) >= $2",
+        "where (p.title ilike '%' || $1 || '%' or p.title_en ilike '%' || $1 || '%' "
+        "  or (cardinality($2::text[]) > 0 and p.title_en ilike all($2::text[]))) "
+        "  and coalesce(s.overall_score, 0) >= $3",
         q,
+        patterns,
         min_score,
     )
     return [_to_product(r) for r in rows], int(total or 0)

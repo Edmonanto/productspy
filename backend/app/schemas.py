@@ -35,6 +35,8 @@ class AdSignal(BaseModel):
 class Product(BaseModel):
     id: str
     title: str
+    # English rendering of a non-English (1688) title; null until translated.
+    title_en: str | None = None
     image_url: str | None
     product_url: str
     category: str | None

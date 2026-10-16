@@ -125,6 +125,26 @@ async def _record_usage(provider) -> None:
         log.exception("%s: could not record API usage", provider.name)
 
 
+async def translate_new_titles() -> int:
+    """Give freshly ingested 1688 products an English name.
+
+    Search and display both use title_en. The matching cron also translates,
+    but it exists for retail sources (TikTok/Amazon); a 1688-only deployment
+    still needs English titles, so ingestion does it too. Already-translated
+    rows are skipped, so whichever job runs second does nothing.
+    """
+    if not config.ANTHROPIC_API_KEY:
+        return 0
+    from ..matching.runner import translate_suppliers
+
+    try:
+        return await translate_suppliers(config.MATCH_TRANSLATE_LIMIT)
+    except Exception:
+        # Translation is an enhancement; it must not fail the ingestion run.
+        log.exception("ingest: title translation failed")
+        return 0
+
+
 async def run(limit: int = config.INGEST_LIMIT) -> dict[str, int]:
     providers = enabled_providers()
     if not providers:
@@ -141,6 +161,9 @@ async def run(limit: int = config.INGEST_LIMIT) -> dict[str, int]:
             stats = await ingest_provider(provider, limit)
             for key in totals:
                 totals[key] += stats[key]
+        translated = await translate_new_titles()
+        if translated:
+            log.info("ingest: translated %d new titles", translated)
     finally:
         await db.disconnect()
 

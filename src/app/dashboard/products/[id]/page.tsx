@@ -4,7 +4,7 @@ import { useState } from "react";
 import useSWR from "swr";
 import { useParams } from "next/navigation";
 import { productsApi, watchlistApi } from "@/lib/api";
-import { formatPrice, estimatedMargin, scoreColor, scoreLabel, sourceIcon } from "@/lib/utils";
+import { formatPrice, estimatedMargin, scoreColor, scoreLabel, sourceIcon, displayTitle, originalTitle } from "@/lib/utils";
 import ScoreBadge from "@/components/products/ScoreBadge";
 import ScoreBar from "@/components/products/ScoreBar";
 import Topbar from "@/components/layout/Topbar";
@@ -84,7 +84,10 @@ export default function ProductDetailPage() {
                 </>
               )}
             </div>
-            <h1 className="text-white text-xl font-bold leading-snug max-w-2xl">{product.title}</h1>
+            <h1 className="text-white text-xl font-bold leading-snug max-w-2xl">{displayTitle(product)}</h1>
+            {originalTitle(product) && (
+              <p lang="zh" className="text-zinc-500 text-sm mt-1 max-w-2xl">{originalTitle(product)}</p>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -122,7 +125,7 @@ export default function ProductDetailPage() {
             <div className="aspect-square bg-zinc-800 rounded-xl overflow-hidden">
               <ProductImage
                 src={product.image_url}
-                alt={product.title}
+                alt={displayTitle(product)}
                 className="w-full h-full object-cover"
                 fallback={
                   <div className="w-full h-full flex items-center justify-center text-6xl">

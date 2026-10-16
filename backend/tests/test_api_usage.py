@@ -202,3 +202,17 @@ def test_status_lists_configured_provider_that_never_ran():
     status = build_status({"runs": [], "usage": [], "products": {}}, CAPS, is_admin=True)
     assert status.sources[0].state == "never_run"
     assert status.last_updated_at is None
+
+
+# ── English search (lives here to keep the repository unit tests together) ──
+from app.repository import search_patterns  # noqa: E402
+
+
+def test_search_patterns_one_per_word():
+    assert search_patterns("  Pet  Water fountain ") == ["%pet%", "%water%", "%fountain%"]
+    assert search_patterns("") == []
+
+
+def test_search_patterns_escape_wildcards():
+    # A user typing % or _ must not turn the query into a match-everything.
+    assert search_patterns("100% cotton_shirt") == ["%100\%%", "%cotton\_shirt%"]

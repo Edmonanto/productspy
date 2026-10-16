@@ -48,6 +48,7 @@ export const api = {
 export interface Product {
   id: string;
   title: string;
+  title_en?: string | null; // English name for 1688 products; null until translated
   image_url: string | null;
   product_url: string;
   category: string | null;
