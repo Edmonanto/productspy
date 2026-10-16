@@ -22,4 +22,12 @@ jobs:
       - run: pip install -r requirements-dev.txt
       # No Postgres and no real API calls: the DB layer is stubbed and HTTP is
       # mocked, so this needs no secrets.
-      - run: pytest tests/ -q
+      # On failure, the tail of the output is also posted as an annotation so
+      # it shows on the PR and the run summary without opening the raw log.
+      - run: |
+          set -o pipefail
+          if ! pytest tests/ -q -rfE --tb=short 2>&1 | tee pytest.log; then
+            msg=$(tail -n 80 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=pytest failed::${msg}"
+            exit 1
+          fi
