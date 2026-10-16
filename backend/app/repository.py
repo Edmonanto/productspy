@@ -269,6 +269,91 @@ async def finish_run(
     )
 
 
+# ── Metered API usage ───────────────────────────────────────────────────────
+async def api_calls_today(provider: str) -> dict[str, int]:
+    """{endpoint: calls sent today (UTC)} for one provider."""
+    rows = await db.fetch(
+        "select endpoint, calls from api_usage "
+        "where provider = $1 and usage_day = (now() at time zone 'utc')::date",
+        provider,
+    )
+    return {r["endpoint"]: int(r["calls"]) for r in rows}
+
+
+async def record_api_calls(provider: str, calls: list[Any]) -> None:
+    """Fold a run's ApiCall log into today's per-endpoint counters.
+
+    The latest reported balance wins. The endpoint's state follows its last
+    call: an out-of-credits refusal stamps out_of_credits_at, and a later
+    successful call (after a top-up) clears it along with the last error.
+    """
+    by_endpoint: dict[str, list[Any]] = {}
+    for call in calls:
+        by_endpoint.setdefault(call.endpoint, []).append(call)
+
+    for endpoint, group in by_endpoint.items():
+        balances = [c.balance for c in group if c.balance is not None]
+        errors = [c.error for c in group if c.error]
+        last = group[-1]
+        state = "out" if last.out_of_credits else ("ok" if last.ok else "failed")
+        await db.execute(
+            """
+            insert into api_usage (provider, endpoint, calls, failures,
+                last_balance, last_error, out_of_credits_at)
+            values ($1, $2, $3, $4, $5, $6, case when $7 = 'out' then now() end)
+            on conflict (provider, endpoint, usage_day) do update set
+                calls             = api_usage.calls + excluded.calls,
+                failures          = api_usage.failures + excluded.failures,
+                last_balance      = coalesce(excluded.last_balance, api_usage.last_balance),
+                last_error        = case when $7 = 'ok' then null
+                                         else coalesce(excluded.last_error, api_usage.last_error) end,
+                out_of_credits_at = case when $7 = 'out' then now()
+                                         when $7 = 'ok' then null
+                                         else api_usage.out_of_credits_at end,
+                updated_at        = now()
+            """,
+            provider,
+            endpoint,
+            len(group),
+            sum(1 for c in group if not c.ok),
+            balances[-1] if balances else None,
+            None if state == "ok" else (errors[-1] if errors else None),
+            state,
+        )
+
+
+async def data_status() -> dict[str, Any]:
+    """What /status reports: per-provider runs, today's usage, catalogue size."""
+    runs = await db.fetch(
+        """
+        select distinct on (provider)
+            provider, started_at, finished_at, fetched, upserted, error,
+            (select max(r2.finished_at) from ingestion_runs r2
+              where r2.provider = r.provider and r2.upserted > 0) as last_success_at
+        from ingestion_runs r
+        order by provider, started_at desc
+        """
+    )
+    # Latest row per endpoint, so a token that ran out yesterday still shows
+    # as out today until a successful call proves otherwise.
+    usage = await db.fetch(
+        """
+        select distinct on (provider, endpoint)
+            provider, endpoint, usage_day, last_balance, last_error, out_of_credits_at,
+            case when usage_day = (now() at time zone 'utc')::date then calls else 0 end
+                as calls_today
+        from api_usage
+        order by provider, endpoint, usage_day desc
+        """
+    )
+    counts = await db.fetch("select source, count(*) as n from products group by source")
+    return {
+        "runs": [dict(r) for r in runs],
+        "usage": [dict(u) for u in usage],
+        "products": {r["source"]: int(r["n"]) for r in counts},
+    }
+
+
 async def save_score(product_id: str, score: Score) -> None:
     await db.execute(
         """

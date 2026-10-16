@@ -79,6 +79,7 @@ The grammar checks skip cleanly when `pglast` isn't installed.
 | `python -m app.ingest.worker` | done — scheduled ingestion + scoring + summaries |
 | `python -m app.matching.runner` | done — translate + match, writes candidates |
 | `GET /matches/` `POST /{id}/confirm` `reject` | done — review queue; confirm applies the cost |
+| `GET /status/` | done — data freshness per source; token balances and usage for `ADMIN_EMAILS` |
 
 ## Migrations
 
@@ -107,7 +108,7 @@ python -m app.ingest.worker
 ```
 
 Per provider: fetch → upsert → **snapshot** → score → summarise. On Render it
-runs as a cron job every 6 hours (see `render.yaml`); each run also writes a
+runs as a daily cron job (see `render.yaml`); each run also writes a
 `product_snapshots` row per product.
 
 Providers are opt-in by credential — set the keys and the source turns on:
@@ -217,7 +218,32 @@ for one unit of quota.
   that as 1). Both are handled; `tests/fixtures/` holds trimmed copies of real
   responses so an upstream schema change fails a test instead of silently
   ingesting nothing.
-* The provider logs `left_nums` after each search — watch it for quota burn.
+* **Every search result is kept.** A search call is the unit of cost and
+  returns ~60 offers, so `INGEST_LIMIT` is not split across keywords for this
+  provider — that used to keep ~16 of the 60 a call had already paid for.
+
+#### Protecting the prepaid tokens
+
+Both tokens are prepaid per call, and the provider refuses with
+`{"code":"error","msg":"token次数不足"}` (HTTP 200) once a balance is spent.
+
+* **Daily caps.** `AGG1688_DAILY_SEARCH_CALLS` / `AGG1688_DAILY_DETAIL_CALLS`
+  (default 10 each) cap calls per UTC day across *all* runs. The worker reads
+  today's usage from `api_usage` before fetching; once a cap is hit, the call
+  is skipped rather than made. `0` blocks an endpoint.
+* **Out of credits stops the run's calls.** The first `次数不足` ends that
+  run's searching (results already fetched are still ingested), and the run
+  is logged in `ingestion_runs.error` as `out of credits: search token — …`.
+* **Every paid call is counted** in `api_usage` (calls, failures, last
+  reported balance, last error), whether it succeeded or not.
+* **`GET /status`** reports, per source, whether data is fresh (`ok`,
+  `low_credits`, `out_of_credits`, `failing`, `never_run`) and when it last
+  updated. Emails listed in `ADMIN_EMAILS` additionally see balances,
+  today's calls against the caps, and raw provider errors. `low_credits`
+  triggers below `AGG1688_LOW_BALANCE` (default 20) calls left.
+
+Budget maths: the ingest cron runs daily, so N keywords spend N search calls
+a day. Detail enrichment adds `AGG1688_ENRICH_TOP` calls per run.
 
 > ⚠️ These endpoints are **plain HTTP on bare IPs**. The token and the
 > response travel unencrypted, and the operator is unknown. Keep tokens in

@@ -26,9 +26,11 @@ services:
       - fromGroup: ProductSpy Env
 
   # ── Ingestion worker ──────────────────────────────────────────────────
-  # Every 6 hours. Each run snapshots every product it sees, which is what
-  # trend scoring is computed from — so the schedule is the data asset, not
-  # just a refresh.
+  # Daily. Each run snapshots every product it sees, which is what trend
+  # scoring is computed from (TREND_WINDOW_DAYS = 7, so daily is plenty).
+  # Every run spends one prepaid 1688 search call per keyword, capped per
+  # day by AGG1688_DAILY_SEARCH_CALLS — raise the frequency only once you
+  # know the token's balance.
   #
   # Migrations run first. They are idempotent and tracked in
   # schema_migrations, so this costs nothing when the schema is current but
@@ -40,7 +42,7 @@ services:
     runtime: python
     rootDir: backend
     plan: starter
-    schedule: "0 */6 * * *"
+    schedule: "0 2 * * *"            # 02:00 UTC
     buildCommand: pip install -r requirements.txt
     startCommand: python -m app.migrate && python -m app.ingest.worker
     envVars:
@@ -49,8 +51,8 @@ services:
       - fromGroup: ProductSpy Env
 
   # ── Matching worker ───────────────────────────────────────────────────
-  # Runs 30 minutes after each ingestion so it scores products that run just
-  # wrote, rather than racing it.
+  # Runs 30 minutes after the daily ingestion so it scores products that run
+  # just wrote, rather than racing it.
   #
   # Needs ANTHROPIC_API_KEY: 1688 titles are Chinese, and without translation
   # there is no text signal, so the queue stays empty. Writes candidates only
@@ -60,7 +62,7 @@ services:
     runtime: python
     rootDir: backend
     plan: starter
-    schedule: "30 */6 * * *"
+    schedule: "30 2 * * *"           # 02:30 UTC
     buildCommand: pip install -r requirements.txt
     startCommand: python -m app.matching.runner
     envVars:

@@ -88,6 +88,33 @@ class Me(BaseModel):
     quota: Quota
 
 
+class EndpointUsage(BaseModel):
+    endpoint: str
+    calls_today: int
+    daily_cap: int | None
+    balance: int | None          # calls left, as last reported by the provider
+    out_of_credits: bool
+    last_error: str | None
+
+
+class SourceStatus(BaseModel):
+    provider: str
+    # ok | low_credits | out_of_credits | failing | never_run
+    state: str
+    last_run_at: datetime | None
+    last_success_at: datetime | None
+    # Operator detail — only populated for ADMIN_EMAILS.
+    last_error: str | None = None
+    endpoints: list[EndpointUsage] = []
+
+
+class DataStatus(BaseModel):
+    sources: list[SourceStatus]
+    products: dict[str, int]       # catalogue size per source
+    last_updated_at: datetime | None
+    is_admin: bool
+
+
 class BillingStatus(BaseModel):
     plan: str
     status: str

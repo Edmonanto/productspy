@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import config, db
-from .routers import billing, matches, products, users, watchlist
+from .routers import billing, matches, products, status, users, watchlist
 
 
 @asynccontextmanager
@@ -34,7 +34,7 @@ app.add_middleware(
 )
 
 for r in (users.router, products.router, watchlist.router,
-          matches.router, billing.router):
+          matches.router, billing.router, status.router):
     app.include_router(r, prefix=config.API_PREFIX)
 
 

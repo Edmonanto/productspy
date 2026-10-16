@@ -21,7 +21,7 @@ from typing import Any
 import httpx
 
 from .. import config
-from .base import RawProduct
+from .base import ApiCall, OutOfCredits, RawProduct
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +64,47 @@ def parse_price(value: Any) -> float | None:
     return float(match.group()) if match else None
 
 
+# The aggregator's refusal when a token's prepaid calls are spent:
+# {"code": "error", "msg": "token次数不足"} — sent with HTTP 200.
+_OUT_OF_CREDITS = "次数不足"
+
+
+def _error_message(body: Any) -> str | None:
+    """The error text of an error envelope, or None for a normal response.
+
+    Search signals errors with code="error"; detail with a `ret` that doesn't
+    start with SUCCESS ("SUCCESS::调用成功" on success).
+    """
+    if not isinstance(body, dict):
+        return "non-object response"
+    if body.get("code") not in (None, "success", 200, "200"):
+        return str(body.get("msg") or body.get("code"))
+    ret = body.get("ret")
+    if isinstance(ret, str) and ret and not ret.startswith("SUCCESS"):
+        return ret
+    if isinstance(ret, list) and ret and not str(ret[0]).startswith("SUCCESS"):
+        return str(ret[0])
+    return None
+
+
+def _balance(body: Any) -> int | None:
+    """Calls left on the token. Detail reports `left_num`; some search
+    deployments report `left_nums`."""
+    if not isinstance(body, dict):
+        return None
+    for key in ("left_num", "left_nums"):
+        value = body.get(key)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and value.isdigit():
+            return int(value)
+    return None
+
+
+def _short(exc: Exception) -> str:
+    return f"{exc.__class__.__name__}: {exc}"[:200]
+
+
 def _walk(obj: Any, *keys: str) -> Any:
     for key in keys:
         if not isinstance(obj, dict):
@@ -91,39 +132,88 @@ class Aggregator1688Provider:
         self.keywords = (
             keywords if keywords is not None else config.agg1688_keywords()
         )
+        # Calls this provider may still make today, per endpoint. The worker
+        # lowers these from api_usage before fetch(); the defaults are the
+        # daily caps, so a run with no usage history still respects them.
+        self.remaining: dict[str, int] = dict(self.daily_budgets)
+        self.call_log: list[ApiCall] = []
+        self.out_of_credits: set[str] = set()
+
+    @property
+    def daily_budgets(self) -> dict[str, int]:
+        return {
+            "search": config.AGG1688_DAILY_SEARCH_CALLS,
+            "detail": config.AGG1688_DAILY_DETAIL_CALLS,
+        }
 
     @property
     def configured(self) -> bool:
         return bool(self.search_url and self.search_token and self.keywords)
 
+    # ── metered calls ───────────────────────────────────────────────────────
+    async def _call(
+        self, client: httpx.AsyncClient, endpoint: str, url: str, params: dict[str, Any]
+    ) -> dict[str, Any] | None:
+        """One paid request. Returns the body, or None if it failed.
+
+        Raises OutOfCredits when the token is spent, so the caller stops
+        instead of paying for — or at least waiting on — more refusals.
+        """
+        if self.remaining.get(endpoint, 0) <= 0:
+            log.warning("1688-aggregator: daily %s budget used up, skipping call", endpoint)
+            return None
+        self.remaining[endpoint] -= 1
+
+        try:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            body = response.json()
+        except Exception as exc:
+            self.call_log.append(ApiCall(endpoint, ok=False, error=_short(exc)))
+            log.warning("1688-aggregator: %s call failed: %s", endpoint, exc)
+            return None
+
+        balance = _balance(body)
+        message = _error_message(body)
+        if message and _OUT_OF_CREDITS in message:
+            self.call_log.append(
+                ApiCall(endpoint, ok=False, balance=0, error=message, out_of_credits=True)
+            )
+            self.out_of_credits.add(endpoint)
+            raise OutOfCredits(f"1688 {endpoint} token is out of credits")
+
+        self.call_log.append(ApiCall(endpoint, ok=message is None, balance=balance, error=message))
+        return body
+
     # ── search ──────────────────────────────────────────────────────────────
     async def fetch(self, limit: int = 50) -> list[RawProduct]:
+        """Every offer from one search call per keyword.
+
+        `limit` is deliberately not split across keywords: a search call is
+        the unit of cost and returns ~60 offers, so keeping 16 of them would
+        pay full price for a quarter of the data. Keywords define the
+        catalogue size instead.
+        """
         if not self.configured:
             log.warning("1688-aggregator: not configured, skipping")
             return []
 
         products: list[RawProduct] = []
-        per_keyword = max(1, limit // max(1, len(self.keywords)))
-
         async with httpx.AsyncClient(timeout=config.AGG1688_TIMEOUT) as client:
-            for keyword in self.keywords:
-                try:
-                    response = await client.get(
-                        self.search_url,
-                        params={"keyword": keyword, "token": self.search_token},
+            try:
+                for keyword in self.keywords:
+                    body = await self._call(
+                        client, "search", self.search_url,
+                        {"keyword": keyword, "token": self.search_token},
                     )
-                    response.raise_for_status()
-                    body = response.json()
-                except Exception as exc:
-                    log.warning("1688-aggregator: search '%s' failed: %s", keyword, exc)
-                    continue
-
-                found = self.parse_search(body)
-                log.info(
-                    "1688-aggregator: '%s' -> %d offers (quota left: %s)",
-                    keyword, len(found), body.get("left_nums", "?"),
-                )
-                products.extend(found[:per_keyword])
+                    if body is None:
+                        continue
+                    found = self.parse_search(body)
+                    log.info("1688-aggregator: '%s' -> %d offers", keyword, len(found))
+                    products.extend(found)
+            except OutOfCredits as exc:
+                # Keep what earlier keywords returned; just stop searching.
+                log.error("1688-aggregator: %s", exc)
 
             if config.AGG1688_ENRICH_TOP > 0 and self.detail_token:
                 await self._enrich(client, products[: config.AGG1688_ENRICH_TOP])
@@ -192,15 +282,20 @@ class Aggregator1688Provider:
     async def _enrich(self, client: httpx.AsyncClient, products: list[RawProduct]) -> None:
         for product in products:
             try:
-                response = await client.get(
-                    self.detail_url,
-                    params={"itemId": product.external_id, "token": self.detail_token},
+                body = await self._call(
+                    client, "detail", self.detail_url,
+                    {"itemId": product.external_id, "token": self.detail_token},
                 )
-                response.raise_for_status()
-                self.apply_detail(product, response.json())
+            except OutOfCredits as exc:
+                log.error("1688-aggregator: %s", exc)
+                return
+            if body is None:
+                continue
+            try:
+                self.apply_detail(product, body)
             except Exception as exc:
                 log.warning(
-                    "1688-aggregator: detail %s failed: %s", product.external_id, exc
+                    "1688-aggregator: detail %s unparseable: %s", product.external_id, exc
                 )
 
     def apply_detail(self, product: RawProduct, body: dict[str, Any]) -> RawProduct:
