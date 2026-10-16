@@ -197,6 +197,9 @@ WHOLESALE_MARKUP = float(os.environ.get("WHOLESALE_MARKUP", "3.0"))
 # ── Claude (ai_summary) ─────────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-5")
+# Title translation is short, high-volume work. It can run on a cheaper model
+# than summaries; unset, it uses ANTHROPIC_MODEL.
+TRANSLATE_MODEL = os.environ.get("TRANSLATE_MODEL", "") or ANTHROPIC_MODEL
 
 # ── Matching (cross-platform) ───────────────────────────────────────────────
 # Stage 2 is retail x suppliers, so both sides are capped: comparing whole

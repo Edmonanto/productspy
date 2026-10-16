@@ -79,7 +79,7 @@ async def translate_batch(items: list[tuple[str, str]]) -> dict[str, str]:
 
             try:
                 message = await client.messages.create(
-                    model=config.ANTHROPIC_MODEL,
+                    model=config.TRANSLATE_MODEL,
                     # Thinking shares this budget with the reply, and a batch
                     # of 40 descriptors is not small — leave real headroom.
                     max_tokens=8000,
