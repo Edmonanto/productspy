@@ -215,7 +215,7 @@ def test_search_patterns_one_per_word():
 
 def test_search_patterns_escape_wildcards():
     # A user typing % or _ must not turn the query into a match-everything.
-    assert search_patterns("100% cotton_shirt") == ["%100\%%", "%cotton\_shirt%"]
+    assert search_patterns("100% cotton_shirt") == [r"%100\%%", r"%cotton\_shirt%"]
 
 
 def test_status_score_distribution_fills_empty_buckets():
