@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { Zap, TrendingUp, GitCompareArrows, LineChart, ArrowRight, Check } from "lucide-react";
+import { Zap, TrendingUp, Calculator, LineChart, ArrowRight, Check } from "lucide-react";
 import ProductImage from "@/components/products/ProductImage";
 
 const FEATURES = [
   {
     icon: TrendingUp,
-    title: "Three sources, every six hours",
-    desc: "TikTok Shop for retail price and units sold, 1688 for real wholesale cost, Amazon as a retail price anchor. Ingested on a schedule, not on demand.",
+    title: "Straight from the factory, updated daily",
+    desc: "Products come from 1688, China's wholesale marketplace, with real factory prices and units sold. Refreshed every day, translated into English, searchable in English or Chinese.",
   },
   {
     icon: Zap,
@@ -14,9 +14,9 @@ const FEATURES = [
     desc: "Demand, margin, trend and competition, weighted and shown separately. A signal we don't have scores neutral instead of being guessed at — so a high score means evidence, not optimism.",
   },
   {
-    icon: GitCompareArrows,
-    title: "Retail matched to supplier",
-    desc: "Pairs a retail listing with the 1688 offer behind it, so margin comes from two observed numbers. Every match goes to a review queue — nothing is applied to your data automatically.",
+    icon: Calculator,
+    title: "Know your profit before you order",
+    desc: "Wholesale price tiers and minimum order for every product, plus a calculator for landed cost, fees, ad spend, margin and monthly profit. Need an exact number? Request a quote for your quantity and country.",
   },
   {
     icon: LineChart,
@@ -152,7 +152,7 @@ export default function LandingPage() {
           </span>
         </h1>
         <p className="text-zinc-400 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-          ProductSpy Pro ingests TikTok Shop, 1688 and Amazon every six hours, scores every product on demand, margin and trend, and matches retail listings to the supplier behind them.
+          ProductSpy Pro pulls products from 1688 every day, translates them into English, and scores each one on demand, margin and trend, so you can find what sells before you source it.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
           <Link href="/signup" className="w-full sm:w-auto flex items-center justify-center gap-2 bg-violet-600 hover:bg-violet-500 text-white font-semibold px-6 py-3 rounded-xl transition-colors text-sm shadow-lg shadow-violet-900/30">
@@ -204,7 +204,7 @@ export default function LandingPage() {
       {/* Social proof bar */}
       <section className="border-y border-zinc-800/60 py-6 bg-zinc-900/30">
         <div className="max-w-5xl mx-auto px-4 sm:px-8 flex flex-wrap items-center justify-center gap-4 sm:gap-12 text-zinc-500 text-xs sm:text-sm font-medium">
-          {["TikTok Shop · 1688 · Amazon", "Refreshed every 6 hours", "Four scoring signals", "Supplier matches reviewed, never auto-applied"].map((s) => (
+          {["Factory prices from 1688", "Refreshed daily", "Four scoring signals", "Search in English or Chinese"].map((s) => (
             <span key={s} className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
               {s}

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from .. import config, quota, repository, scoring
 from ..auth import CurrentUser, current_user
 from ..schemas import Product, ProductList, RescoreResponse
+from ..services import product_details
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -14,10 +15,11 @@ async def get_trending(
     category: str = Query(""),
     min_score: int = Query(0, ge=0, le=100),
     limit: int = Query(40, ge=1, le=100),
+    sort: str = Query("score", pattern="^(score|orders|price_low|newest)$"),
     user: CurrentUser = Depends(current_user),
 ) -> ProductList:
     """Browsing trending products does not consume search quota."""
-    products, total = await repository.trending(source, category, min_score, limit)
+    products, total = await repository.trending(source, category, min_score, limit, sort)
     return ProductList(products=products, total=total)
 
 
@@ -42,7 +44,8 @@ async def get_product(
     product = await repository.get_product(product_id)
     if product is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
-    return product
+    # 1688 only: tiers, MOQ, weight, seller. May spend one capped detail call.
+    return await product_details.attach_details(product)
 
 
 @router.post("/{product_id}/rescore", response_model=RescoreResponse)

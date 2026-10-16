@@ -44,3 +44,28 @@ export function sourceIcon(source: string): string {
   };
   return map[source] || "🌐";
 }
+
+/** English name when we have one (1688 titles are Chinese), else the original. */
+export function displayTitle(p: { title: string; title_en?: string | null }): string {
+  return p.title_en?.trim() || p.title;
+}
+
+/** The original title, when it differs from what displayTitle shows. */
+export function originalTitle(p: { title: string; title_en?: string | null }): string | null {
+  return p.title_en?.trim() && p.title_en.trim() !== p.title ? p.title : null;
+}
+
+/** "just now", "5m ago", "3h ago", "2d ago". */
+export function timeAgo(iso: string | null | undefined): string {
+  if (!iso) return "never";
+  const seconds = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
+
+/** 7900 -> "7.9k", 1250000 -> "1.3M". */
+export function compactCount(n: number): string {
+  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}

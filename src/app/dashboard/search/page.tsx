@@ -45,7 +45,7 @@ function SearchResults() {
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder="Search products by title…"
+              placeholder="Search in English or Chinese, e.g. pet water fountain or 宠物饮水机"
               aria-label="Search products"
               className="w-full bg-zinc-900 border border-zinc-800 text-zinc-200 text-sm rounded-lg pl-9 pr-3 py-2.5 focus:outline-none focus:border-violet-500 placeholder-zinc-600"
             />

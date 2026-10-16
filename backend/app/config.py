@@ -36,6 +36,12 @@ CORS_ORIGINS = [
 
 API_PREFIX = "/api/v1"
 
+# Comma-separated emails that see operator detail in /status (token balances,
+# call counts, raw provider errors). Everyone else sees freshness only.
+ADMIN_EMAILS = {
+    e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()
+}
+
 # ── Plans ───────────────────────────────────────────────────────────────────
 # Mirrors the PLANS array in src/app/dashboard/billing/page.tsx.
 UNLIMITED = "unlimited"
@@ -98,6 +104,23 @@ AGG1688_ENRICH_TOP = int(os.environ.get("AGG1688_ENRICH_TOP", "0"))
 # P4P results are paid placement, not organic demand.
 AGG1688_INCLUDE_ADS = os.environ.get("AGG1688_INCLUDE_ADS", "").lower() == "true"
 AGG1688_TIMEOUT = int(os.environ.get("AGG1688_TIMEOUT", "60"))
+# Both tokens are prepaid per call. These cap calls per UTC day across every
+# run, so a schedule change or a retry loop can't drain the balance. Once a
+# cap is hit, later runs that day skip the call instead of making it.
+# 0 blocks the endpoint entirely.
+AGG1688_DAILY_SEARCH_CALLS = int(os.environ.get("AGG1688_DAILY_SEARCH_CALLS", "10"))
+AGG1688_DAILY_DETAIL_CALLS = int(os.environ.get("AGG1688_DAILY_DETAIL_CALLS", "10"))
+# Opening a 1688 product page fetches its detail (tiers, MOQ, weight, seller)
+# when missing or older than DETAIL_TTL_DAYS — one detail call, within the
+# daily cap above. Set AGG1688_DETAIL_ON_VIEW=false to never spend on views.
+AGG1688_DETAIL_ON_VIEW = os.environ.get("AGG1688_DETAIL_ON_VIEW", "true").lower() == "true"
+DETAIL_TTL_DAYS = float(os.environ.get("DETAIL_TTL_DAYS", "7"))
+# Rough China -> buyer small-parcel cost, used only to pre-fill the profit
+# calculator when the listing reports a weight. Users can override it.
+SHIPPING_USD_BASE = float(os.environ.get("SHIPPING_USD_BASE", "3.0"))
+SHIPPING_USD_PER_KG = float(os.environ.get("SHIPPING_USD_PER_KG", "10.0"))
+# Warn in /status when the provider reports fewer calls left than this.
+AGG1688_LOW_BALANCE = int(os.environ.get("AGG1688_LOW_BALANCE", "20"))
 
 
 def agg1688_keywords() -> list[str]:
@@ -174,6 +197,9 @@ WHOLESALE_MARKUP = float(os.environ.get("WHOLESALE_MARKUP", "3.0"))
 # ── Claude (ai_summary) ─────────────────────────────────────────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-5")
+# Title translation is short, high-volume work. It can run on a cheaper model
+# than summaries; unset, it uses ANTHROPIC_MODEL.
+TRANSLATE_MODEL = os.environ.get("TRANSLATE_MODEL", "") or ANTHROPIC_MODEL
 
 # ── Matching (cross-platform) ───────────────────────────────────────────────
 # Stage 2 is retail x suppliers, so both sides are capped: comparing whole

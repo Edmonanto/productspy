@@ -48,6 +48,8 @@ export const api = {
 export interface Product {
   id: string;
   title: string;
+  title_en?: string | null; // English name for 1688 products; null until translated
+  orders_count?: number | null; // units sold, as last reported by the source
   image_url: string | null;
   product_url: string;
   category: string | null;
@@ -65,9 +67,11 @@ export interface Product {
     competition_score: number;
     trend_score: number;
     ai_summary: string;
+    trend_known?: boolean; // false: no sales history yet, trend is a neutral default
   } | null;
   suppliers: Supplier[];
   ad_signals: AdSignal[];
+  details?: ProductDetails | null; // product page only, 1688 sourcing data
 }
 
 export interface Supplier {
@@ -176,4 +180,104 @@ export interface Me {
 
 export const usersApi = {
   me: () => api.get<Me>("/users/me"),
+};
+
+// ---- Data status (GET /status/) ----
+
+export type SourceState = "ok" | "low_credits" | "out_of_credits" | "failing" | "never_run";
+
+export interface EndpointUsage {
+  endpoint: string;
+  calls_today: number;
+  daily_cap: number | null;
+  balance: number | null;
+  out_of_credits: boolean;
+  last_error: string | null;
+}
+
+export interface SourceStatus {
+  provider: string;
+  state: SourceState;
+  last_run_at: string | null;
+  last_success_at: string | null;
+  last_error: string | null;  // admins only
+  endpoints: EndpointUsage[]; // admins only
+}
+
+export interface DataStatus {
+  sources: SourceStatus[];
+  products: Record<string, number>;
+  score_distribution: { range: string; count: number }[];
+  last_updated_at: string | null;
+  is_admin: boolean;
+}
+
+export const statusApi = {
+  get: () => api.get<DataStatus>("/status/"),
+};
+
+// ---- 1688 sourcing detail (GET /products/{id} only) ----
+
+export interface PriceTier {
+  min_qty: number;
+  price_cny: number;
+  price_usd: number;
+}
+
+export interface ProductDetails {
+  images: string[];
+  video_url: string | null;
+  price_tiers: PriceTier[];
+  moq: number | null;
+  unit: string | null;
+  units_sold: number | null;
+  weight_kg: number | null;
+  ships_from: string | null;
+  ships_within_days: number | null;
+  free_shipping_in_china: boolean;
+  seller_name: string | null;
+  seller_url: string | null;
+  variants: string[];
+  attributes: Record<string, string>;
+  fetched_at: string | null;
+  cny_per_usd: number;
+  shipping_estimate_usd: number | null;
+}
+
+// ---- Quote requests (/quotes) ----
+
+export interface Quote {
+  id: string;
+  user_email: string;
+  product_id: string | null;
+  product_title: string;
+  quantity: number;
+  destination_country: string;
+  target_price_usd: number | null;
+  notes: string;
+  status: "open" | "quoted" | "closed";
+  quoted_unit_usd: number | null;
+  quoted_shipping_usd: number | null;
+  reply: string;
+  created_at: string;
+  replied_at: string | null;
+}
+
+export interface QuoteCreate {
+  product_id: string;
+  quantity: number;
+  destination_country: string;
+  target_price_usd?: number | null;
+  notes?: string;
+}
+
+export const quotesApi = {
+  create: (body: QuoteCreate) => api.post<Quote>("/quotes/", body),
+  list: (all = false) => api.get<{ quotes: Quote[]; is_admin: boolean }>(`/quotes/${all ? "?all=true" : ""}`),
+  reply: (id: string, body: {
+    status: "quoted" | "closed";
+    quoted_unit_usd?: number | null;
+    quoted_shipping_usd?: number | null;
+    reply?: string;
+  }) => api.post<Quote>(`/quotes/${id}/reply`, body),
 };

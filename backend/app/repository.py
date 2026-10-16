@@ -12,9 +12,10 @@ from .schemas import AdSignal, Product, Score, Subscription, Supplier
 _PRODUCT_SELECT = """
     select
         p.id, p.title, p.image_url, p.product_url, p.category,
-        p.price_usd, p.cost_usd, p.price_is_derived, p.source,
+        p.price_usd, p.cost_usd, p.price_is_derived, p.source, p.title_en,
         s.overall_score, s.demand_score, s.margin_score,
-        s.competition_score, s.trend_score, s.ai_summary,
+        s.competition_score, s.trend_score, s.ai_summary, s.trend_known,
+        p.orders_count,
         coalesce(sup.items, '[]'::json) as suppliers,
         coalesce(ads.items, '[]'::json) as ad_signals
     from products p
@@ -49,6 +50,7 @@ def _to_product(row: asyncpg.Record) -> Product:
             competition_score=row["competition_score"],
             trend_score=row["trend_score"],
             ai_summary=row["ai_summary"] or "",
+            trend_known=bool(row["trend_known"]),
         )
 
     suppliers = [Supplier(**s) for s in json.loads(row["suppliers"])]
@@ -57,6 +59,8 @@ def _to_product(row: asyncpg.Record) -> Product:
     return Product(
         id=str(row["id"]),
         title=row["title"],
+        title_en=row["title_en"],
+        orders_count=row["orders_count"],
         image_url=row["image_url"],
         product_url=row["product_url"],
         category=row["category"],
@@ -71,8 +75,19 @@ def _to_product(row: asyncpg.Record) -> Product:
 
 
 # ── Products ────────────────────────────────────────────────────────────────
+# Whitelisted ORDER BY clauses for /products/trending?sort=. Never interpolate
+# the raw parameter.
+TRENDING_SORTS = {
+    "score": "s.overall_score desc nulls last, p.updated_at desc",
+    "orders": "p.orders_count desc nulls last, s.overall_score desc nulls last",
+    "price_low": "p.cost_usd asc nulls last, s.overall_score desc nulls last",
+    "newest": "p.first_seen_at desc",
+}
+
+
 async def trending(
-    source: str = "", category: str = "", min_score: int = 0, limit: int = 40
+    source: str = "", category: str = "", min_score: int = 0, limit: int = 40,
+    sort: str = "score",
 ) -> tuple[list[Product], int]:
     where: list[str] = ["coalesce(s.overall_score, 0) >= $1"]
     args: list[Any] = [min_score]
@@ -89,7 +104,7 @@ async def trending(
 
     rows = await db.fetch(
         f"{_PRODUCT_SELECT} where {clause} "
-        f"order by s.overall_score desc nulls last, p.updated_at desc "
+        f"order by {TRENDING_SORTS.get(sort, TRENDING_SORTS['score'])} "
         f"limit ${len(args)}",
         *args,
     )
@@ -101,21 +116,46 @@ async def trending(
     return [_to_product(r) for r in rows], int(total or 0)
 
 
+def search_patterns(q: str) -> list[str]:
+    """ILIKE patterns, one per word: 'Pet water fountain' -> ['%pet%', ...].
+
+    `%`, `_` and `\\` are escaped so user input can't act as a wildcard.
+    """
+    words = [w for w in q.lower().split() if w]
+    escaped = [w.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") for w in words]
+    return [f"%{w}%" for w in escaped]
+
+
 async def search(q: str, min_score: int = 40, limit: int = 40) -> tuple[list[Product], int]:
+    """A product matches when the whole phrase appears in either title (1688
+    titles are Chinese, so a Chinese query hits `title`), or when every word
+    of the query appears in the English rendering — "pet water fountain"
+    finds "automatic pet water fountain dispenser".
+
+    The predicate is written out in both queries, not shared, so the static
+    SQL checks can still count its placeholders.
+    """
+    q = q.strip()
+    patterns = search_patterns(q)
     rows = await db.fetch(
         f"{_PRODUCT_SELECT} "
-        f"where p.title ilike '%' || $1 || '%' "
-        f"  and coalesce(s.overall_score, 0) >= $2 "
-        f"order by s.overall_score desc nulls last limit $3",
+        f"where (p.title ilike '%' || $1 || '%' or p.title_en ilike '%' || $1 || '%' "
+        f"  or (cardinality($2::text[]) > 0 and p.title_en ilike all($2::text[]))) "
+        f"  and coalesce(s.overall_score, 0) >= $3 "
+        f"order by s.overall_score desc nulls last limit $4",
         q,
+        patterns,
         min_score,
         limit,
     )
     total = await db.fetchval(
         "select count(*) from products p "
         "left join product_scores s on s.product_id = p.id "
-        "where p.title ilike '%' || $1 || '%' and coalesce(s.overall_score, 0) >= $2",
+        "where (p.title ilike '%' || $1 || '%' or p.title_en ilike '%' || $1 || '%' "
+        "  or (cardinality($2::text[]) > 0 and p.title_en ilike all($2::text[]))) "
+        "  and coalesce(s.overall_score, 0) >= $3",
         q,
+        patterns,
         min_score,
     )
     return [_to_product(r) for r in rows], int(total or 0)
@@ -269,12 +309,220 @@ async def finish_run(
     )
 
 
+# ── Product detail (sourcing data for the product page) ─────────────────────
+async def product_details(product_id: str) -> asyncpg.Record | None:
+    return await db.fetchrow(
+        "select external_id, details, details_fetched_at from products where id = $1",
+        product_id,
+    )
+
+
+async def save_details(
+    product_id: str, details: dict[str, Any], cost_usd: float | None
+) -> None:
+    """Store fetched detail; a MOQ-tier cost replaces the search-card cost.
+
+    A derived retail price is re-derived from the new cost so the two stay
+    consistent. A published retail price is never touched.
+    """
+    import json
+
+    await db.execute(
+        """
+        update products set
+            details = $2::jsonb,
+            details_fetched_at = now(),
+            cost_usd  = coalesce($3, cost_usd),
+            price_usd = case when price_is_derived and $3 is not null
+                             then round($3 * $4, 2) else price_usd end,
+            updated_at = now()
+        where id = $1
+        """,
+        product_id,
+        json.dumps(details),
+        cost_usd,
+        config.WHOLESALE_MARKUP,
+    )
+
+
+# ── Quote requests ──────────────────────────────────────────────────────────
+_QUOTE_COLUMNS = (
+    "id, user_id, user_email, product_id, product_title, quantity, "
+    "destination_country, target_price_usd, notes, status, quoted_unit_usd, "
+    "quoted_shipping_usd, reply, created_at, replied_at"
+)
+
+
+async def create_quote(
+    user_id: str,
+    user_email: str,
+    product_id: str,
+    product_title: str,
+    quantity: int,
+    destination_country: str,
+    target_price_usd: float | None,
+    notes: str,
+) -> asyncpg.Record:
+    return await db.fetchrow(
+        """
+        insert into quote_requests (user_id, user_email, product_id, product_title,
+            quantity, destination_country, target_price_usd, notes)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        returning id, user_id, user_email, product_id, product_title, quantity,
+            destination_country, target_price_usd, notes, status, quoted_unit_usd,
+            quoted_shipping_usd, reply, created_at, replied_at
+        """,
+        user_id, user_email, product_id, product_title, quantity,
+        destination_country, target_price_usd, notes,
+    )
+
+
+async def quotes_created_today(user_id: str) -> int:
+    return int(
+        await db.fetchval(
+            "select count(*) from quote_requests where user_id = $1 "
+            "and created_at >= (now() at time zone 'utc')::date",
+            user_id,
+        )
+        or 0
+    )
+
+
+async def list_quotes(user_id: str | None, limit: int = 100) -> list[asyncpg.Record]:
+    """A user's own quotes, or every quote when user_id is None (admins)."""
+    if user_id is None:
+        return await db.fetch(
+            f"select {_QUOTE_COLUMNS} from quote_requests "
+            "order by (status = 'open') desc, created_at desc limit $1",
+            limit,
+        )
+    return await db.fetch(
+        f"select {_QUOTE_COLUMNS} from quote_requests "
+        "where user_id = $1 order by created_at desc limit $2",
+        user_id,
+        limit,
+    )
+
+
+async def reply_quote(
+    quote_id: str,
+    status: str,
+    quoted_unit_usd: float | None,
+    quoted_shipping_usd: float | None,
+    reply: str,
+) -> asyncpg.Record | None:
+    return await db.fetchrow(
+        """
+        update quote_requests set
+            status = $2, quoted_unit_usd = $3, quoted_shipping_usd = $4,
+            reply = $5, replied_at = now()
+        where id = $1
+        returning id, user_id, user_email, product_id, product_title, quantity,
+            destination_country, target_price_usd, notes, status, quoted_unit_usd,
+            quoted_shipping_usd, reply, created_at, replied_at
+        """,
+        quote_id, status, quoted_unit_usd, quoted_shipping_usd, reply,
+    )
+
+
+# ── Metered API usage ───────────────────────────────────────────────────────
+async def api_calls_today(provider: str) -> dict[str, int]:
+    """{endpoint: calls sent today (UTC)} for one provider."""
+    rows = await db.fetch(
+        "select endpoint, calls from api_usage "
+        "where provider = $1 and usage_day = (now() at time zone 'utc')::date",
+        provider,
+    )
+    return {r["endpoint"]: int(r["calls"]) for r in rows}
+
+
+async def record_api_calls(provider: str, calls: list[Any]) -> None:
+    """Fold a run's ApiCall log into today's per-endpoint counters.
+
+    The latest reported balance wins. The endpoint's state follows its last
+    call: an out-of-credits refusal stamps out_of_credits_at, and a later
+    successful call (after a top-up) clears it along with the last error.
+    """
+    by_endpoint: dict[str, list[Any]] = {}
+    for call in calls:
+        by_endpoint.setdefault(call.endpoint, []).append(call)
+
+    for endpoint, group in by_endpoint.items():
+        balances = [c.balance for c in group if c.balance is not None]
+        errors = [c.error for c in group if c.error]
+        last = group[-1]
+        state = "out" if last.out_of_credits else ("ok" if last.ok else "failed")
+        await db.execute(
+            """
+            insert into api_usage (provider, endpoint, calls, failures,
+                last_balance, last_error, out_of_credits_at)
+            values ($1, $2, $3, $4, $5, $6, case when $7 = 'out' then now() end)
+            on conflict (provider, endpoint, usage_day) do update set
+                calls             = api_usage.calls + excluded.calls,
+                failures          = api_usage.failures + excluded.failures,
+                last_balance      = coalesce(excluded.last_balance, api_usage.last_balance),
+                last_error        = case when $7 = 'ok' then null
+                                         else coalesce(excluded.last_error, api_usage.last_error) end,
+                out_of_credits_at = case when $7 = 'out' then now()
+                                         when $7 = 'ok' then null
+                                         else api_usage.out_of_credits_at end,
+                updated_at        = now()
+            """,
+            provider,
+            endpoint,
+            len(group),
+            sum(1 for c in group if not c.ok),
+            balances[-1] if balances else None,
+            None if state == "ok" else (errors[-1] if errors else None),
+            state,
+        )
+
+
+async def data_status() -> dict[str, Any]:
+    """What /status reports: per-provider runs, today's usage, catalogue size."""
+    runs = await db.fetch(
+        """
+        select distinct on (provider)
+            provider, started_at, finished_at, fetched, upserted, error,
+            (select max(r2.finished_at) from ingestion_runs r2
+              where r2.provider = r.provider and r2.upserted > 0) as last_success_at
+        from ingestion_runs r
+        order by provider, started_at desc
+        """
+    )
+    # Latest row per endpoint, so a token that ran out yesterday still shows
+    # as out today until a successful call proves otherwise.
+    usage = await db.fetch(
+        """
+        select distinct on (provider, endpoint)
+            provider, endpoint, usage_day, last_balance, last_error, out_of_credits_at,
+            case when usage_day = (now() at time zone 'utc')::date then calls else 0 end
+                as calls_today
+        from api_usage
+        order by provider, endpoint, usage_day desc
+        """
+    )
+    counts = await db.fetch("select source, count(*) as n from products group by source")
+    # Five 20-point buckets; 100 joins the top one rather than getting its own.
+    buckets = await db.fetch(
+        "select least(overall_score / 20, 4) as bucket, count(*) as n "
+        "from product_scores group by 1"
+    )
+    return {
+        "runs": [dict(r) for r in runs],
+        "usage": [dict(u) for u in usage],
+        "products": {r["source"]: int(r["n"]) for r in counts},
+        "score_buckets": {int(b["bucket"]): int(b["n"]) for b in buckets},
+    }
+
+
 async def save_score(product_id: str, score: Score) -> None:
     await db.execute(
         """
         insert into product_scores (product_id, overall_score, demand_score,
-            margin_score, competition_score, trend_score, ai_summary, scored_at)
-        values ($1, $2, $3, $4, $5, $6, $7, now())
+            margin_score, competition_score, trend_score, ai_summary, trend_known,
+            scored_at)
+        values ($1, $2, $3, $4, $5, $6, $7, $8, now())
         on conflict (product_id) do update set
             overall_score = excluded.overall_score,
             demand_score = excluded.demand_score,
@@ -282,6 +530,7 @@ async def save_score(product_id: str, score: Score) -> None:
             competition_score = excluded.competition_score,
             trend_score = excluded.trend_score,
             ai_summary = excluded.ai_summary,
+            trend_known = excluded.trend_known,
             scored_at = now()
         """,
         product_id,
@@ -291,6 +540,7 @@ async def save_score(product_id: str, score: Score) -> None:
         score.competition_score,
         score.trend_score,
         score.ai_summary,
+        score.trend_known,
     )
 
 

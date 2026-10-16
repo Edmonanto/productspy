@@ -7,21 +7,30 @@ import ProductCard from "@/components/products/ProductCard";
 import Topbar from "@/components/layout/Topbar";
 import { SlidersHorizontal, RefreshCw } from "lucide-react";
 
-// The sources ingestion actually writes. "aliexpress" was listed here and has
-// never produced a row; "1688" is the largest source and was missing, so
-// filtering by it was impossible and picking aliexpress always returned none.
-const SOURCES = ["all", "1688", "tiktok", "amazon"];
+// 1688 is the only source this deployment ingests. Other sources may still
+// have old rows; "all" shows them, but they get no filter of their own.
+const SOURCES = ["all", "1688"];
+
+const SORTS = [
+  { value: "score", label: "Best score" },
+  { value: "orders", label: "Most sold" },
+  { value: "price_low", label: "Lowest cost" },
+  { value: "newest", label: "Newest" },
+] as const;
+type Sort = (typeof SORTS)[number]["value"];
 
 export default function TrendingPage() {
   const [source, setSource] = useState("all");
   const [minScore, setMinScore] = useState(50);
+  const [sort, setSort] = useState<Sort>("score");
 
   const { data, isLoading, mutate } = useSWR(
-    ["trending", source, minScore],
+    ["trending", source, minScore, sort],
     () => productsApi.trending({
       source: source === "all" ? "" : source,
       min_score: minScore,
       limit: 40,
+      sort,
     }),
     { refreshInterval: 1_800_000 } // refresh every 30 min
   );
@@ -74,6 +83,22 @@ export default function TrendingPage() {
             />
             <span className="text-violet-400 text-xs font-bold w-6">{minScore}</span>
           </div>
+
+          <div className="w-px h-5 bg-zinc-700" />
+
+          {/* Sort */}
+          <label className="flex items-center gap-2">
+            <span className="text-zinc-500 text-xs">Sort:</span>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as Sort)}
+              className="bg-zinc-800 border border-zinc-700 text-zinc-200 text-xs rounded-lg px-2 py-1.5 outline-none focus:border-violet-500"
+            >
+              {SORTS.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </label>
 
           <button
             onClick={() => mutate()}

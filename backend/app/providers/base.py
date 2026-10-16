@@ -4,7 +4,7 @@ A provider fetches raw products from one source. Everything downstream
 (normalising, upserting, snapshotting, scoring) is provider-agnostic, so
 swapping one source for another — or adding a new marketplace — is a config change.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol, runtime_checkable
 
 
@@ -27,6 +27,25 @@ class RawProduct:
     rating: float | None = None
     ad_count: int | None = None      # advertisers seen — drives competition_score
     ad_platform: str | None = None
+
+
+@dataclass
+class ApiCall:
+    """One request to a metered endpoint, as the provider saw it.
+
+    Providers stay database-free: they append these to `call_log`, and the
+    ingestion worker persists them to `api_usage` after the run.
+    """
+
+    endpoint: str                    # search | detail | ...
+    ok: bool
+    balance: int | None = None       # calls left, if the provider reported it
+    error: str | None = None
+    out_of_credits: bool = False
+
+
+class OutOfCredits(Exception):
+    """The provider refused a call because the token's balance is spent."""
 
 
 @runtime_checkable

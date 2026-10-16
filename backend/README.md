@@ -79,6 +79,8 @@ The grammar checks skip cleanly when `pglast` isn't installed.
 | `python -m app.ingest.worker` | done — scheduled ingestion + scoring + summaries |
 | `python -m app.matching.runner` | done — translate + match, writes candidates |
 | `GET /matches/` `POST /{id}/confirm` `reject` | done — review queue; confirm applies the cost |
+| `GET /status/` | done — data freshness per source; token balances and usage for `ADMIN_EMAILS` |
+| `POST /quotes/` `GET /quotes/` `POST /quotes/{id}/reply` | done — customer quote requests; admins reply |
 
 ## Migrations
 
@@ -107,7 +109,7 @@ python -m app.ingest.worker
 ```
 
 Per provider: fetch → upsert → **snapshot** → score → summarise. On Render it
-runs as a cron job every 6 hours (see `render.yaml`); each run also writes a
+runs as a daily cron job (see `render.yaml`); each run also writes a
 `product_snapshots` row per product.
 
 Providers are opt-in by credential — set the keys and the source turns on:
@@ -217,7 +219,57 @@ for one unit of quota.
   that as 1). Both are handled; `tests/fixtures/` holds trimmed copies of real
   responses so an upstream schema change fails a test instead of silently
   ingesting nothing.
-* The provider logs `left_nums` after each search — watch it for quota burn.
+* **Every search result is kept.** A search call is the unit of cost and
+  returns ~60 offers, so `INGEST_LIMIT` is not split across keywords for this
+  provider — that used to keep ~16 of the 60 a call had already paid for.
+
+#### Protecting the prepaid tokens
+
+Both tokens are prepaid per call, and the provider refuses with
+`{"code":"error","msg":"token次数不足"}` (HTTP 200) once a balance is spent.
+
+* **Daily caps.** `AGG1688_DAILY_SEARCH_CALLS` / `AGG1688_DAILY_DETAIL_CALLS`
+  (default 10 each) cap calls per UTC day across *all* runs. The worker reads
+  today's usage from `api_usage` before fetching; once a cap is hit, the call
+  is skipped rather than made. `0` blocks an endpoint.
+* **Out of credits stops the run's calls.** The first `次数不足` ends that
+  run's searching (results already fetched are still ingested), and the run
+  is logged in `ingestion_runs.error` as `out of credits: search token — …`.
+* **Every paid call is counted** in `api_usage` (calls, failures, last
+  reported balance, last error), whether it succeeded or not.
+* **`GET /status`** reports, per source, whether data is fresh (`ok`,
+  `low_credits`, `out_of_credits`, `failing`, `never_run`) and when it last
+  updated. Emails listed in `ADMIN_EMAILS` additionally see balances,
+  today's calls against the caps, and raw provider errors. `low_credits`
+  triggers below `AGG1688_LOW_BALANCE` (default 20) calls left.
+
+Budget maths: the ingest cron runs daily, so N keywords spend N search calls
+a day. Detail enrichment adds `AGG1688_ENRICH_TOP` calls per run.
+
+#### Product page detail (lazy, cached)
+
+`GET /products/{id}` on a 1688 product attaches `details`: price tiers by
+quantity, MOQ, units sold, weight, ships-from, dispatch time, seller, gallery,
+variants and attributes. It is fetched from the detail endpoint the first time
+the page is opened, stored in `products.details`, and reused for
+`DETAIL_TTL_DAYS` (7). The fetch draws on the same `AGG1688_DAILY_DETAIL_CALLS`
+cap as ingestion; when the cap is spent or the token is dry the page renders
+with whatever is stored. `AGG1688_DETAIL_ON_VIEW=false` stops page views from
+spending calls at all.
+
+The MOQ-tier price replaces the search-card price as `cost_usd` (and the
+derived `price_usd` follows). `shipping_estimate_usd` is
+`SHIPPING_USD_BASE + weight_kg x SHIPPING_USD_PER_KG` — only a pre-fill for
+the frontend profit calculator, which users override.
+
+#### Quote requests
+
+`POST /quotes/` lets a customer ask for an exact unit and shipping price for a
+quantity and destination; `GET /quotes/` lists their own. `ADMIN_EMAILS` see
+every request with `?all=true` and answer with `POST /quotes/{id}/reply`
+(unit price, shipping per unit, message, or close it). Capped at 20 requests
+per customer per day. There is no email notification yet — admins check
+`/dashboard/quotes`.
 
 > ⚠️ These endpoints are **plain HTTP on bare IPs**. The token and the
 > response travel unencrypted, and the operator is unknown. Keep tokens in
