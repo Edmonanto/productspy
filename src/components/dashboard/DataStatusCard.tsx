@@ -32,8 +32,9 @@ function customerLine(s: SourceStatus): string {
   return s.state === "ok" || s.state === "low_credits" ? ago : `${ago} · refresh delayed`;
 }
 
-/** What an admin (ADMIN_EMAILS) additionally sees. */
-function adminLine(s: SourceStatus): string | null {
+/** What an admin (ADMIN_EMAILS) additionally sees. Always a line, so an admin
+ *  can tell "no data yet" apart from "not recognised as admin". */
+function adminLine(s: SourceStatus): string {
   if (s.state === "out_of_credits") return "Out of credits — top up the token";
   const parts = s.endpoints.map((e) => {
     const cap = e.daily_cap != null ? `/${e.daily_cap}` : "";
@@ -41,18 +42,34 @@ function adminLine(s: SourceStatus): string | null {
     return `${e.endpoint} ${e.calls_today}${cap} today${left}`;
   });
   if (s.state === "failing" && s.last_error) parts.push(`error: ${s.last_error}`);
-  return parts.length ? parts.join(" · ") : null;
+  return parts.length
+    ? parts.join(" · ")
+    : "No paid calls recorded yet — the daily job runs at 02:00 UTC";
 }
 
 export default function DataStatusCard({ status, loading }: Props) {
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-      <h3 className="text-white font-semibold text-sm mb-3">Data sources</h3>
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-white font-semibold text-sm">Data sources</h3>
+        {status?.is_admin && (
+          <span className="text-[10px] font-semibold uppercase tracking-wide bg-violet-600/20 text-violet-300 border border-violet-600/30 px-1.5 py-0.5 rounded">
+            Admin
+          </span>
+        )}
+      </div>
 
       {loading && <p className="text-zinc-600 text-xs">Checking…</p>}
 
-      {!loading && !status?.sources.length && (
-        <p className="text-zinc-500 text-xs">No data source has run yet. Products update once a day.</p>
+      {!loading && !status && (
+        <p className="text-yellow-500/80 text-xs">Couldn&apos;t load data status.</p>
+      )}
+
+      {!loading && status && !status.sources.length && (
+        <p className="text-zinc-500 text-xs">
+          No data source has run yet. Products update once a day.
+          {status.is_admin && " No 1688 provider is configured on the API — check AGG1688_SEARCH_TOKEN and AGG1688_KEYWORDS."}
+        </p>
       )}
 
       <div className="space-y-3">
