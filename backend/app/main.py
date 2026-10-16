@@ -7,13 +7,20 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import config, db
+from . import config, db, migrate
 from .routers import billing, matches, products, quotes, status, users, watchlist
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.connect()
+    # Bring the schema up to date before serving. Migrations used to run only
+    # in the ingest cron, so a deploy went live against a schema it didn't
+    # match until the next 02:00 run — every query naming a new column failed.
+    # Idempotent and ledger-tracked, so this is a no-op when current. A failure
+    # aborts startup; Render then keeps the previous version live.
+    if config.MIGRATE_ON_START and db.is_connected():
+        await migrate.apply_all()
     yield
     await db.disconnect()
 

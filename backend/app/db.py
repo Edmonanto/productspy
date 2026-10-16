@@ -31,6 +31,10 @@ async def disconnect() -> None:
         _pool = None
 
 
+def is_connected() -> bool:
+    return _pool is not None
+
+
 def pool() -> asyncpg.Pool:
     if _pool is None:
         raise RuntimeError("Database pool is not initialised")

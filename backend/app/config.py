@@ -36,6 +36,9 @@ CORS_ORIGINS = [
 
 API_PREFIX = "/api/v1"
 
+# Apply pending migrations when the API starts (see main.lifespan).
+MIGRATE_ON_START = os.environ.get("MIGRATE_ON_START", "true").lower() == "true"
+
 # Comma-separated emails that see operator detail in /status (token balances,
 # call counts, raw provider errors). Everyone else sees freshness only.
 ADMIN_EMAILS = {
