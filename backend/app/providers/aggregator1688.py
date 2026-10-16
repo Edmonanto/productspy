@@ -347,11 +347,21 @@ class Aggregator1688Provider:
         if not isinstance(sold, int):
             sold = item.get("saledCount") if isinstance(item.get("saledCount"), int) else None
 
+        # Gallery: mainPic.offerImgList when present; otherwise the flat
+        # images[] list, and at worst the single default image. Payloads vary
+        # in which of these they carry.
+        images = [u for u in (_walk(data, "mainPic", "offerImgList") or []) if isinstance(u, str)]
+        if not images:
+            images = [
+                i["fullPathImageURI"] for i in (data.get("images") or [])
+                if isinstance(i, dict) and isinstance(i.get("fullPathImageURI"), str)
+            ]
+        if not images and isinstance(item.get("defaultOfferImg"), str):
+            images = [item["defaultOfferImg"]]
+
         ship_days = delivery.get("deliveryLimit")
         return {
-            "images": [
-                u for u in (_walk(data, "mainPic", "offerImgList") or []) if isinstance(u, str)
-            ],
+            "images": images,
             "video_url": _walk(data, "mainPic", "videoUrl") or None,
             "price_tiers": tiers,
             "moq": tiers[0]["min_qty"] if tiers else None,
