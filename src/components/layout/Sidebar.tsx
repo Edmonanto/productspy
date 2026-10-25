@@ -4,11 +4,14 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bookmark, LayoutDashboard, Trophy, Receipt,
-  CreditCard, Settings, Zap, LogOut, X, Menu
+  CreditCard, Settings, Zap, LogOut, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+/** The Topbar's menu button dispatches this to open the mobile drawer. */
+export const OPEN_SIDEBAR_EVENT = "productspy:open-sidebar";
 
 const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Overview" },
@@ -36,7 +39,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         <span className="font-bold text-white text-lg tracking-tight">ProductSpy</span>
         <span className="text-[10px] text-violet-400 font-semibold bg-violet-500/10 border border-violet-500/20 px-1.5 py-0.5 rounded ml-auto">PRO</span>
         {onClose && (
-          <button onClick={onClose} className="text-zinc-500 hover:text-white ml-1">
+          <button onClick={onClose} aria-label="Close menu" className="text-zinc-500 hover:text-white ml-1 p-2 -mr-2">
             <X size={16} />
           </button>
         )}
@@ -95,35 +98,46 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const open = () => setMobileOpen(true);
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMobileOpen(false);
+    window.addEventListener(OPEN_SIDEBAR_EVENT, open);
+    window.addEventListener("keydown", esc);
+    return () => {
+      window.removeEventListener(OPEN_SIDEBAR_EVENT, open);
+      window.removeEventListener("keydown", esc);
+    };
+  }, []);
+
+  // Close the drawer after navigating, and stop the page scrolling behind it.
+  useEffect(() => setMobileOpen(false), [pathname]);
+  useEffect(() => {
+    document.body.style.overflow = mobileOpen ? "hidden" : "";
+    return () => { document.body.style.overflow = ""; };
+  }, [mobileOpen]);
 
   return (
     <>
-      {/* Mobile hamburger button */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="md:hidden fixed top-4 left-4 z-50 p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-400 hover:text-white"
-      >
-        <Menu size={18} />
-      </button>
-
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="md:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+          className="lg:hidden fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       {/* Mobile drawer */}
       <div className={cn(
-        "md:hidden fixed inset-y-0 left-0 z-50 transition-transform duration-300",
-        mobileOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
+        "lg:hidden fixed inset-y-0 left-0 z-50 transition-[transform,visibility] duration-300 max-w-[85vw]",
+        mobileOpen ? "translate-x-0 visible" : "-translate-x-full invisible"
+      )} role="dialog" aria-modal={mobileOpen} aria-label="Menu">
         <SidebarContent onClose={() => setMobileOpen(false)} />
       </div>
 
       {/* Desktop sidebar */}
-      <div className="hidden md:flex min-h-screen">
+      <div className="hidden lg:flex min-h-screen sticky top-0 h-screen">
         <SidebarContent />
       </div>
     </>

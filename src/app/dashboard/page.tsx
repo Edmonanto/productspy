@@ -68,9 +68,9 @@ function OverviewInner() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-white font-semibold text-sm">Today&apos;s top picks</h3>
+              <h2 className="text-white font-semibold text-sm">Today&apos;s top picks</h2>
               <Link href={`/dashboard/winners${market ? `?market=${market}` : ""}`}
-                    className="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
+                    className="inline-flex items-center py-3 -my-3 text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1">
                 See all <ArrowRight size={12} />
               </Link>
             </div>
@@ -92,7 +92,7 @@ function OverviewInner() {
                           src={w.product!.image_url}
                           alt={w.product!.title}
                           className="w-full h-full object-cover"
-                          fallback={<div className="w-full h-full flex items-center justify-center text-zinc-600"><ImageOff size={14} /></div>}
+                          fallback={<div className="w-full h-full flex items-center justify-center text-zinc-500"><ImageOff size={14} /></div>}
                         />
                       </div>
                       <div className="flex-1 min-w-0">
@@ -111,7 +111,7 @@ function OverviewInner() {
           <div className="space-y-4">
             <WatchlistMini items={watchlistItems} loading={watchlistLoading} />
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-              <h3 className="text-white font-semibold text-sm mb-3 flex items-center gap-2"><Activity size={14} /> Daily scan</h3>
+              <h2 className="text-white font-semibold text-sm mb-3 flex items-center gap-2"><Activity size={14} /> Daily scan</h2>
               {status?.runs.length ? (
                 <div className="space-y-2.5">
                   {status.runs.map((r) => (
@@ -119,7 +119,7 @@ function OverviewInner() {
                       <div className="flex items-center gap-2">
                         <span className={`w-1.5 h-1.5 rounded-full ${r.status === "ok" ? "bg-emerald-500" : r.status === "running" ? "bg-sky-400 animate-pulse" : r.status === "partial" ? "bg-amber-400" : "bg-red-500"}`} />
                         <span className="text-zinc-300">{nameOf(r.market)?.flag} {r.market}</span>
-                        <span className="text-zinc-600">{r.stats?.scored ?? 0} scored</span>
+                        <span className="text-zinc-500">{r.stats?.scored ?? 0} scored</span>
                       </div>
                       <span className="text-zinc-500">{timeAgo(r.finished_at ?? r.started_at)}</span>
                     </div>

@@ -46,7 +46,7 @@ function Field({
         />
         {suffix && <span className="pr-2.5 text-zinc-500 text-sm">{suffix}</span>}
       </div>
-      {hint && <span className="text-zinc-600 text-[11px] mt-1 block">{hint}</span>}
+      {hint && <span className="text-zinc-500 text-[11px] mt-1 block">{hint}</span>}
     </label>
   );
 }

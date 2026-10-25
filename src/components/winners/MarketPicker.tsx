@@ -25,7 +25,7 @@ export default function MarketPicker({ markets, following, value, onChange }: Pr
             key={code}
             onClick={() => onChange(code)}
             className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors",
+              "flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-lg text-xs font-medium border transition-colors",
               value === code
                 ? "bg-violet-600/20 text-violet-200 border-violet-500/40"
                 : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:text-white hover:border-zinc-700"
@@ -38,7 +38,7 @@ export default function MarketPicker({ markets, following, value, onChange }: Pr
       })}
       <Link
         href="/dashboard/settings"
-        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
+        className="max-md:min-h-[44px] flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors"
       >
         <Settings2 size={13} />
         Change markets

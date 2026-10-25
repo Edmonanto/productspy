@@ -148,7 +148,7 @@ export default function BillingPage() {
           )}>
             {message.type === "success" ? <Check size={14} /> : <AlertTriangle size={14} />}
             {message.text}
-            <button onClick={() => setMessage(null)} className="ml-auto">
+            <button onClick={() => setMessage(null)} aria-label="Dismiss" className="ml-auto p-2 -m-2">
               <X size={14} />
             </button>
           </div>
@@ -220,14 +220,14 @@ export default function BillingPage() {
                 <button
                   onClick={handlePortal}
                   disabled={loading}
-                  className="flex items-center gap-1.5 text-xs px-3 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 text-xs px-3 py-2 max-md:min-h-[44px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg transition-colors"
                 >
                   <ExternalLink size={12} />
                   Manage
                 </button>
                 <button
                   onClick={() => setShowCancel(true)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-2 bg-zinc-800 hover:bg-red-900/30 text-zinc-500 hover:text-red-400 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 text-xs px-3 py-2 max-md:min-h-[44px] bg-zinc-800 hover:bg-red-900/30 text-zinc-500 hover:text-red-400 rounded-lg transition-colors"
                 >
                   <X size={12} />
                   Cancel
@@ -256,15 +256,15 @@ export default function BillingPage() {
 
         {/* Payment provider toggle */}
         {(currentPlan === "free" || inTrial) && (
-          <div className="flex items-center gap-3">
-            <span className="text-zinc-500 text-sm">Pay with:</span>
+          <div className="flex items-center gap-x-3 gap-y-2 flex-wrap">
+            <span className="text-zinc-500 text-sm whitespace-nowrap">Pay with:</span>
             <div className="flex rounded-lg border border-zinc-700 overflow-hidden">
               {(["stripe", "paypal"] as Provider[]).map((p) => (
                 <button
                   key={p}
                   onClick={() => setProvider(p)}
                   className={cn(
-                    "px-4 py-2 text-xs font-medium capitalize transition-colors",
+                    "px-4 py-2.5 md:py-2 max-md:min-h-[44px] text-xs font-medium capitalize transition-colors whitespace-nowrap",
                     provider === p
                       ? "bg-violet-600 text-white"
                       : "bg-zinc-900 text-zinc-400 hover:text-white"
@@ -274,7 +274,7 @@ export default function BillingPage() {
                 </button>
               ))}
             </div>
-            <span className="text-zinc-600 text-xs flex items-center gap-1">
+            <span className="text-zinc-500 text-xs flex items-center gap-1 whitespace-nowrap">
               <Shield size={11} />
               Secure & encrypted
             </span>
@@ -344,9 +344,9 @@ export default function BillingPage() {
                     onClick={() => !isCurrent && plan.id !== "free" && handleCheckout(plan.id)}
                     disabled={isCurrent || plan.id === "free" || (loading && selectedPlan === plan.id)}
                     className={cn(
-                      "w-full py-2.5 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2",
+                      "w-full py-2.5 max-md:min-h-[44px] rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2",
                       isCurrent || plan.id === "free"
-                        ? "bg-zinc-800 text-zinc-600 cursor-default"
+                        ? "bg-zinc-800 text-zinc-500 cursor-default"
                         : plan.highlight
                         ? "bg-violet-600 hover:bg-violet-500 text-white"
                         : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300"
@@ -371,7 +371,7 @@ export default function BillingPage() {
         </div>
 
         {/* Trust signals */}
-        <div className="flex items-center justify-center gap-8 text-zinc-600 text-xs border-t border-zinc-800 pt-6">
+        <div className="flex items-center justify-center gap-8 text-zinc-500 text-xs border-t border-zinc-800 pt-6">
           {[
             { icon: Shield, text: "256-bit SSL encryption" },
             { icon: RefreshCw, text: "Cancel anytime" },

@@ -58,7 +58,7 @@ export default function SettingsPage() {
           )}
           <Link
             href="/dashboard/billing"
-            className="mt-4 inline-flex items-center gap-1.5 text-sm text-violet-400 hover:text-violet-300 transition-colors"
+            className="py-3 -my-3 mt-4 inline-flex items-center gap-1.5 text-sm text-violet-400 hover:text-violet-300 transition-colors"
           >
             Manage billing <ExternalLink size={13} />
           </Link>
@@ -68,7 +68,7 @@ export default function SettingsPage() {
           <h2 className="text-white font-semibold text-sm mb-3">Session</h2>
           <button
             onClick={signOut}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-zinc-700 text-sm text-zinc-300 hover:text-red-400 hover:border-red-500/40 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 max-md:min-h-[44px] rounded-lg border border-zinc-700 text-sm text-zinc-300 hover:text-red-400 hover:border-red-500/40 transition-colors"
           >
             <LogOut size={14} />
             Sign out

@@ -7,7 +7,7 @@ import { Zap, Eye, EyeOff, AlertCircle, CheckCircle, Check } from "lucide-react"
 
 const TRIAL_PERKS = [
   "Daily Winners: 5–10 products being scaled right now",
-  "Up to 3 markets — US, Europe, UK, Australia, UAE…",
+  "3 markets — United States, United Kingdom, France",
   "The ads, stores and margins behind each pick",
 ]
 
@@ -73,7 +73,7 @@ export default function SignupPage() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-left space-y-3">
             <p className="text-zinc-400 text-sm">Next steps:</p>
             {[
-              "Open the email from ProductSpy AI",
+              "Open the email from ProductSpy Pro",
               "Click the confirmation link",
               "You'll be redirected to your dashboard",
             ].map((step, i) => (
@@ -85,7 +85,7 @@ export default function SignupPage() {
               </div>
             ))}
           </div>
-          <p className="text-zinc-600 text-sm">
+          <p className="text-zinc-500 text-sm">
             Wrong email?{" "}
             <button onClick={() => setStep(1)} className="text-violet-400 hover:text-violet-300 transition-colors">
               Go back
@@ -146,7 +146,7 @@ export default function SignupPage() {
 
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-zinc-800" />
-            <span className="text-zinc-600 text-xs">or</span>
+            <span className="text-zinc-500 text-xs">or</span>
             <div className="flex-1 h-px bg-zinc-800" />
           </div>
 
@@ -168,7 +168,7 @@ export default function SignupPage() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="John Doe"
-                className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors"
+                className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors"
               />
             </div>
 
@@ -180,7 +180,7 @@ export default function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors"
+                className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors"
               />
             </div>
 
@@ -193,12 +193,13 @@ export default function SignupPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min. 8 characters"
-                  className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors pr-10"
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 p-3 text-zinc-500 hover:text-zinc-300"
                 >
                   {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -225,7 +226,7 @@ export default function SignupPage() {
                     ].map(({ key, label }) => (
                       <span
                         key={key}
-                        className={strength[key as keyof typeof strength] ? "text-emerald-400" : "text-zinc-600"}
+                        className={strength[key as keyof typeof strength] ? "text-emerald-400" : "text-zinc-500"}
                       >
                         ✓ {label}
                       </span>
@@ -246,17 +247,17 @@ export default function SignupPage() {
             </button>
           </form>
 
-          <p className="text-zinc-600 text-xs text-center">
+          <p className="text-zinc-500 text-xs text-center">
             By signing up, you agree to our{" "}
-            <Link href="/terms" className="text-zinc-400 hover:text-white underline">Terms</Link>{" "}
+            <Link href="/terms" className="inline-block py-3 -my-3 text-zinc-400 hover:text-white underline">Terms</Link>{" "}
             and{" "}
-            <Link href="/privacy" className="text-zinc-400 hover:text-white underline">Privacy Policy</Link>
+            <Link href="/privacy" className="inline-block py-3 -my-3 text-zinc-400 hover:text-white underline">Privacy Policy</Link>
           </p>
         </div>
 
-        <p className="text-center text-zinc-600 text-sm">
+        <p className="text-center text-zinc-500 text-sm">
           Already have an account?{" "}
-          <Link href="/login" className="text-violet-400 hover:text-violet-300 font-medium transition-colors">
+          <Link href="/login" className="inline-flex items-center py-3 -my-3 text-violet-400 hover:text-violet-300 font-medium transition-colors">
             Sign in
           </Link>
         </p>

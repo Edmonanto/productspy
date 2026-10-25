@@ -9,6 +9,34 @@
 
   html {
     color-scheme: dark;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* iOS zooms the page into any field whose text is under 16px; fields
+     also get a full 44px tap height on phones. */
+  @media (max-width: 767px) {
+    input, select, textarea {
+      font-size: 16px !important;
+    }
+    input:not([type="checkbox"]):not([type="radio"]), select {
+      min-height: 44px;
+    }
+  }
+
+  /* Keyboard users always see where they are. */
+  :focus-visible {
+    outline: 2px solid #a78bfa;
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   ::-webkit-scrollbar {

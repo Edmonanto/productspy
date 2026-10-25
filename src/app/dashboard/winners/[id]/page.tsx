@@ -39,11 +39,12 @@ function AdCard({ ad }: { ad: AdEvidence }) {
           src={ad.thumbnail_url}
           alt={ad.advertiser_name ?? "Ad"}
           className="w-full h-full object-cover"
-          fallback={<div className="w-full h-full flex items-center justify-center text-zinc-600"><ImageOff size={20} /></div>}
+          fallback={<div className="w-full h-full flex items-center justify-center text-zinc-500"><ImageOff size={20} /></div>}
         />
         {ad.ad_url && (
           <a href={ad.ad_url} target="_blank" rel="noreferrer"
-             className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 bg-black/40 transition-opacity">
+             aria-label={`Open the ad${ad.advertiser_name ? ` by ${ad.advertiser_name}` : ""}`}
+             className="absolute inset-0 flex items-center justify-center opacity-0 hover:opacity-100 focus-visible:opacity-100 bg-black/40 transition-opacity">
             <PlayCircle className="text-white" size={32} />
           </a>
         )}
@@ -59,12 +60,12 @@ function AdCard({ ad }: { ad: AdEvidence }) {
       </div>
       <div className="flex border-t border-zinc-800 text-xs">
         {ad.ad_url && (
-          <a href={ad.ad_url} target="_blank" rel="noreferrer" className="flex-1 text-center py-2 text-zinc-400 hover:text-white hover:bg-zinc-800">
+          <a href={ad.ad_url} target="_blank" rel="noreferrer" className="flex-1 text-center py-2 max-md:py-3 text-zinc-400 hover:text-white hover:bg-zinc-800">
             View
           </a>
         )}
         {ad.landing_url && (
-          <a href={ad.landing_url} target="_blank" rel="noreferrer" className="flex-1 text-center py-2 text-zinc-400 hover:text-white hover:bg-zinc-800 border-l border-zinc-800">
+          <a href={ad.landing_url} target="_blank" rel="noreferrer" className="flex-1 text-center py-2 max-md:py-3 text-zinc-400 hover:text-white hover:bg-zinc-800 border-l border-zinc-800">
             Store
           </a>
         )}
@@ -101,23 +102,23 @@ function EvidenceInner() {
 
   return (
     <div className="p-4 md:p-6 max-w-6xl mx-auto w-full space-y-5">
-      <Link href={`/dashboard/winners?market=${market}`} className="inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-white">
+      <Link href={`/dashboard/winners?market=${market}`} className="py-3 -my-3 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-white">
         <ArrowLeft size={12} /> Back to winners
       </Link>
 
       {/* Header */}
-      <div className="grid md:grid-cols-[220px_1fr_260px] gap-5 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-        <div className="aspect-square bg-zinc-800 rounded-lg overflow-hidden">
+      <div className="grid md:grid-cols-[180px_1fr] lg:grid-cols-[220px_1fr_260px] gap-5 bg-zinc-900 border border-zinc-800 rounded-xl p-4 md:p-5">
+        <div className="h-48 sm:h-64 md:h-auto md:aspect-square bg-zinc-800 rounded-lg overflow-hidden">
           <ProductImage
             src={p.image_url}
             alt={p.title}
             className="w-full h-full object-cover"
-            fallback={<div className="w-full h-full flex items-center justify-center text-zinc-600"><Package size={28} /></div>}
+            fallback={<div className="w-full h-full flex items-center justify-center text-zinc-500"><Package size={28} /></div>}
           />
         </div>
         <div className="space-y-3 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-white text-xl font-semibold">{p.title}</h2>
+            <h2 className="text-white text-lg md:text-xl font-semibold">{p.title}</h2>
           </div>
           <div className="text-xs text-zinc-500 capitalize">
             {p.category ? `${p.category.replace("-", " ")} · ` : ""}{market}
@@ -143,14 +144,14 @@ function EvidenceInner() {
             </ul>
           )}
         </div>
-        <div className="space-y-4 md:border-l md:border-zinc-800 md:pl-5">
+        <div className="space-y-4 md:col-span-2 lg:col-span-1 lg:border-l lg:border-zinc-800 lg:pl-5">
           {score && (
             <>
               <div className="flex items-center gap-3">
                 <ScoreRing score={score.total} size={80} stroke={7} />
                 <div className="text-xs text-zinc-400">
                   <div className="capitalize">{score.confidence} confidence</div>
-                  <div className="text-zinc-600">scored {score.scored_on}</div>
+                  <div className="text-zinc-500">scored {score.scored_on}</div>
                 </div>
               </div>
               <PillarBars breakdown={score.breakdown} />
@@ -159,9 +160,9 @@ function EvidenceInner() {
         </div>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4">
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {/* Unit economics */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-3">
+        <div className="md:col-span-2 lg:col-span-1 bg-zinc-900 border border-zinc-800 rounded-xl p-4 md:p-5 space-y-3">
           <h3 className="text-white text-sm font-semibold">Unit economics</h3>
           <div className="grid grid-cols-3 gap-2 text-center">
             <div className="bg-zinc-800/60 rounded-lg py-3">
@@ -189,7 +190,7 @@ function EvidenceInner() {
             <div className="space-y-1.5 pt-1">
               {data.suppliers.map((s) => (
                 <a key={s.supplier_url} href={s.supplier_url} target="_blank" rel="noreferrer"
-                   className="flex items-center justify-between text-xs bg-zinc-800/60 hover:bg-zinc-800 rounded-lg px-3 py-2">
+                   className="flex items-center justify-between gap-2 text-xs bg-zinc-800/60 hover:bg-zinc-800 rounded-lg px-3 py-2 max-md:min-h-[44px]">
                   <span className="text-zinc-300">{s.supplier_name}</span>
                   <span className="flex items-center gap-1 text-zinc-400">
                     {formatPrice(s.unit_cost_usd)} <ExternalLink size={11} />
@@ -201,7 +202,7 @@ function EvidenceInner() {
         </div>
 
         {/* Score history */}
-        <div className="md:col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+        <div className="md:col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl p-4 md:p-5">
           <h3 className="text-white text-sm font-semibold mb-3">Score over time</h3>
           {data.history.length > 1 ? (
             <div className="h-40">
@@ -237,15 +238,15 @@ function EvidenceInner() {
       />
 
       {/* Evidence */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 md:p-5 space-y-4">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <h3 className="text-white text-sm font-semibold">Evidence</h3>
-          <div className="flex gap-1">
-            {TABS.map((t) => (
+          <div className="flex gap-1 overflow-x-auto -mx-1 px-1 max-w-full">
+            {TABS.filter((t) => t.key === activeTab || (data.ad_counts[t.key] ?? 0) > 0).map((t) => (
               <button key={t.key} onClick={() => setTab(t.key)}
-                      className={cn("px-3 py-1.5 rounded-lg text-xs",
+                      className={cn("px-3 py-2 md:py-1.5 max-md:min-h-[44px] rounded-lg text-xs whitespace-nowrap shrink-0",
                         activeTab === t.key ? "bg-zinc-800 text-white" : "text-zinc-500 hover:text-white")}>
-                {t.label} <span className="text-zinc-600">{data.ad_counts[t.key] ?? 0}</span>
+                {t.label} <span className="text-zinc-500">{data.ad_counts[t.key] ?? 0}</span>
               </button>
             ))}
           </div>
@@ -263,7 +264,7 @@ function EvidenceInner() {
         ) : (data.ads[activeTab] ?? []).length === 0 ? (
           <p className="text-zinc-500 text-sm py-6 text-center">Nothing from {SOURCE_LABEL[activeTab]} for this product yet.</p>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
             {data.ads[activeTab].map((ad, i) => <AdCard key={`${ad.ad_url}-${i}`} ad={ad} />)}
           </div>
         )}

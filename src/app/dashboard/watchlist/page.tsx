@@ -40,7 +40,7 @@ export default function WatchlistPage() {
           <div className="flex flex-col items-center justify-center py-32 text-center">
             <Bookmark size={40} className="text-zinc-700 mb-4" />
             <p className="text-zinc-400 font-medium">No saved products yet</p>
-            <p className="text-zinc-600 text-sm mt-1">
+            <p className="text-zinc-500 text-sm mt-1">
               Open <Link href="/dashboard/winners" className="text-violet-400 hover:text-violet-300">Daily Winners</Link>{" "}
               and press Save on a product to keep it here.
             </p>
@@ -52,12 +52,12 @@ export default function WatchlistPage() {
               const href = `/dashboard/winners/${p.id}${p.market ? `?market=${p.market}` : ""}`;
               return (
                 <div key={p.id} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex gap-3 hover:border-zinc-700 transition-colors">
-                  <Link href={href} className="w-20 h-20 rounded-lg bg-zinc-800 overflow-hidden shrink-0">
+                  <Link href={href} aria-label={p.title} tabIndex={-1} className="w-20 h-20 rounded-lg bg-zinc-800 overflow-hidden shrink-0">
                     <ProductImage
                       src={p.image_url}
                       alt={p.title}
                       className="w-full h-full object-cover"
-                      fallback={<div className="w-full h-full flex items-center justify-center text-zinc-600"><ImageOff size={18} /></div>}
+                      fallback={<div className="w-full h-full flex items-center justify-center text-zinc-500"><ImageOff size={18} /></div>}
                     />
                   </Link>
                   <div className="flex-1 min-w-0 space-y-1">
@@ -68,9 +68,9 @@ export default function WatchlistPage() {
                       {formatPrice(p.price_usd)}
                       {markup && <span className="text-emerald-400"> · {markup.toFixed(1)}× cost</span>}
                     </div>
-                    <div className="flex items-center justify-between text-[11px] text-zinc-600">
+                    <div className="flex items-center justify-between text-[11px] text-zinc-500">
                       <span>{p.market ? `${p.market} · ` : ""}saved {new Date(added_at).toLocaleDateString()}</span>
-                      <button onClick={() => remove(p.id)} className="p-1 text-zinc-600 hover:text-red-400" aria-label="Remove">
+                      <button onClick={() => remove(p.id)} className="p-3 -m-3 text-zinc-500 hover:text-red-400" aria-label="Remove">
                         <Trash2 size={13} />
                       </button>
                     </div>
@@ -78,7 +78,7 @@ export default function WatchlistPage() {
                   {p.score != null ? (
                     <ScoreRing score={p.score} size={44} stroke={4} />
                   ) : (
-                    <span className="text-[10px] text-zinc-600 self-start mt-1 w-11 text-center leading-tight">not picked this week</span>
+                    <span className="text-[10px] text-zinc-500 self-start mt-1 w-11 text-center leading-tight">not picked this week</span>
                   )}
                 </div>
               );

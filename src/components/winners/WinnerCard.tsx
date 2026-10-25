@@ -66,13 +66,13 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
     <article className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden hover:border-zinc-700 transition-colors">
       <div className="flex flex-col md:flex-row gap-4 p-4">
         {/* Image + rank */}
-        <Link href={href} className="relative shrink-0 self-start">
-          <div className="w-24 md:w-32 aspect-square rounded-lg bg-zinc-800 overflow-hidden">
+        <Link href={href} className="relative shrink-0 self-start hidden md:block">
+          <div className="w-32 aspect-square rounded-lg bg-zinc-800 overflow-hidden">
             <ProductImage
               src={p.image_url}
               alt={p.title}
               className="w-full h-full object-cover"
-              fallback={<div className="w-full h-full flex items-center justify-center text-zinc-600"><ImageOff size={20} /></div>}
+              fallback={<div className="w-full h-full flex items-center justify-center text-zinc-500"><ImageOff size={20} /></div>}
             />
           </div>
           <span className="absolute -top-2 -left-2 w-8 h-8 rounded-full bg-zinc-950 border border-zinc-700 flex items-center justify-center text-white text-sm font-bold">
@@ -82,7 +82,36 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
 
         {/* Main */}
         <div className="flex-1 min-w-0 space-y-3">
-          <div className="flex items-start gap-2 flex-wrap">
+          {/* Phone: photo, name and score in one row */}
+          <div className="flex items-start gap-3 md:hidden">
+            <Link href={href} className="relative shrink-0">
+              <div className="w-16 h-16 rounded-lg bg-zinc-800 overflow-hidden">
+                <ProductImage
+                  src={p.image_url}
+                  alt={p.title}
+                  className="w-full h-full object-cover"
+                  fallback={<div className="w-full h-full flex items-center justify-center text-zinc-500"><ImageOff size={16} /></div>}
+                />
+              </div>
+              <span className="absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full bg-zinc-950 border border-zinc-700 flex items-center justify-center text-white text-xs font-bold">
+                {pick.rank}
+              </span>
+            </Link>
+            <div className="flex-1 min-w-0">
+              <Link href={href} className="text-white font-semibold text-[15px] leading-snug line-clamp-2">
+                {p.title}
+              </Link>
+              <div className="mt-1 text-xs flex items-center gap-1.5 flex-wrap">
+                <span className="text-white font-semibold">{formatPrice(p.price_usd)}</span>
+                {mult && <span className="text-emerald-400">{mult.toFixed(1)}× cost{p.cost_estimated ? " (est.)" : ""}</span>}
+                {pick.tier === "rising" && <span className="text-[10px] font-semibold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded px-1">Rising</span>}
+                {pick.tier === "watch" && <span className="text-[10px] font-semibold uppercase bg-sky-500/10 text-sky-300 border border-sky-500/30 rounded px-1">Watch</span>}
+              </div>
+            </div>
+            <ScoreRing score={pick.total} size={52} stroke={5} />
+          </div>
+
+          <div className="hidden md:flex items-start gap-2 flex-wrap">
             <Link href={href} className="text-white font-semibold text-base hover:text-violet-200 leading-snug">
               {p.title}
             </Link>
@@ -128,7 +157,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
             {(pick.penalties ?? []).slice(0, 2).map((pen) => (
               <li key={pen.reason} className="flex items-start gap-2 text-sm text-zinc-400">
                 <AlertTriangle size={14} className="text-amber-400 mt-0.5 shrink-0" />
-                <span>{pen.reason} <span className="text-zinc-600">(−{pen.points})</span></span>
+                <span>{pen.reason} <span className="text-zinc-500">(−{pen.points})</span></span>
               </li>
             ))}
           </ul>
@@ -143,8 +172,8 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
         </div>
 
         {/* Score */}
-        <div className="md:w-60 shrink-0 space-y-3 md:border-l md:border-zinc-800 md:pl-4">
-          <div className="flex items-center gap-3">
+        <div className="hidden md:block md:w-60 shrink-0 space-y-3 md:border-l md:border-zinc-800 md:pl-4">
+          <div className="hidden md:flex items-center gap-3">
             <ScoreRing score={pick.total} />
             <div className="text-xs space-y-0.5">
               <div className="text-zinc-500">Sell price</div>
@@ -156,7 +185,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
               )}
             </div>
           </div>
-          {pick.breakdown && <PillarBars breakdown={pick.breakdown} compact />}
+          {pick.breakdown && <div className="hidden md:block"><PillarBars breakdown={pick.breakdown} compact /></div>}
         </div>
       </div>
 
@@ -164,28 +193,28 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
       <div className="flex items-center gap-1 border-t border-zinc-800 px-4 py-2 text-xs flex-wrap">
         {pick.links?.ad_url && (
           <a href={pick.links.ad_url} target="_blank" rel="noreferrer"
-             className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800">
+             className="flex items-center gap-1 px-2.5 py-2 md:py-1.5 max-md:min-h-[44px] rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800">
             <ExternalLink size={12} /> See ad
           </a>
         )}
         {pick.links?.store_url && (
           <a href={pick.links.store_url} target="_blank" rel="noreferrer"
-             className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800">
+             className="flex items-center gap-1 px-2.5 py-2 md:py-1.5 max-md:min-h-[44px] rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800">
             <Store size={12} /> Competitor store
           </a>
         )}
         {pick.links?.supplier_url && (
           <a href={pick.links.supplier_url} target="_blank" rel="noreferrer"
-             className="flex items-center gap-1 px-2.5 py-1.5 rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800">
+             className="flex items-center gap-1 px-2.5 py-2 md:py-1.5 max-md:min-h-[44px] rounded-md text-zinc-400 hover:text-white hover:bg-zinc-800">
             <ExternalLink size={12} /> Supplier
           </a>
         )}
         <button onClick={toggleSave}
-                className={cn("flex items-center gap-1 px-2.5 py-1.5 rounded-md hover:bg-zinc-800",
+                className={cn("flex items-center gap-1 px-2.5 py-2 md:py-1.5 max-md:min-h-[44px] rounded-md hover:bg-zinc-800",
                   saved ? "text-violet-300" : "text-zinc-400 hover:text-white")}>
           <Bookmark size={12} fill={saved ? "currentColor" : "none"} /> {saved ? "Saved" : "Save"}
         </button>
-        <Link href={href} className="ml-auto flex items-center gap-1 px-2.5 py-1.5 rounded-md text-violet-300 hover:text-violet-200 hover:bg-violet-500/10 font-medium">
+        <Link href={href} className="ml-auto flex items-center gap-1 px-2.5 py-2 md:py-1.5 max-md:min-h-[44px] rounded-md text-violet-300 hover:text-violet-200 hover:bg-violet-500/10 font-medium">
           Full evidence <ArrowRight size={12} />
         </Link>
       </div>

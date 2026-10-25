@@ -83,12 +83,13 @@ export default function ResetPasswordPage() {
                       value={value}
                       onChange={(e) => setter(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors pr-10"
+                      className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      className="absolute right-0.5 top-1/2 -translate-y-1/2 p-3 text-zinc-500 hover:text-zinc-300"
                     >
                       {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                     </button>

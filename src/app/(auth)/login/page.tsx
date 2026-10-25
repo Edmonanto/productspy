@@ -39,7 +39,7 @@ export default function LoginPage() {
           </div>
           <div className="text-center">
             <h1 className="text-white font-bold text-2xl">Welcome back</h1>
-            <p className="text-zinc-500 text-sm mt-1">Sign in to ProductSpy AI</p>
+            <p className="text-zinc-500 text-sm mt-1">Sign in to ProductSpy Pro</p>
           </div>
         </div>
 
@@ -67,7 +67,7 @@ export default function LoginPage() {
           {/* Divider */}
           <div className="flex items-center gap-3">
             <div className="flex-1 h-px bg-zinc-800" />
-            <span className="text-zinc-600 text-xs">or</span>
+            <span className="text-zinc-500 text-xs">or</span>
             <div className="flex-1 h-px bg-zinc-800" />
           </div>
 
@@ -89,14 +89,14 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@example.com"
-                className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors"
+                className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors"
               />
             </div>
 
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="text-zinc-400 text-xs font-medium">Password</label>
-                <Link href="/forgot-password" className="text-violet-400 hover:text-violet-300 text-xs transition-colors">
+                <Link href="/forgot-password" className="inline-flex items-center py-3 -my-3 text-violet-400 hover:text-violet-300 text-xs transition-colors">
                   Forgot password?
                 </Link>
               </div>
@@ -107,12 +107,13 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors pr-10"
+                  className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-0.5 top-1/2 -translate-y-1/2 p-3 text-zinc-500 hover:text-zinc-300"
                 >
                   {showPassword ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -131,9 +132,9 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-zinc-600 text-sm">
+        <p className="text-center text-zinc-500 text-sm">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="text-violet-400 hover:text-violet-300 font-medium transition-colors">
+          <Link href="/signup" className="inline-flex items-center py-3 -my-3 text-violet-400 hover:text-violet-300 font-medium transition-colors">
             Sign up free
           </Link>
         </p>

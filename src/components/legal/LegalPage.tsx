@@ -5,8 +5,8 @@ import { SITE } from "@/lib/site";
 export function SiteFooter() {
   return (
     <footer className="border-t border-zinc-800 px-4 sm:px-8 py-8">
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-zinc-600 text-sm">
-        <Link href="/" className="flex items-center gap-2">
+      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-zinc-500 text-sm">
+        <Link href="/" className="flex items-center gap-2 py-2 -my-2">
           <div className="w-6 h-6 rounded bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
             <Zap size={12} className="text-white" />
           </div>
@@ -14,9 +14,9 @@ export function SiteFooter() {
           <span>© 2026</span>
         </Link>
         <div className="flex gap-6">
-          <Link href="/privacy" className="hover:text-zinc-400 transition-colors">Privacy</Link>
-          <Link href="/terms" className="hover:text-zinc-400 transition-colors">Terms</Link>
-          <Link href="/contact" className="hover:text-zinc-400 transition-colors">Contact</Link>
+          <Link href="/privacy" className="inline-block py-3 -my-3 hover:text-zinc-300 transition-colors">Privacy</Link>
+          <Link href="/terms" className="inline-block py-3 -my-3 hover:text-zinc-300 transition-colors">Terms</Link>
+          <Link href="/contact" className="inline-block py-3 -my-3 hover:text-zinc-300 transition-colors">Contact</Link>
         </div>
       </div>
     </footer>
@@ -34,7 +34,7 @@ export default function LegalPage({ title, children, showUpdated = true }: { tit
             </div>
             <span className="font-bold text-white text-lg tracking-tight">ProductSpy</span>
           </Link>
-          <Link href="/" className="flex items-center gap-1.5 text-zinc-400 hover:text-white text-sm">
+          <Link href="/" className="max-md:min-h-[44px] flex items-center gap-1.5 text-zinc-400 hover:text-white text-sm">
             <ArrowLeft size={14} /> Back to home
           </Link>
         </div>

@@ -51,7 +51,7 @@ export default function ForgotPasswordPage() {
                   Sent a reset link to <span className="text-white">{email}</span>
                 </p>
               </div>
-              <p className="text-zinc-600 text-xs">
+              <p className="text-zinc-500 text-xs">
                 Didn&apos;t receive it? Check spam or{" "}
                 <button onClick={() => setSent(false)} className="text-violet-400 hover:text-violet-300">
                   try again
@@ -76,7 +76,7 @@ export default function ForgotPasswordPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
-                    className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-600 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors"
+                    className="w-full bg-zinc-800 border border-zinc-700 text-white placeholder-zinc-500 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-violet-500 transition-colors"
                   />
                 </div>
 

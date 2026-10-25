@@ -43,7 +43,7 @@ export function TrustedBySection() {
           </div>
         ))}
       </div>
-      <p className="text-center text-zinc-600 text-[11px] mt-4">
+      <p className="text-center text-zinc-500 text-[11px] mt-4">
         ProductSpy is independent and not affiliated with or endorsed by Meta, TikTok or AliExpress.
       </p>
     </section>

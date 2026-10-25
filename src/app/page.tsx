@@ -1,6 +1,6 @@
 import Link from "next/link";
 import {
-  Zap, ArrowRight, Check, Trophy, Radar, Brain, Gauge, CheckCircle2, AlertTriangle, Globe2,
+  Zap, ArrowRight, Check, Trophy, Radar, Brain, Gauge, CheckCircle2, AlertTriangle, Globe2, Package,
 } from "lucide-react";
 import { ReviewsSection, TrustedBySection } from "@/components/landing/SocialProof";
 import { SiteFooter } from "@/components/legal/LegalPage";
@@ -91,16 +91,18 @@ export default function LandingPage() {
             <a href="#how" className="text-zinc-400 hover:text-white text-sm transition-colors">How it works</a>
             <a href="#reviews" className="text-zinc-400 hover:text-white text-sm transition-colors">Reviews</a>
             <a href="#pricing" className="text-zinc-400 hover:text-white text-sm transition-colors">Pricing</a>
-            <Link href="/login" className="text-zinc-400 hover:text-white text-sm transition-colors">Sign in</Link>
+            <Link href="/login" className="inline-flex items-center py-3 -my-3 text-zinc-400 hover:text-white text-sm transition-colors">Sign in</Link>
             <Link href="/signup" className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-lg shadow-violet-900/30">
               Start free trial
             </Link>
           </div>
-          <Link href="/signup" className="sm:hidden bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors">
+          <Link href="/signup" className="sm:hidden inline-flex items-center min-h-[44px] bg-violet-600 hover:bg-violet-500 text-white text-xs font-semibold px-3 py-2 rounded-lg transition-colors">
             Free trial
           </Link>
         </div>
       </nav>
+
+      <main>
 
       {/* Hero */}
       <section className="max-w-5xl mx-auto px-4 sm:px-8 pt-16 sm:pt-24 pb-16 sm:pb-20 text-center space-y-6 sm:space-y-8">
@@ -125,7 +127,7 @@ export default function LandingPage() {
             Sign in
           </Link>
         </div>
-        <p className="text-zinc-600 text-xs">7 days of Pro free · No credit card required · Free plan after the trial</p>
+        <p className="text-zinc-500 text-xs">7 days of Pro free · No credit card required · Free plan after the trial</p>
 
         {/* Anatomy of a pick — a layout illustration, not a real product */}
         <div className="mt-8 sm:mt-12 rounded-2xl border border-zinc-800 bg-zinc-900/80 p-4 sm:p-6 shadow-2xl shadow-violet-900/20 ring-1 ring-white/5 text-left">
@@ -133,11 +135,11 @@ export default function LandingPage() {
             <div className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
             <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
             <div className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
-            <span className="text-zinc-600 text-xs ml-2">productspy.pro/dashboard/winners</span>
+            <span className="text-zinc-500 text-xs ml-2">productspy.pro/dashboard/winners</span>
           </div>
           <div className="flex flex-col md:flex-row gap-5">
-            <div className="w-full md:w-32 aspect-square md:h-32 rounded-xl bg-gradient-to-br from-zinc-700 to-zinc-800 flex items-center justify-center text-zinc-500 text-xs shrink-0">
-              product photo
+            <div className="w-full h-28 md:w-32 md:h-32 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center shrink-0" aria-hidden="true">
+              <Package size={36} strokeWidth={1.5} className="text-violet-300/70" />
             </div>
             <div className="flex-1 space-y-2.5">
               <div className="text-white font-semibold">#1 · the product name</div>
@@ -164,7 +166,7 @@ export default function LandingPage() {
               ))}
             </div>
           </div>
-          <p className="text-zinc-600 text-[11px] mt-4">How every pick is laid out. Real picks show real products, prices and the ads behind them.</p>
+          <p className="text-zinc-500 text-[11px] mt-4">How every pick is laid out. Real picks show real products, prices and the ads behind them.</p>
         </div>
       </section>
 
@@ -196,7 +198,7 @@ export default function LandingPage() {
                 <div className="w-10 h-10 rounded-lg bg-violet-600/20 border border-violet-600/20 flex items-center justify-center">
                   <Icon size={18} className="text-violet-400" />
                 </div>
-                <span className="text-zinc-600 text-sm font-semibold">Step {i + 1}</span>
+                <span className="text-zinc-500 text-sm font-semibold">Step {i + 1}</span>
               </div>
               <h3 className="text-white font-semibold">{title}</h3>
               <p className="text-zinc-500 text-sm leading-relaxed">{desc}</p>
@@ -238,7 +240,7 @@ export default function LandingPage() {
             <span key={m} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300">{m}</span>
           ))}
         </div>
-        <p className="text-zinc-600 text-xs mt-6">
+        <p className="text-zinc-500 text-xs mt-6">
           Coming next: {COMING_SOON.join(" · ")}
         </p>
       </section>
@@ -305,6 +307,8 @@ export default function LandingPage() {
           </Link>
         </div>
       </section>
+
+      </main>
 
       {/* Footer */}
       <SiteFooter />

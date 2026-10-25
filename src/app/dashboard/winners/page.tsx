@@ -69,11 +69,12 @@ function WinnersInner() {
                 : "Only products scoring 70+ make the list. Updated every day."}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {dates && dates.dates.length > 1 && (
-              <label className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-400">
+              <label className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 max-md:py-0 text-xs text-zinc-400">
                 <CalendarDays size={13} />
                 <select
+                  aria-label="Pick a day"
                   value={date ?? ""}
                   onChange={(e) => pickDate(e.target.value)}
                   className="bg-transparent text-zinc-200 focus:outline-none"
@@ -88,7 +89,7 @@ function WinnersInner() {
             <button
               onClick={doExport}
               disabled={!data?.date}
-              className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-lg px-3 py-1.5 text-xs text-zinc-300 disabled:opacity-40"
+              className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-lg px-3 py-1.5 max-md:min-h-[44px] text-xs text-zinc-300 disabled:opacity-40"
             >
               {ent?.export_csv ? <Download size={13} /> : <Lock size={13} />}
               Export CSV
@@ -136,7 +137,7 @@ function WinnersInner() {
           </div>
         ) : winners.length === 0 ? (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center space-y-2">
-            <Trophy className="mx-auto text-zinc-600" />
+            <Trophy className="mx-auto text-zinc-500" />
             <p className="text-white font-medium">No picks yet for this market</p>
             <p className="text-zinc-500 text-sm">
               {lastRun

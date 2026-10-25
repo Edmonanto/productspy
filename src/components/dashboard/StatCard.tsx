@@ -37,7 +37,7 @@ export default function StatCard({ label, value, sub, icon: Icon, trend, trendVa
       </div>
       <div>
         <div className="text-2xl font-extrabold text-white">{value}</div>
-        {sub && <p className="text-zinc-600 text-xs mt-0.5">{sub}</p>}
+        {sub && <p className="text-zinc-500 text-xs mt-0.5">{sub}</p>}
       </div>
       {trend && trendValue && (
         <div className={cn("flex items-center gap-1 text-xs font-medium", TREND_COLORS[trend])}>

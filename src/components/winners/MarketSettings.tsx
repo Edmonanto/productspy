@@ -55,7 +55,7 @@ export default function MarketSettings() {
           </p>
         </div>
         {max < 99 && (
-          <Link href="/dashboard/billing" className="text-xs text-violet-400 hover:text-violet-300">More markets →</Link>
+          <Link href="/dashboard/billing" className="inline-flex items-center py-3 -my-3 text-xs text-violet-400 hover:text-violet-300">More markets →</Link>
         )}
       </div>
 
@@ -83,7 +83,7 @@ export default function MarketSettings() {
                   <span className="block text-sm text-white truncate">{m.name}</span>
                   <span className="block text-[11px] text-zinc-500">{m.currency}</span>
                 </span>
-                {on ? <Check size={15} className="text-violet-300" /> : full ? <Lock size={13} className="text-zinc-600" /> : null}
+                {on ? <Check size={15} className="text-violet-300" /> : full ? <Lock size={13} className="text-zinc-500" /> : null}
               </button>
             );
           })}
@@ -94,7 +94,7 @@ export default function MarketSettings() {
         <button
           onClick={save}
           disabled={!dirty || saving || selected.length === 0}
-          className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 disabled:opacity-40"
+          className="px-4 py-2 max-md:min-h-[44px] rounded-lg bg-violet-600 text-white text-sm font-medium hover:bg-violet-500 disabled:opacity-40"
         >
           {saving ? "Saving…" : "Save markets"}
         </button>
