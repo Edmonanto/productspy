@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import Topbar from "@/components/layout/Topbar";
-import { usersApi, billingApi, Me } from "@/lib/api";
+import { usersApi, billingApi, winnersApi, Me } from "@/lib/api";
 import {
   CreditCard, Zap, Check, AlertTriangle,
   ExternalLink, X, Shield, RefreshCw
@@ -16,7 +16,7 @@ const PLANS = [
     name: "Free",
     price: 0,
     period: "",
-    features: ["5 searches/day", "Basic AI score", "Watchlist (10 products)"],
+    features: ["Top 3 Daily Winners a day", "1 market", "Score + reasons for each pick", "Watchlist (10 products)"],
     cta: "Current plan",
     highlight: false,
   },
@@ -25,7 +25,7 @@ const PLANS = [
     name: "Starter",
     price: 29,
     period: "/mo",
-    features: ["50 searches/day", "Full AI scoring", "Email alerts", "Unlimited watchlist"],
+    features: ["All 5–10 Daily Winners", "1 market", "Ad & video evidence", "7-day winners archive", "Unlimited watchlist"],
     cta: "Upgrade to Starter",
     highlight: false,
   },
@@ -35,10 +35,10 @@ const PLANS = [
     price: 79,
     period: "/mo",
     features: [
-      "Unlimited searches",
-      "Full AI scoring",
-      "Supplier matching",
-      "Email alerts",
+      "All Daily Winners",
+      "3 markets",
+      "Ad & video evidence + supplier links",
+      "30-day archive + CSV export",
       "Priority support",
     ],
     cta: "Upgrade to Pro",
@@ -51,9 +51,8 @@ const PLANS = [
     period: "/mo",
     features: [
       "Everything in Pro",
-      "5 team seats",
-      "White-label reports",
-      "API access",
+      "Every market",
+      "90-day winners archive",
       "Dedicated support",
     ],
     cta: "Upgrade to Agency",
@@ -65,6 +64,8 @@ type Provider = "stripe" | "paypal";
 
 export default function BillingPage() {
   const { data: me, isLoading } = useSWR<Me>("me", usersApi.me);
+  const { data: winnerMeta } = useSWR("winner-markets", winnersApi.markets);
+  const ent = winnerMeta?.entitlements;
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [provider, setProvider] = useState<Provider>("stripe");
   const [loading, setLoading] = useState(false);
@@ -73,11 +74,28 @@ export default function BillingPage() {
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   const currentPlan = me?.subscription.plan ?? "free";
+  const trial = me?.trial;
+  const inTrial = !!trial?.active;
+  const [startingTrial, setStartingTrial] = useState(false);
+
+  const handleStartTrial = async () => {
+    setStartingTrial(true);
+    try {
+      await billingApi.startTrial();
+      await mutate("me");
+      await mutate("winner-markets");
+      setMessage({ type: "success", text: `Your ${trial?.length_days ?? 7}-day Pro trial has started.` });
+    } catch (err: any) {
+      setMessage({ type: "error", text: err.message ?? "Could not start the trial" });
+    } finally {
+      setStartingTrial(false);
+    }
+  };
   const subStatus = me?.subscription.status ?? "active";
   const periodEnd = me?.subscription.current_period_end;
 
   const handleCheckout = async (planId: string) => {
-    if (planId === currentPlan) return;
+    if (planId === currentPlan && !inTrial) return;
     setLoading(true);
     setSelectedPlan(planId);
     try {
@@ -136,6 +154,42 @@ export default function BillingPage() {
           </div>
         )}
 
+        {/* Free trial */}
+        {inTrial && trial && (
+          <div className="bg-gradient-to-r from-violet-900/40 to-indigo-900/20 border border-violet-700/40 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1">
+              <p className="text-white font-semibold">
+                Pro trial · {trial.days_left} day{trial.days_left === 1 ? "" : "s"} left
+              </p>
+              <p className="text-zinc-400 text-sm mt-0.5">
+                Ends {trial.ends_at && new Date(trial.ends_at).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}.
+                Pick a plan now to keep everything — paying by card, you&apos;re only charged when the trial ends.
+              </p>
+            </div>
+            <div className="w-full sm:w-40 h-2 bg-zinc-800 rounded-full overflow-hidden">
+              <div className="h-full bg-violet-400 rounded-full"
+                   style={{ width: `${Math.max(4, 100 - (trial.days_left / trial.length_days) * 100)}%` }} />
+            </div>
+          </div>
+        )}
+        {trial?.eligible && (
+          <div className="bg-zinc-900 border border-violet-700/40 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex-1">
+              <p className="text-white font-semibold">Try Pro free for {trial.length_days} days</p>
+              <p className="text-zinc-400 text-sm mt-0.5">All Daily Winners in 3 markets, ad evidence and CSV export. No card needed.</p>
+            </div>
+            <button onClick={handleStartTrial} disabled={startingTrial}
+                    className="px-4 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold disabled:opacity-50">
+              {startingTrial ? "Starting…" : "Start free trial"}
+            </button>
+          </div>
+        )}
+        {trial?.expired && currentPlan === "free" && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-5 py-4 text-sm text-zinc-400">
+            Your free trial has ended — you&apos;re on the Free plan (top 3 winners a day). Upgrade below to unlock the full list again.
+          </div>
+        )}
+
         {/* Current plan card */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
           <div className="flex items-start justify-between">
@@ -161,7 +215,7 @@ export default function BillingPage() {
               )}
             </div>
 
-            {currentPlan !== "free" && (
+            {currentPlan !== "free" && !inTrial && (
               <div className="flex items-center gap-2">
                 <button
                   onClick={handlePortal}
@@ -182,34 +236,26 @@ export default function BillingPage() {
             )}
           </div>
 
-          {/* Quota bar */}
-          <div className="mt-4 pt-4 border-t border-zinc-800">
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-zinc-500 flex items-center gap-1.5">
-                <Zap size={11} className="text-violet-400" />
-                Daily searches
-              </span>
-              <span className="text-zinc-400">
-                <span className="text-white font-bold">{me?.quota.used ?? 0}</span>
-                {" / "}
-                {me?.quota.limit === "unlimited" ? "∞" : me?.quota.limit ?? 5}
-              </span>
+          {/* What the plan includes */}
+          {ent && (
+            <div className="mt-4 pt-4 border-t border-zinc-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+              {[
+                { label: "Markets", value: ent.markets >= 99 ? "All" : String(ent.markets) },
+                { label: "Winners / day", value: ent.winners_per_day >= 10 ? "All (5–10)" : `Top ${ent.winners_per_day}` },
+                { label: "Archive", value: ent.history_days ? `${ent.history_days} days` : "Today only" },
+                { label: "Ad evidence · CSV", value: `${ent.ad_evidence ? "Yes" : "No"} · ${ent.export_csv ? "Yes" : "No"}` },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <div className="text-zinc-500 flex items-center gap-1"><Zap size={10} className="text-violet-400" />{label}</div>
+                  <div className="text-white font-semibold mt-0.5">{value}</div>
+                </div>
+              ))}
             </div>
-            {me?.quota.limit !== "unlimited" && (
-              <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-violet-500 rounded-full transition-all"
-                  style={{
-                    width: `${Math.min(100, (Number(me?.quota.used ?? 0) / Number(me?.quota.limit ?? 5)) * 100)}%`
-                  }}
-                />
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
         {/* Payment provider toggle */}
-        {currentPlan === "free" && (
+        {(currentPlan === "free" || inTrial) && (
           <div className="flex items-center gap-3">
             <span className="text-zinc-500 text-sm">Pay with:</span>
             <div className="flex rounded-lg border border-zinc-700 overflow-hidden">
@@ -240,7 +286,8 @@ export default function BillingPage() {
           <h3 className="text-white font-semibold mb-4">Choose a plan</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {PLANS.map((plan) => {
-              const isCurrent = plan.id === currentPlan;
+              const isTrialPlan = inTrial && plan.id === currentPlan;
+              const isCurrent = plan.id === currentPlan && !inTrial;
               const isProcessing = selectedPlan === plan.id && loading;
 
               return (
@@ -254,7 +301,14 @@ export default function BillingPage() {
                     isCurrent && "border-emerald-500/40 bg-emerald-500/5"
                   )}
                 >
-                  {plan.highlight && !isCurrent && (
+                  {isTrialPlan && (
+                    <div className="mb-3">
+                      <span className="bg-blue-500/20 text-blue-300 text-[10px] font-bold px-2.5 py-1 rounded-full border border-blue-500/30">
+                        ON TRIAL · {trial?.days_left}d LEFT
+                      </span>
+                    </div>
+                  )}
+                  {plan.highlight && !isCurrent && !isTrialPlan && (
                     <div className="mb-3">
                       <span className="bg-violet-600 text-white text-[10px] font-bold px-2.5 py-1 rounded-full">
                         MOST POPULAR
@@ -287,11 +341,11 @@ export default function BillingPage() {
                   </ul>
 
                   <button
-                    onClick={() => !isCurrent && handleCheckout(plan.id)}
-                    disabled={isCurrent || (loading && selectedPlan === plan.id)}
+                    onClick={() => !isCurrent && plan.id !== "free" && handleCheckout(plan.id)}
+                    disabled={isCurrent || plan.id === "free" || (loading && selectedPlan === plan.id)}
                     className={cn(
                       "w-full py-2.5 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2",
-                      isCurrent
+                      isCurrent || plan.id === "free"
                         ? "bg-zinc-800 text-zinc-600 cursor-default"
                         : plan.highlight
                         ? "bg-violet-600 hover:bg-violet-500 text-white"
@@ -302,6 +356,10 @@ export default function BillingPage() {
                       <RefreshCw size={12} className="animate-spin" />
                     ) : isCurrent ? (
                       "Current plan"
+                    ) : isTrialPlan ? (
+                      "Keep Pro after trial"
+                    ) : plan.id === "free" ? (
+                      inTrial ? "After your trial" : "Included"
                     ) : (
                       plan.cta
                     )}

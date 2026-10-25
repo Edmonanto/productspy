@@ -1,308 +1,57 @@
-"""Data access. Plain SQL against Postgres — no ORM."""
+"""Data access. Plain SQL against Postgres — no ORM.
+
+Daily Winners queries live in app/winners/store.py; this module holds the
+account side: watchlist, subscription, free trial and webhook ledger.
+"""
 from typing import Any
 
 import asyncpg
 
-from . import config, db
-from .providers.base import RawProduct
-from .schemas import AdSignal, Product, Score, Subscription, Supplier
-
-# Products are always read with their score, suppliers and ad signals attached,
-# so the frontend's Product shape can be built in a single round trip.
-_PRODUCT_SELECT = """
-    select
-        p.id, p.title, p.image_url, p.product_url, p.category,
-        p.price_usd, p.cost_usd, p.price_is_derived, p.source,
-        s.overall_score, s.demand_score, s.margin_score,
-        s.competition_score, s.trend_score, s.ai_summary,
-        coalesce(sup.items, '[]'::json) as suppliers,
-        coalesce(ads.items, '[]'::json) as ad_signals
-    from products p
-    left join product_scores s on s.product_id = p.id
-    left join lateral (
-        select json_agg(json_build_object(
-            'platform', x.platform, 'supplier_name', x.supplier_name,
-            'supplier_url', x.supplier_url, 'unit_cost_usd', x.unit_cost_usd,
-            'shipping_days', x.shipping_days, 'rating', x.rating
-        )) as items
-        from suppliers x where x.product_id = p.id
-    ) sup on true
-    left join lateral (
-        select json_agg(json_build_object(
-            'platform', x.platform, 'ad_count', x.ad_count,
-            'last_seen_at', x.last_seen_at
-        )) as items
-        from ad_signals x where x.product_id = p.id
-    ) ads on true
-"""
+from . import config, db, trial
+from .schemas import Subscription, WatchedProduct
 
 
-def _to_product(row: asyncpg.Record) -> Product:
-    import json
-
-    score = None
-    if row["overall_score"] is not None:
-        score = Score(
-            overall_score=row["overall_score"],
-            demand_score=row["demand_score"],
-            margin_score=row["margin_score"],
-            competition_score=row["competition_score"],
-            trend_score=row["trend_score"],
-            ai_summary=row["ai_summary"] or "",
-        )
-
-    suppliers = [Supplier(**s) for s in json.loads(row["suppliers"])]
-    ad_signals = [AdSignal(**a) for a in json.loads(row["ad_signals"])]
-
-    return Product(
-        id=str(row["id"]),
-        title=row["title"],
-        image_url=row["image_url"],
-        product_url=row["product_url"],
-        category=row["category"],
-        price_usd=float(row["price_usd"]) if row["price_usd"] is not None else None,
-        cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
-        price_is_derived=bool(row["price_is_derived"]),
-        source=row["source"],
-        score=score,
-        suppliers=suppliers,
-        ad_signals=ad_signals,
-    )
-
-
-# ── Products ────────────────────────────────────────────────────────────────
-async def trending(
-    source: str = "", category: str = "", min_score: int = 0, limit: int = 40
-) -> tuple[list[Product], int]:
-    where: list[str] = ["coalesce(s.overall_score, 0) >= $1"]
-    args: list[Any] = [min_score]
-
-    if source and source != "all":
-        args.append(source)
-        where.append(f"p.source = ${len(args)}")
-    if category and category != "all":
-        args.append(category)
-        where.append(f"p.category = ${len(args)}")
-
-    clause = " and ".join(where)
-    args.append(limit)
-
-    rows = await db.fetch(
-        f"{_PRODUCT_SELECT} where {clause} "
-        f"order by s.overall_score desc nulls last, p.updated_at desc "
-        f"limit ${len(args)}",
-        *args,
-    )
-    total = await db.fetchval(
-        f"select count(*) from products p "
-        f"left join product_scores s on s.product_id = p.id where {clause}",
-        *args[:-1],
-    )
-    return [_to_product(r) for r in rows], int(total or 0)
-
-
-async def search(q: str, min_score: int = 40, limit: int = 40) -> tuple[list[Product], int]:
-    rows = await db.fetch(
-        f"{_PRODUCT_SELECT} "
-        f"where p.title ilike '%' || $1 || '%' "
-        f"  and coalesce(s.overall_score, 0) >= $2 "
-        f"order by s.overall_score desc nulls last limit $3",
-        q,
-        min_score,
-        limit,
-    )
-    total = await db.fetchval(
-        "select count(*) from products p "
-        "left join product_scores s on s.product_id = p.id "
-        "where p.title ilike '%' || $1 || '%' and coalesce(s.overall_score, 0) >= $2",
-        q,
-        min_score,
-    )
-    return [_to_product(r) for r in rows], int(total or 0)
-
-
-async def get_product(product_id: str) -> Product | None:
-    row = await db.fetchrow(f"{_PRODUCT_SELECT} where p.id = $1", product_id)
-    return _to_product(row) if row else None
-
-
-async def upsert_product(raw: "RawProduct") -> str:
-    """Insert or refresh a product from a provider; returns its uuid."""
-    return str(
-        await db.fetchval(
-            """
-            insert into products (title, image_url, product_url, category,
-                price_usd, cost_usd, price_is_derived, source, external_id,
-                orders_count, rating, provider, updated_at)
-            values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
-            on conflict (source, external_id) do update set
-                title = excluded.title,
-                image_url = coalesce(excluded.image_url, products.image_url),
-                product_url = excluded.product_url,
-                category = coalesce(excluded.category, products.category),
-                price_usd = excluded.price_usd,
-                cost_usd = excluded.cost_usd,
-                price_is_derived = excluded.price_is_derived,
-                orders_count = excluded.orders_count,
-                rating = excluded.rating,
-                updated_at = now()
-            returning id
-            """,
-            raw.title,
-            raw.image_url,
-            raw.product_url,
-            raw.category,
-            raw.price_usd,
-            raw.cost_usd,
-            raw.price_is_derived,
-            raw.source,
-            raw.external_id,
-            raw.orders_count,
-            raw.rating,
-            raw.source,
-        )
-    )
-
-
-async def record_ad_signal(product_id: str, platform: str, ad_count: int) -> None:
-    await db.execute(
-        """
-        insert into ad_signals (product_id, platform, ad_count, last_seen_at)
-        values ($1, $2, $3, now())
-        on conflict (product_id, platform) do update set
-            ad_count = excluded.ad_count, last_seen_at = now()
-        """,
-        product_id,
-        platform,
-        ad_count,
-    )
-
-
-# ── Snapshots (the trend signal we build ourselves) ─────────────────────────
-async def write_snapshot(
-    product_id: str,
-    price_usd: float | None,
-    cost_usd: float | None,
-    orders_count: int | None,
-    ad_count: int | None,
-) -> None:
-    await db.execute(
-        "insert into product_snapshots (product_id, price_usd, cost_usd, "
-        "orders_count, ad_count) values ($1, $2, $3, $4, $5)",
-        product_id,
-        price_usd,
-        cost_usd,
-        orders_count,
-        ad_count,
-    )
-
-
-async def orders_at(product_id: str, days_ago: int) -> int | None:
-    """Orders from the newest snapshot at least `days_ago` days old.
-
-    Returns None until history reaches that far back, which is what keeps
-    trend_score neutral rather than fabricated during the first weeks.
-    """
-    return await db.fetchval(
-        """
-        select orders_count from product_snapshots
-        where product_id = $1
-          and captured_at <= now() - ($2 || ' days')::interval
-          and orders_count is not null
-        order by captured_at desc limit 1
-        """,
-        product_id,
-        str(days_ago),
-    )
-
-
-async def orders_baseline(source: str) -> list[int]:
-    """Sorted orders_count for one source — the distribution demand ranks in.
-
-    Read once per source per run: the list is small (one int per product) and
-    scoring every product against it individually would be a query apiece.
-    """
-    rows = await db.fetch(
-        """
-        select orders_count from products
-         where source = $1 and orders_count is not null and orders_count > 0
-         order by orders_count
-        """,
-        source,
-    )
-    return [r["orders_count"] for r in rows]
-
-
-async def current_orders(product_id: str) -> int | None:
-    return await db.fetchval(
-        "select orders_count from products where id = $1", product_id
-    )
-
-
-# ── Ingestion run log ───────────────────────────────────────────────────────
-async def start_run(provider: str) -> int:
-    return int(
-        await db.fetchval(
-            "insert into ingestion_runs (provider) values ($1) returning id",
-            provider,
-        )
-    )
-
-
-async def finish_run(
-    run_id: int,
-    fetched: int,
-    upserted: int,
-    scored: int,
-    summarized: int,
-    error: str | None = None,
-) -> None:
-    await db.execute(
-        "update ingestion_runs set finished_at = now(), fetched = $2, "
-        "upserted = $3, scored = $4, summarized = $5, error = $6 where id = $1",
-        run_id,
-        fetched,
-        upserted,
-        scored,
-        summarized,
-        error,
-    )
-
-
-async def save_score(product_id: str, score: Score) -> None:
-    await db.execute(
-        """
-        insert into product_scores (product_id, overall_score, demand_score,
-            margin_score, competition_score, trend_score, ai_summary, scored_at)
-        values ($1, $2, $3, $4, $5, $6, $7, now())
-        on conflict (product_id) do update set
-            overall_score = excluded.overall_score,
-            demand_score = excluded.demand_score,
-            margin_score = excluded.margin_score,
-            competition_score = excluded.competition_score,
-            trend_score = excluded.trend_score,
-            ai_summary = excluded.ai_summary,
-            scored_at = now()
-        """,
-        product_id,
-        score.overall_score,
-        score.demand_score,
-        score.margin_score,
-        score.competition_score,
-        score.trend_score,
-        score.ai_summary,
-    )
+# ── Products (only what the watchlist needs) ────────────────────────────────
+async def product_exists(product_id: str) -> bool:
+    return bool(await db.fetchval("select 1 from products where id = $1", product_id))
 
 
 # ── Watchlist ───────────────────────────────────────────────────────────────
-async def watchlist(user_id: str) -> list[tuple[str, Product, Any]]:
+async def watchlist(user_id: str) -> list[tuple[str, WatchedProduct, Any]]:
+    """Saved products with their best recent Daily Winners score (any market)."""
     rows = await db.fetch(
-        f"select w.id as watch_id, w.added_at, sub.* from watchlists w "
-        f"join lateral ({_PRODUCT_SELECT} where p.id = w.product_id) sub on true "
-        f"where w.user_id = $1 order by w.added_at desc",
+        """
+        select w.id as watch_id, w.added_at, p.id, p.title, p.image_url,
+               p.price_usd, p.cost_usd,
+               (select max(ws.total) from winner_scores ws
+                 where ws.product_id = p.id
+                   and ws.scored_on > (now() at time zone 'utc')::date - 7) as score,
+               (select ws.market from winner_scores ws
+                 where ws.product_id = p.id
+                 order by ws.scored_on desc, ws.total desc limit 1) as market
+          from watchlists w
+          join products p on p.id = w.product_id
+         where w.user_id = $1
+         order by w.added_at desc
+        """,
         user_id,
     )
-    return [(str(r["watch_id"]), _to_product(r), r["added_at"]) for r in rows]
+    return [
+        (
+            str(r["watch_id"]),
+            WatchedProduct(
+                id=str(r["id"]),
+                title=r["title"],
+                image_url=r["image_url"],
+                price_usd=float(r["price_usd"]) if r["price_usd"] is not None else None,
+                cost_usd=float(r["cost_usd"]) if r["cost_usd"] is not None else None,
+                score=r["score"],
+                market=r["market"],
+            ),
+            r["added_at"],
+        )
+        for r in rows
+    ]
 
 
 async def watchlist_count(user_id: str) -> int:
@@ -328,21 +77,28 @@ async def watchlist_remove(user_id: str, product_id: str) -> None:
     )
 
 
-# ── Subscription & quota ────────────────────────────────────────────────────
+# ── Subscription ────────────────────────────────────────────────────
 async def subscription(user_id: str) -> tuple[Subscription, str]:
-    """Return the user's subscription and billing provider (defaults to free)."""
+    """Return the user's subscription and billing provider (defaults to free).
+
+    `plan` is the *effective* plan: a free trial past its end reads as free
+    here, before the daily job has rewritten the row. Every quota and feature
+    check goes through this, so none of them can be fooled by a stale trial.
+    """
     row = await db.fetchrow(
-        "select plan, status, provider, current_period_end "
+        "select plan, status, provider, current_period_end, trial_ends_at "
         "from subscriptions where user_id = $1",
         user_id,
     )
     if row is None:
         return Subscription(plan=config.DEFAULT_PLAN, status="active", current_period_end=None), "none"
+    plan = trial.effective_plan(row["plan"], row["status"], row["provider"], row["trial_ends_at"])
+    expired_trial = trial.is_app_trial(row["status"], row["provider"]) and plan == "free"
     return (
         Subscription(
-            plan=row["plan"],
-            status=row["status"],
-            current_period_end=row["current_period_end"],
+            plan=plan,
+            status="active" if expired_trial else row["status"],
+            current_period_end=None if expired_trial else row["current_period_end"],
         ),
         row["provider"],
     )
@@ -352,9 +108,89 @@ async def subscription_row(user_id: str) -> asyncpg.Record | None:
     """Full subscription row, including the provider ids the API calls need."""
     return await db.fetchrow(
         "select plan, status, provider, provider_customer_id, "
-        "provider_subscription_id, current_period_end, cancel_at_period_end "
+        "provider_subscription_id, current_period_end, cancel_at_period_end, "
+        "trial_started_at, trial_ends_at, trial_used, email "
         "from subscriptions where user_id = $1",
         user_id,
+    )
+
+
+# ── Free trial ──────────────────────────────────────────────────────────────
+async def ensure_subscription(user_id: str, email: str) -> None:
+    """First visit: start the no-card trial. Later visits: keep email current.
+
+    `on conflict do nothing`-style for the trial itself — an existing row,
+    paid or free, is never put back on a trial here.
+    """
+    await db.execute(
+        """
+        insert into subscriptions (user_id, plan, status, provider,
+            current_period_end, trial_started_at, trial_ends_at, trial_used,
+            email, updated_at)
+        values ($1, $2, 'trialing', 'none', $3, now(), $3, true, $4, now())
+        on conflict (user_id) do update set
+            email = coalesce(nullif(excluded.email, ''), subscriptions.email)
+        """,
+        user_id,
+        config.TRIAL_PLAN,
+        trial.trial_end_from_now(),
+        email,
+    )
+
+
+async def start_trial(user_id: str, email: str) -> bool:
+    """Put an existing free account on the trial. False if not eligible.
+
+    Eligible = never had a trial and not on a paid plan. The condition lives
+    in the WHERE clause so two concurrent clicks can't both succeed.
+    """
+    row = await db.fetchrow(
+        """
+        update subscriptions set
+            plan = $2, status = 'trialing', provider = 'none',
+            current_period_end = $3, trial_started_at = now(), trial_ends_at = $3,
+            trial_used = true, trial_reminder_sent_at = null,
+            email = coalesce(nullif($4, ''), email), updated_at = now()
+         where user_id = $1 and trial_used = false
+           and (plan = 'free' or status = 'canceled')
+        returning user_id
+        """,
+        user_id,
+        config.TRIAL_PLAN,
+        trial.trial_end_from_now(),
+        email,
+    )
+    return row is not None
+
+
+async def expire_trials() -> list[asyncpg.Record]:
+    """Move every expired app trial to free; return who to notify."""
+    return await db.fetch(
+        """
+        update subscriptions set
+            plan = 'free', status = 'active', current_period_end = null, updated_at = now()
+         where status = 'trialing' and provider = 'none'
+           and trial_ends_at is not null and trial_ends_at <= now()
+        returning user_id, email
+        """
+    )
+
+
+async def trials_due_reminder() -> list[asyncpg.Record]:
+    """Trials ending within 48h not reminded in the last 20h.
+
+    Run daily, that is one email at ~2 days left and one on the last day.
+    Marking and selecting in one statement means a re-run never double-sends.
+    """
+    return await db.fetch(
+        """
+        update subscriptions set trial_reminder_sent_at = now()
+         where status = 'trialing' and provider = 'none'
+           and trial_ends_at > now() and trial_ends_at <= now() + interval '48 hours'
+           and (trial_reminder_sent_at is null
+                or trial_reminder_sent_at < now() - interval '20 hours')
+        returning user_id, email, trial_ends_at
+        """
     )
 
 
@@ -414,145 +250,6 @@ async def find_user_by_provider_id(
     return str(row["user_id"]) if row else None
 
 
-# ── Matching ────────────────────────────────────────────────────────────────
-async def untranslated_suppliers(source: str, limit: int) -> list[asyncpg.Record]:
-    """Supplier rows whose title has not been translated yet."""
-    return await db.fetch(
-        "select id, title from products "
-        "where source = $1 and title_en is null and title is not null "
-        "order by updated_at desc limit $2",
-        source,
-        limit,
-    )
-
-
-async def save_translation(product_id: str, title_en: str) -> None:
-    await db.execute(
-        "update products set title_en = $2, translated_at = now() where id = $1",
-        product_id,
-        title_en,
-    )
-
-
-async def retail_products_for_matching(limit: int) -> list[asyncpg.Record]:
-    """Retail listings with a real price, best demand first.
-
-    Matching spends effort where the answer is worth having, so the ordering
-    is by demand rather than by recency.
-    """
-    return await db.fetch(
-        "select id, title, price_usd, source, orders_count from products "
-        "where price_usd is not null and cost_usd is null "
-        "  and source <> '1688' "
-        "order by coalesce(orders_count, 0) desc limit $1",
-        limit,
-    )
-
-
-async def supplier_candidates(limit: int) -> list[asyncpg.Record]:
-    """Translated supplier listings with a real cost."""
-    return await db.fetch(
-        "select id, title, title_en, cost_usd from products "
-        "where source = '1688' and cost_usd is not null and title_en is not null "
-        "order by coalesce(orders_count, 0) desc limit $1",
-        limit,
-    )
-
-
-async def save_match(
-    retail_id: str,
-    supplier_id: str,
-    confidence: float,
-    method: str,
-    evidence: str,
-    status: str,
-) -> None:
-    """Record a match. Re-running refreshes the score but never resurrects a
-    pair a human already rejected."""
-    await db.execute(
-        """
-        insert into product_matches (retail_id, supplier_id, confidence,
-            method, evidence, status)
-        values ($1, $2, $3, $4, $5::jsonb, $6)
-        on conflict (retail_id, supplier_id) do update set
-            confidence = excluded.confidence,
-            method = excluded.method,
-            evidence = excluded.evidence,
-            status = case when product_matches.status = 'rejected'
-                          then 'rejected' else excluded.status end
-        """,
-        retail_id,
-        supplier_id,
-        confidence,
-        method,
-        evidence,
-        status,
-    )
-
-
-async def list_matches(status: str, limit: int) -> list[asyncpg.Record]:
-    """Review queue: both sides of each match, strongest candidates first."""
-    return await db.fetch(
-        """
-        select m.id, m.confidence, m.method, m.evidence, m.status, m.created_at,
-               r.id as retail_id, r.title as retail_title, r.image_url as retail_image,
-               r.product_url as retail_url, r.price_usd as retail_price,
-               r.source as retail_source, r.orders_count as retail_orders,
-               s.id as supplier_id, s.title as supplier_title,
-               s.title_en as supplier_title_en, s.image_url as supplier_image,
-               s.product_url as supplier_url, s.cost_usd as supplier_cost,
-               s.source as supplier_source
-        from product_matches m
-        join products r on r.id = m.retail_id
-        join products s on s.id = m.supplier_id
-        where m.status = $1
-        order by m.confidence desc, m.created_at desc
-        limit $2
-        """,
-        status,
-        limit,
-    )
-
-
-async def get_match(match_id: int) -> asyncpg.Record | None:
-    return await db.fetchrow(
-        "select m.*, r.price_usd as retail_price, s.cost_usd as supplier_cost "
-        "from product_matches m "
-        "join products r on r.id = m.retail_id "
-        "join products s on s.id = m.supplier_id "
-        "where m.id = $1",
-        match_id,
-    )
-
-
-async def set_match_status(match_id: int, status: str) -> None:
-    await db.execute(
-        "update product_matches set status = $2, reviewed_at = now() where id = $1",
-        match_id,
-        status,
-    )
-
-
-async def apply_supplier_cost(retail_id: str, cost_usd: float) -> None:
-    """Give a retail listing the confirmed supplier's real cost.
-
-    This is the whole point of matching: the retail row stops having an
-    unknown margin and starts having an observed one.
-    """
-    await db.execute(
-        "update products set cost_usd = $2, updated_at = now() where id = $1",
-        retail_id,
-        cost_usd,
-    )
-
-
-async def match_counts() -> dict[str, int]:
-    rows = await db.fetch(
-        "select status, count(*) as n from product_matches group by status"
-    )
-    return {r["status"]: int(r["n"]) for r in rows}
-
-
 # ── Webhook idempotency ─────────────────────────────────────────────────────
 async def claim_billing_event(provider: str, event_id: str, event_type: str) -> bool:
     """Record an event; return False if we have already seen it.
@@ -580,31 +277,4 @@ async def complete_billing_event(
         provider,
         event_id,
         error,
-    )
-
-
-async def searches_used_today(user_id: str) -> int:
-    return int(
-        await db.fetchval(
-            "select used from search_usage "
-            "where user_id = $1 and usage_day = (now() at time zone 'utc')::date",
-            user_id,
-        )
-        or 0
-    )
-
-
-async def increment_search(user_id: str) -> int:
-    return int(
-        await db.fetchval(
-            """
-            insert into search_usage (user_id, usage_day, used)
-            values ($1, (now() at time zone 'utc')::date, 1)
-            on conflict (user_id, usage_day)
-            do update set used = search_usage.used + 1
-            returning used
-            """,
-            user_id,
-        )
-        or 1
     )

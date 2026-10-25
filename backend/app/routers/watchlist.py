@@ -23,7 +23,7 @@ async def list_watchlist(user: CurrentUser = Depends(current_user)) -> Watchlist
 async def add_to_watchlist(
     product_id: str, user: CurrentUser = Depends(current_user)
 ) -> dict[str, str]:
-    if await repository.get_product(product_id) is None:
+    if not await repository.product_exists(product_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
 
     subscription, _ = await repository.subscription(user.id)

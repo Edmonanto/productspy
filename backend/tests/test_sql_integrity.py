@@ -19,6 +19,10 @@ BACKEND = pathlib.Path(__file__).resolve().parent.parent
 MIGRATIONS = sorted((BACKEND / "migrations").glob("*.sql"))
 REPOSITORY = BACKEND / "app" / "repository.py"
 REPO_SRC = REPOSITORY.read_text()
+# Every module that talks to the database with raw SQL. The Daily Winners
+# store is held to the same checks as the repository.
+SQL_MODULES = [REPOSITORY, BACKEND / "app" / "winners" / "store.py"]
+ALL_SQL_SRC = "\n".join(p.read_text() for p in SQL_MODULES)
 DB_METHODS = {"execute", "fetchval", "fetchrow", "fetch"}
 
 try:
@@ -69,7 +73,7 @@ def db_queries() -> list[tuple[str, str, int | None]]:
     product_select = re.search(r'_PRODUCT_SELECT = """(.*?)"""', REPO_SRC, re.S)
     found = []
 
-    for fn in ast.walk(ast.parse(REPO_SRC)):
+    for fn in (n for path in SQL_MODULES for n in ast.walk(ast.parse(path.read_text()))):
         if not isinstance(fn, (ast.AsyncFunctionDef, ast.FunctionDef)):
             continue
         for call in ast.walk(fn):
@@ -117,11 +121,21 @@ def db_queries() -> list[tuple[str, str, int | None]]:
 def test_every_expected_table_is_created():
     tables = schema()
     for name in (
-        "products", "product_scores", "suppliers", "ad_signals", "watchlists",
-        "subscriptions", "search_usage", "product_snapshots", "ingestion_runs",
-        "billing_events",
+        "products", "suppliers", "ad_signals", "watchlists", "subscriptions",
+        "billing_events", "ad_creatives", "winner_scores", "daily_winners",
+        "winner_runs", "user_preferences",
     ):
         assert name in tables, f"{name} is never created by a migration"
+
+
+DROPPED = {"product_matches", "product_snapshots", "ingestion_runs", "search_usage", "product_scores"}
+
+
+def test_queries_never_touch_dropped_tables():
+    """009 drops the marketplace engine's tables; nothing may still use them."""
+    hits = [f"{name}(): {t}" for name, sql, _ in db_queries()
+            for t in DROPPED if re.search(rf"\b{t}\b", sql)]
+    assert not hits, "\n".join(hits)
 
 
 def test_queries_only_reference_columns_that_exist():
@@ -139,8 +153,8 @@ def test_queries_only_reference_columns_that_exist():
                 if column not in tables[table]:
                     problems.append(f"{table}.{column} does not exist")
 
-    # Qualified references anywhere in the file, e.g. subscriptions.plan
-    for table, column in re.findall(r"\b(\w+)\.(\w+)\b", REPO_SRC):
+    # Qualified references anywhere in the SQL modules, e.g. subscriptions.plan
+    for table, column in re.findall(r"\b(\w+)\.(\w+)\b", ALL_SQL_SRC):
         if table in tables and column not in tables[table]:
             problems.append(f"{table}.{column} does not exist")
 
@@ -196,3 +210,11 @@ def test_suite_actually_covers_the_queries():
     """Guards the guard: if extraction silently breaks, the checks above pass
     vacuously. repository.py has ~25 db calls; far fewer means a parser bug."""
     assert len(db_queries()) >= 20
+
+
+def test_winners_store_queries_are_covered():
+    """The winners store is scanned too — not silently skipped."""
+    names = {name for name, _, _ in db_queries()}
+    for fn in ("upsert_ad", "save_score", "picks", "save_followed_markets",
+               "ensure_subscription", "expire_trials", "trials_due_reminder"):
+        assert fn in names, f"{fn}() SQL is not being checked"

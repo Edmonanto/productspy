@@ -1,35 +1,21 @@
-"""Smoke tests: routing, auth, response shapes, quota and scoring.
+"""Smoke tests: routing, auth, response shapes, watchlist and billing.
 
-The database layer is stubbed, so these run without Postgres.
+The database layer is stubbed, so these run without Postgres. Daily Winners
+routes are covered in test_winners_api.py, the trial in test_trial.py.
 """
 from datetime import datetime, timezone
 
 import pytest
 from fastapi.testclient import TestClient
 
-from app import config, db, quota, repository, scoring
+from app import config, db, repository
 from app.auth import CurrentUser, current_user
 from app.main import app
-from app.schemas import AdSignal, Product, Score, Subscription
+from app.schemas import Subscription, WatchedProduct
 
 USER = CurrentUser(id="11111111-1111-1111-1111-111111111111", email="e@x.com",
                    name="Edmond", avatar_url=None)
-
-PRODUCT = Product(
-    id="22222222-2222-2222-2222-222222222222",
-    title="LED Dog Collar",
-    image_url=None,
-    product_url="https://example.com/p/1",
-    category="pets",
-    price_usd=24.99,
-    cost_usd=4.20,
-    source="aliexpress",
-    score=Score(overall_score=80, demand_score=90, margin_score=70,
-                competition_score=60, trend_score=85, ai_summary="strong"),
-    suppliers=[],
-    ad_signals=[AdSignal(platform="tiktok", ad_count=50,
-                         last_seen_at=datetime.now(timezone.utc))],
-)
+PRODUCT_ID = "22222222-2222-2222-2222-222222222222"
 
 
 @pytest.fixture
@@ -46,6 +32,10 @@ async def _noop():
     return None
 
 
+async def _none(*_a, **_k):
+    return None
+
+
 def _free_plan(*_args, **_kwargs):
     async def inner(*a, **k):
         return Subscription(plan="free", status="active", current_period_end=None), "none"
@@ -59,6 +49,7 @@ def test_protected_route_rejects_missing_token(monkeypatch):
     monkeypatch.setattr(db, "disconnect", lambda: _noop())
     with TestClient(app) as c:
         assert c.get("/api/v1/users/me").status_code == 401
+        assert c.get("/api/v1/winners?market=US").status_code == 401
 
 
 def test_health(monkeypatch):
@@ -73,139 +64,69 @@ def test_health(monkeypatch):
         assert c.get("/health").json() == {"ok": True, "database": True}
 
 
+def test_old_marketplace_routes_are_gone(client):
+    """Trending/search/matching were removed with the marketplace engine."""
+    for path in ("/api/v1/products/trending", "/api/v1/products/search?q=cat", "/api/v1/matches/"):
+        assert client.get(path).status_code == 404
+
+
 # ── users/me ────────────────────────────────────────────────────────────────
 def test_me_shape(client, monkeypatch):
     monkeypatch.setattr(repository, "subscription", lambda uid: _free_plan())
-
-    async def used(_uid):
-        return 2
-
-    monkeypatch.setattr(repository, "searches_used_today", used)
+    monkeypatch.setattr(repository, "ensure_subscription", _none)
+    monkeypatch.setattr(repository, "subscription_row", _none)
 
     body = client.get("/api/v1/users/me").json()
     assert body["id"] == USER.id
     assert body["subscription"] == {"plan": "free", "status": "active",
                                     "current_period_end": None}
-    # free plan = 5 searches/day, 2 used
-    assert body["quota"] == {"plan": "free", "limit": 5, "used": 2, "remaining": 3}
-
-
-# ── products ────────────────────────────────────────────────────────────────
-def test_trending_shape(client, monkeypatch):
-    async def trending(*a, **k):
-        return [PRODUCT], 1
-
-    monkeypatch.setattr(repository, "trending", trending)
-
-    body = client.get("/api/v1/products/trending?source=all&min_score=50&limit=40").json()
-    assert body["total"] == 1
-    p = body["products"][0]
-    # Field names the frontend's Product interface requires
-    assert set(p) >= {"id", "title", "image_url", "product_url", "category",
-                      "price_usd", "cost_usd", "source", "score", "suppliers",
-                      "ad_signals"}
-    assert p["score"]["overall_score"] == 80
-
-
-def test_search_consumes_quota(client, monkeypatch):
-    monkeypatch.setattr(repository, "subscription", lambda uid: _free_plan())
-    calls = {"inc": 0}
-
-    async def used(_uid):
-        return 0
-
-    async def inc(_uid):
-        calls["inc"] += 1
-        return 1
-
-    async def search(*a, **k):
-        return [PRODUCT], 1
-
-    monkeypatch.setattr(repository, "searches_used_today", used)
-    monkeypatch.setattr(repository, "increment_search", inc)
-    monkeypatch.setattr(repository, "search", search)
-
-    assert client.get("/api/v1/products/search?q=collar").status_code == 200
-    assert calls["inc"] == 1
-
-
-def test_search_blocked_when_quota_exhausted(client, monkeypatch):
-    monkeypatch.setattr(repository, "subscription", lambda uid: _free_plan())
-
-    async def used(_uid):
-        return 5  # free limit reached
-
-    monkeypatch.setattr(repository, "searches_used_today", used)
-
-    res = client.get("/api/v1/products/search?q=collar")
-    assert res.status_code == 429
-    assert "limit" in res.json()["detail"].lower()
-
-
-def test_product_404(client, monkeypatch):
-    async def get_product(_pid):
-        return None
-
-    monkeypatch.setattr(repository, "get_product", get_product)
-    assert client.get("/api/v1/products/nope").status_code == 404
-
-
-def test_rescore_persists(client, monkeypatch):
-    saved = {}
-
-    async def get_product(_pid):
-        return PRODUCT
-
-    async def save_score(pid, score):
-        saved["pid"], saved["score"] = pid, score
-
-    async def current_orders(_pid):
-        return 1000
-
-    async def orders_at(_pid, _days):
-        return 500  # doubled week-over-week
-
-    async def orders_baseline(_source):
-        return []  # too thin to rank in; demand falls back to the curve
-
-    monkeypatch.setattr(repository, "get_product", get_product)
-    monkeypatch.setattr(repository, "save_score", save_score)
-    monkeypatch.setattr(repository, "current_orders", current_orders)
-    monkeypatch.setattr(repository, "orders_at", orders_at)
-    monkeypatch.setattr(repository, "orders_baseline", orders_baseline)
-
-    body = client.post(f"/api/v1/products/{PRODUCT.id}/rescore").json()
-    assert "score" in body
-    assert saved["pid"] == PRODUCT.id
-    # margin = (24.99-4.20)/24.99 = 83% -> saturates at 100
-    assert body["score"]["margin_score"] == 100
-    # rescore uses the same snapshot history the worker scores with
-    assert body["score"]["trend_score"] == 100
+    assert body["trial"]["eligible"] is True
+    assert "quota" not in body  # search quotas went with search
 
 
 # ── watchlist ───────────────────────────────────────────────────────────────
 def test_watchlist_free_plan_limit(client, monkeypatch):
-    async def get_product(_pid):
-        return PRODUCT
+    async def exists(_pid):
+        return True
 
     async def count(_uid):
         return 10  # free plan cap
 
-    monkeypatch.setattr(repository, "get_product", get_product)
+    monkeypatch.setattr(repository, "product_exists", exists)
     monkeypatch.setattr(repository, "subscription", lambda uid: _free_plan())
     monkeypatch.setattr(repository, "watchlist_count", count)
 
-    res = client.post(f"/api/v1/watchlist/{PRODUCT.id}")
+    res = client.post(f"/api/v1/watchlist/{PRODUCT_ID}")
     assert res.status_code == 403
+
+
+def test_watchlist_unknown_product_404(client, monkeypatch):
+    async def exists(_pid):
+        return False
+
+    monkeypatch.setattr(repository, "product_exists", exists)
+    assert client.post(f"/api/v1/watchlist/{PRODUCT_ID}").status_code == 404
+
+
+def test_watchlist_shape(client, monkeypatch):
+    async def watchlist(_uid):
+        return [("w1", WatchedProduct(id=PRODUCT_ID, title="Posture Corrector", image_url=None,
+                                      price_usd=34.99, cost_usd=6.2, score=82, market="US"),
+                 datetime.now(timezone.utc))]
+
+    monkeypatch.setattr(repository, "watchlist", watchlist)
+    item = client.get("/api/v1/watchlist/").json()["items"][0]
+    assert item["product"]["score"] == 82 and item["product"]["market"] == "US"
 
 
 # ── billing ─────────────────────────────────────────────────────────────────
 def test_billing_status(client, monkeypatch):
     monkeypatch.setattr(repository, "subscription", lambda uid: _free_plan())
+    monkeypatch.setattr(repository, "subscription_row", _none)
     body = client.get("/api/v1/billing/status").json()
     assert body["plan"] == "free"
-    assert body["search_quota"] == 5
     assert body["can_manage"] is False
+    assert body["trial"]["eligible"] is True
 
 
 def test_billing_checkout_fails_cleanly_when_provider_unconfigured(client, monkeypatch):
@@ -219,24 +140,3 @@ def test_billing_checkout_fails_cleanly_when_provider_unconfigured(client, monke
     res = client.post("/api/v1/billing/checkout?plan=pro&provider=stripe")
     assert res.status_code == 501
     assert "detail" in res.json()  # frontend surfaces error.detail
-
-
-# ── scoring (pure) ──────────────────────────────────────────────────────────
-@pytest.mark.parametrize(
-    "price,cost,expected",
-    [(100.0, 30.0, 100), (100.0, 65.0, 50), (100.0, 100.0, 0), (None, 5.0, scoring.UNKNOWN), (0.0, 0.0, scoring.UNKNOWN)],
-)
-def test_margin_score(price, cost, expected):
-    assert scoring.margin_score(price, cost) == expected
-
-
-def test_competition_score_inverts_ad_volume():
-    now = datetime.now(timezone.utc)
-    few = [AdSignal(platform="tiktok", ad_count=10, last_seen_at=now)]
-    many = [AdSignal(platform="tiktok", ad_count=400, last_seen_at=now)]
-    assert scoring.competition_score(few) > scoring.competition_score(many)
-    assert scoring.competition_score([]) == 50  # unknown -> neutral
-
-
-def test_overall_weights_sum_to_one():
-    assert abs(sum(scoring.WEIGHTS.values()) - 1.0) < 1e-9

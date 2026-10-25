@@ -2,63 +2,27 @@
 
 These mirror the TypeScript interfaces in src/lib/api.ts exactly — field
 names and nullability included. Changing one side requires changing the other.
+Daily Winners responses are plain dicts built in app/routers/winners.py.
 """
 from datetime import datetime
 
 from pydantic import BaseModel
 
 
-class Score(BaseModel):
-    overall_score: int
-    demand_score: int
-    margin_score: int
-    competition_score: int
-    trend_score: int
-    ai_summary: str
-
-
-class Supplier(BaseModel):
-    platform: str
-    supplier_name: str
-    supplier_url: str
-    unit_cost_usd: float
-    shipping_days: int
-    rating: float
-
-
-class AdSignal(BaseModel):
-    platform: str
-    ad_count: int
-    last_seen_at: datetime
-
-
-class Product(BaseModel):
+class WatchedProduct(BaseModel):
     id: str
     title: str
     image_url: str | None
-    product_url: str
-    category: str | None
     price_usd: float | None
     cost_usd: float | None
-    price_is_derived: bool = False
-    source: str
-    score: Score | None
-    suppliers: list[Supplier] = []
-    ad_signals: list[AdSignal] = []
-
-
-class ProductList(BaseModel):
-    products: list[Product]
-    total: int
-
-
-class RescoreResponse(BaseModel):
-    score: Score
+    # Best Daily Winners score in the last 7 days, and the market it was in.
+    score: int | None
+    market: str | None
 
 
 class WatchlistItem(BaseModel):
     id: str
-    product: Product
+    product: WatchedProduct
     added_at: datetime
 
 
@@ -72,11 +36,16 @@ class Subscription(BaseModel):
     current_period_end: datetime | None
 
 
-class Quota(BaseModel):
+class Trial(BaseModel):
+    active: bool
     plan: str
-    limit: int | str
-    used: int
-    remaining: int | str
+    ends_at: str | None
+    days_left: int
+    hours_left: int
+    used: bool
+    expired: bool
+    eligible: bool
+    length_days: int
 
 
 class Me(BaseModel):
@@ -85,7 +54,7 @@ class Me(BaseModel):
     name: str
     avatar_url: str | None
     subscription: Subscription
-    quota: Quota
+    trial: Trial | None = None
 
 
 class BillingStatus(BaseModel):
@@ -93,5 +62,5 @@ class BillingStatus(BaseModel):
     status: str
     provider: str
     current_period_end: datetime | None
-    search_quota: int | str
     can_manage: bool
+    trial: Trial | None = None

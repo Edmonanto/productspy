@@ -1,48 +1,60 @@
 # ProductSpy Pro — API
 
-FastAPI backend for the Next.js frontend in the repo root. Mounted at
-`/api/v1` to match the frontend's `NEXT_PUBLIC_API_URL`.
+FastAPI backend for productspy.pro (the Next.js frontend in the repo root).
+Mounted at `/api/v1` to match the frontend's `NEXT_PUBLIC_API_URL`.
 
-## Why FastAPI
+ProductSpy Pro does one thing: **Daily Winners** — every day, per market, the
+5-10 products advertisers are scaling right now, read from the Facebook Ad
+Library, TikTok Creative Center and TikTok, with the evidence behind each pick.
 
-The frontend's `src/lib/api.ts` already assumes this shape: a versioned
-`/api/v1` prefix, `snake_case` fields, `{"detail": "..."}` error bodies and a
-`Authorization: Bearer <supabase jwt>` header. Those are FastAPI defaults, and
-Python is the right tool for the Phase 2 scraping and scoring work.
+```
+app/
+  routers/winners.py    picks, evidence, markets, CSV
+  routers/users.py      /users/me (starts the free trial)
+  routers/watchlist.py  saved products
+  routers/billing.py    Stripe + PayPal, /billing/trial
+  winners/              the engine: collectors, extraction, scoring, worker
+  trial.py              7-day trial rules + daily housekeeping job
+  repository.py         account-side SQL (watchlist, subscriptions, webhooks)
+```
 
 ## Auth
 
 There is no second user system. Supabase remains the identity provider; this
-API verifies the access token the browser already holds (HS256, signed with the
-project's JWT secret) and reads `sub` as the user id. Rows are keyed by that
-uuid.
+API verifies the access token the browser already holds and reads `sub` as the
+user id. Tokens signed ES256/RS256 are checked against the project's JWKS
+(`SUPABASE_URL`); legacy HS256 tokens against `SUPABASE_JWT_SECRET`. Rows are
+keyed by that uuid.
 
 ## Running locally
 
 ```bash
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-winners.txt
+playwright install chromium
 cp .env.example .env
 python -m app.migrate
 uvicorn app.main:app --reload --port 8000
 ```
 
 Fill `DATABASE_URL` and `SUPABASE_URL` in `.env` before running migrate.
-`SUPABASE_URL` is what tokens are verified against — Supabase signs them
-ES256 and the public key comes from that project's JWKS endpoint.
-`SUPABASE_JWT_SECRET` is only needed by projects still signing HS256.
+`requirements-winners.txt` is the API's `requirements.txt` plus Playwright,
+which only the daily scan needs.
 
 > Commands in this README carry no trailing `#` comments on purpose. zsh — the
 > default macOS shell — does **not** treat `#` as a comment interactively, so a
 > pasted `cp .env.example .env  # fill this in` runs `cp` with every following
 > word as an argument and fails with `cp: <word>: Not a directory`.
 
-Interactive docs at http://localhost:8000/docs, health at `/health`.
+Then fill the dashboard with a real scan:
 
-Point the frontend at it with `NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1`.
-As soon as `products` has rows, the dashboard stops falling back to
-`src/lib/demo-products.ts` and renders real data.
+```bash
+python -m app.winners.worker --market US
+```
+
+Interactive docs at http://localhost:8000/docs, health at `/health`. Point the
+frontend at it with `NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1`.
 
 ## Tests
 
@@ -51,34 +63,32 @@ pip install -r requirements-dev.txt
 pytest tests/ -q
 ```
 
-`requirements-dev.txt` adds `pglast` for the SQL grammar checks.
-
 The database layer is stubbed, so no Postgres is required.
 
 `tests/test_sql_integrity.py` covers the gap that stubbing leaves: because no
 query executes during the suite, the first real run of this SQL would
-otherwise be the first production ingestion. It statically checks that every
-query references columns the migrations actually create, that `$N`
-placeholders match the arguments passed, and — via `pglast`, bindings to
-PostgreSQL's own parser — that every migration and query is valid Postgres.
-The grammar checks skip cleanly when `pglast` isn't installed.
+otherwise be in production. It statically checks every query in
+`repository.py` and `winners/store.py`: columns exist in the migrations, `$N`
+placeholders match the arguments, nothing touches a dropped table, and — via
+`pglast`, bindings to PostgreSQL's own parser — every migration and query is
+valid Postgres.
 
-## Endpoint status
+## Endpoints
 
-| Endpoint | Status |
+| Endpoint | |
 | --- | --- |
-| `GET /users/me` | done — profile, subscription, live quota |
-| `GET /products/trending` | done — filters by source, category, min_score |
-| `GET /products/search` | done — charges daily search quota (429 when spent) |
-| `GET /products/{id}` | done |
-| `POST /products/{id}/rescore` | done — recomputes all four components from snapshot history |
-| `GET /watchlist/` `POST` `DELETE` | done — free plan capped at 10 |
-| `GET /billing/status` | done — reads real subscription rows |
-| `POST /billing/checkout` `portal` `cancel` | done — Stripe + PayPal |
-| `POST /billing/webhook/{stripe,paypal}` | done — signature-verified, idempotent |
-| `python -m app.ingest.worker` | done — scheduled ingestion + scoring + summaries |
-| `python -m app.matching.runner` | done — translate + match, writes candidates |
-| `GET /matches/` `POST /{id}/confirm` `reject` | done — review queue; confirm applies the cost |
+| `GET /users/me` | profile, effective plan, trial (starts the trial on first visit) |
+| `GET /winners?market=&date=` | the day's picks; beyond the plan's allowance only rank + score |
+| `GET /winners/dates` | archive days within the plan's history |
+| `GET /winners/products/{id}` | score history, ads/videos (paid plans), suppliers |
+| `GET /winners/markets` · `POST /winners/preferences` | markets followed (plan caps the count) |
+| `GET /winners/export.csv` | Pro / Agency |
+| `GET /winners/status` | last scan per market |
+| `GET /watchlist/` · `POST` · `DELETE` | saved products; free plan capped at 10 |
+| `GET /billing/status` · `POST /billing/checkout` `portal` `cancel` `trial` | Stripe + PayPal |
+| `POST /billing/webhook/{stripe,paypal}` | signature-verified, idempotent |
+| `python -m app.winners.worker` | the daily scan |
+| `python -m app.trial` | trial reminder emails + expiry |
 
 ## Migrations
 
@@ -95,240 +105,119 @@ A migration whose content changed after being applied is re-applied with a
 warning rather than skipped: a checksum drift means the database and this
 checkout disagree, and that should be visible.
 
-It exits non-zero on failure, and the ingest cron chains it with `&&`, so a
-broken migration stops the run instead of letting the worker write against a
-stale schema. Render's `preDeployCommand` would be the natural home for this,
-but it needs a paid instance type and the API runs on the free plan.
+It exits non-zero on failure. Both the API (`startCommand`) and the Daily
+Winners cron chain it with `&&`, so a broken migration stops the deploy or run
+instead of letting code run against a stale schema. Render's
+`preDeployCommand` would be the natural home, but it needs a paid instance.
 
-## Ingestion (the engine)
+`009_winners_only.sql` permanently deletes the old marketplace catalogue
+(every product not from Daily Winners) and the tables only it used. Take a
+Supabase backup first if you might want it back.
+
+## Daily Winners
+
+The engine reads **advertising** — the Facebook Ad Library, TikTok Creative
+Center's Top Ads, and TikTok product-discovery hashtags — once a day per
+market, groups the ads into products, scores them, and picks the 5-10
+strongest.
 
 ```bash
-python -m app.ingest.worker
+python -m app.winners.worker --collectors   # which sources are active
+python -m app.winners.worker --market US    # one market
+python -m app.winners.worker                # every market in WINNERS_MARKETS
 ```
 
-Per provider: fetch → upsert → **snapshot** → score → summarise. On Render it
-runs as a cron job every 6 hours (see `render.yaml`); each run also writes a
-`product_snapshots` row per product.
+```
+collect -> ad_creatives -> Claude names + dedupes the product -> price & cost
+        -> aggregate signals -> score 0-100 -> daily_winners (5-10 per market)
+```
 
-Providers are opt-in by credential — set the keys and the source turns on:
+**Markets**: US, UK, EU, FR, DE, CA, AU, AE (UAE/Dubai), SA — `app/winners/markets.py`.
+Users choose theirs in Settings; the plan caps how many (`WINNERS_PLANS` in config).
 
-| Provider | Env | Gives you |
+**Sources** (`app/winners/collectors/`), free by default:
+
+| Source | How | Notes |
 | --- | --- | --- |
-| **1688 Open Platform** | `ALIBABA1688_APP_KEY` / `_SECRET` | Real **wholesale/factory cost** in CNY, plus MOQ and sales volume. The best cost signal available — margin scoring is only as good as this number. |
-| AliExpress Affiliate | `ALIEXPRESS_APP_KEY` / `_SECRET` | Retail price + orders. Official, free after Portals approval; affiliate catalogue only. |
-| **Apify — AliExpress** | `APIFY_TOKEN` alone | **No approval needed.** Full AliExpress catalogue (not just the affiliate subset). Actor defaults to `thirdwatch/aliexpress-product-scraper`, billed pay-per-event. |
-| Apify — other actors | `APIFY_TOKEN` + `APIFY_*_ACTOR` | Amazon / TikTok / Facebook Ad Library. One actor per source. |
+| Facebook Ad Library, EU/FR/DE | Official Graph API (`META_ACCESS_TOKEN`) | The API only returns *commercial* ads that ran in the EU (DSA), with reach. Needs a Meta app + ID verification. |
+| Facebook Ad Library, other markets | Playwright, reads the JSON the page loads | No login. Use a residential proxy for volume. |
+| TikTok Creative Center Top Ads | Playwright | CTR, likes, budget level, landing page. |
+| TikTok videos | Playwright on #tiktokmademebuyit, #amazonfinds… | Samples comments for buying intent. Results follow the visitor's country — set `PROXY_URL_<MARKET>`. |
+| Apify (paid) | `USE_APIFY=true` + `APIFY_TOKEN` | Replaces the scrapers; actor ids configurable. |
 
-**Fastest route to real data:** set `APIFY_TOKEN` and run the worker. No
-affiliate approval, no real-name verification, and products land under
-`source="aliexpress"` so they share a catalogue with the official provider if
-you switch later.
+The scrapers parse the JSON the pages download, not their HTML, which survives
+most redesigns — but both platforms change, so expect to adjust a collector
+occasionally. Scraping is against both platforms' terms; the official Meta API
+and Apify are the lower-risk routes.
 
-`APIFY_QUERIES` is the important one — the actor searches those terms, so that
-list *is* your catalogue. It returns nothing without them.
+**Product extraction** (`extract.py`): Claude names the one physical product
+each ad sells in generic words, gives a canonical key ("posture-corrector"),
+and flags brand/IP copies, restricted items, fragile/heavy and seasonal goods,
+plus a rough supplier cost. Near-duplicate keys merge. Without
+`ANTHROPIC_API_KEY` a Shopify-URL/title heuristic stands in. Products land in
+`products` with `source = 'winners'`.
 
-Actor input schemas are not standardised between authors. The default shape
-(`{queries, maxResults, category, country}`) was verified against this actor's
-own example run input; if you switch actors, set `APIFY_INPUT_JSON` to the raw
-JSON that actor expects. A wrong shape returns an **empty dataset with HTTP
-200**, so the worker logs a loud warning on zero items rather than treating it
-as "no results today".
+**Price & cost** (`enrich.py`): Shopify's free `/products/<slug>.json`, else
+JSON-LD / `og:price`; FX via `config.usd_rates()` (unlisted currency → no
+price, never a guess). Supplier cost from an AliExpress search when it answers,
+else Claude's estimate — flagged `cost_estimated` and counted 20% lower.
 
-Pricing is pay-per-event and set by the actor author — check the actor's page
-for the current rate before scheduling frequent runs.
+### The score (`app/winners/scoring.py`)
 
-### Amazon (`AMAZON_*`)
+| Pillar | Pts | Signals |
+| --- | --- | --- |
+| Scaling proof | 30 | longest-running ad (14d+/30d+), # creatives, new creatives in 7 days, EU reach or TikTok budget level |
+| Engagement | 25 | TikTok engagement rate, share ratio, % buying-intent comments, ad CTR |
+| Proven demand | 20 | 3-15 different stores (the sweet spot), # creators, total views |
+| Margin | 15 | sell ≥ 3× cost, $20-60 price |
+| Freshness | 10 | first seen recently, views/hour on recent videos, wow / problem-solving |
 
-The **retail price anchor**. 1688 gives a real wholesale cost but no retail
-price; Amazon gives an observed retail price for the same class of product.
+Penalties: >30 stores −5, >50 −10, fragile/heavy −5, seasonal −3, brand
+look-alike −3, one platform only −5, ads <4 days old with no organic proof −5.
+Hard filters: restricted, high IP risk, not a physical product, picked in the
+last 30 days.
 
-* `AMAZON_SITES` is a list of marketplaces (`US,UK,DE`) crossed with
-  `AMAZON_KEYWORDS`, so three sites x three keywords is nine calls.
-* **ASINs are namespaced by site** (`US:B09G9FPHY6`). The same ASIN exists on
-  several marketplaces at different prices, so without the site in the
-  identity the US and DE rows collide on `(source, external_id)`.
-* **No sales count.** Amazon does not publish one, so `orders_count` stays
-  `None`. Review count is a popularity proxy, not units sold — substituting
-  it would fabricate demand.
-* Non-USD prices are converted via `USD_PER_GBP` / `USD_PER_EUR`. A currency
-  with no configured rate has its price **dropped**, because an unconverted
-  price is worse than none: margin would read 229 EUR as 229 USD.
+Missing data is never zero — each pillar scores what is known, scaled up, but
+capped at 60% below 40% coverage, so a product needs real evidence to rank.
+Up to 10 products ≥ 70 are picked; if fewer than 5 qualify, the best 60-69
+fill to 5, labelled **rising**.
 
-**Locale is the trap.** The API returns display strings, not numbers, and the
-German format inverts the separators:
+### Deploy
 
-| | price | rating | reviews |
-| --- | --- | --- | --- |
-| US | `$501.60` | `4.5 out of 5 stars` | `(75,618)` / `(11.9K)` |
-| UK | `£8.99` | `4.6 out of 5 stars` | `(45.4K)` |
-| DE | `229,99€` | `4,6 von 5 Sternen` | `(36.976)` |
+`productspy-winners` in `render.yaml`: a Docker cron (`Dockerfile.winners`,
+on the official Playwright image — the native Python runtime lacks Chromium's
+system libraries) at 01:00 UTC, on the `standard` plan because Chromium needs
+memory. It runs migrations, trial housekeeping, then the scan. Each market is
+logged in `winner_runs`; the worker exits non-zero if no market produced picks.
 
-In DE a dot groups thousands, so a naive `float()` reads `36.976` as 36.976
-reviews instead of 36,976 — a 1000x error — and reads `10,99 €` as 1099 or
-nothing. Parsing is site-aware and the tests pin both readings of the same
-string.
+## Free trial
 
-> **Scoring caveat.** With no cost and no sales count, every Amazon product
-> scores the neutral 50 on demand, margin and competition, so they all rank
-> identically. Amazon earns its place as a price *reference* for
-> cross-platform matching — which does not exist yet. Until it does, expect
-> Amazon rows to sit in an undifferentiated block.
+Every new account gets **7 days of Pro, no card** (`TRIAL_DAYS`, `TRIAL_PLAN`).
 
-### TikTok Shop (`TIKTOK_*`)
+- `GET /users/me` — called on every dashboard load — writes the first
+  subscription row as `status='trialing'`, `provider='none'`. That pairing is
+  what marks an app trial: webhooks always write their provider, and Stripe's
+  own `trialing` is mapped to `active`.
+- Access is decided at read time (`app/trial.py: effective_plan`):
+  `repository.subscription()` returns Free for an expired trial before any job
+  runs, so every quota and plan check is trial-aware without changes.
+- Accounts that predate the trial get `POST /billing/trial` (once —
+  `trial_used`, enforced in the UPDATE's WHERE clause).
+- Paying by card during the trial passes `trial_end` to Stripe Checkout, so
+  the first charge lands when the trial ends (skipped when < 48h remain —
+  Stripe refuses those).
+- `python -m app.trial` (inside the winners cron) emails at ~2 days and on
+  the last day, then downgrades expired trials and emails them. Email goes
+  through Resend (`RESEND_API_KEY`, `EMAIL_FROM`); without a key the trial
+  still works, silently.
 
-The strongest source for this product: `sold_count` and its change over time
-feed **demand and trend — 55% of the overall score** — and it is the only
-source here reporting a **real USD retail price** rather than a derived one.
-
-* `TIKTOK_KEYWORDS` is the catalogue; one search call returns up to ~30
-  products for ¥0.05. Result counts vary a lot by keyword (30 for `cat`, 4
-  for `cat bed`), so use several.
-* `TIKTOK_SELLER_IDS` pulls a specific shop's catalogue — same payload shape.
-* Detail enrichment is capped (`TIKTOK_ENRICH_TOP`, default 0): one call per
-  product, and it overlays the true sold_count and the live sale price.
-* **No supplier cost.** TikTok never exposes it, so `cost_usd` stays `None`
-  and margin scores neutral rather than zero (see Scoring).
-* Prices are only trusted when quoted in USD; a localised storefront is
-  dropped rather than misread as dollars.
-* `charged_yuan`/`balance_yuan` are logged on every call so spend is visible.
-
-> The `product/reviews` endpoint is **not used** — it returns
-> `{"code":"error","msg":"调用失败"}` for every parameter combination tried,
-> and reviews are already embedded in the detail response under `review_info`.
-> The aggregator is also intermittently flaky on otherwise-valid requests, so
-> each call is retried once.
-
-### 1688 via aggregator (no approval)
-
-`AGG1688_*` points at a third-party reseller that proxies 1688's internal
-mtop API, so it needs only a token — no Open Platform account. Verified
-end-to-end against the live endpoints: one keyword search returns ~60 offers
-for one unit of quota.
-
-* **`AGG1688_KEYWORDS` is the catalogue.** One search call per keyword.
-* **Detail enrichment is opt-in and capped** (`AGG1688_ENRICH_TOP`, default 0)
-  because detail costs one call *per product* and would drain quota in a run.
-  It overlays the real tiered/MOQ price, which is better than the search price.
-* **P4P results are dropped by default.** They are paid placement, so counting
-  them as demand would let advertisers buy their way up our rankings. In the
-  live check this took 60 raw results down to 50 organic ones.
-* Titles arrive with the matched keyword wrapped in `<font>` tags, and sold
-  counts are Chinese strings (`已售1.3万+件` = 13,000 — naive parsing reads
-  that as 1). Both are handled; `tests/fixtures/` holds trimmed copies of real
-  responses so an upstream schema change fails a test instead of silently
-  ingesting nothing.
-* The provider logs `left_nums` after each search — watch it for quota burn.
-
-> ⚠️ These endpoints are **plain HTTP on bare IPs**. The token and the
-> response travel unencrypted, and the operator is unknown. Keep tokens in
-> env, rotate them if they leak, and treat this as a bootstrap source rather
-> than something to build a paid product on permanently.
-
-### 1688 notes (official Open Platform)
-
-1688 is Alibaba's **domestic Chinese wholesale** marketplace, so its auth
-differs from AliExpress in three ways — do not copy that client:
-
-* gateway `gw.open.1688.com` with a `param2/{version}/{namespace}/{api}/{appKey}` path,
-* signature is **HMAC-SHA1**, uppercase hex (AliExpress uses SHA256),
-* the signed string begins with the URL path, then the sorted params.
-
-`ALIBABA1688_NAMESPACE` and `ALIBABA1688_API_NAME` are configurable because
-which call you may invoke depends on the service package granted to your app.
-Set them to match your grant rather than trusting the defaults.
-
-**Wholesale listings have no retail price.** `cost_usd` is the real number
-(converted at `CNY_PER_USD`); `price_usd` is *derived* as
-`cost × WHOLESALE_MARKUP` (default 3.0) purely so margin scoring has an
-anchor. It is an assumption, not an observed market price — replace it with a
-real retail comparison (Amazon/AliExpress for the same product) before
-presenting margin as fact to paying users.
-
-**Access reality:** the 1688 Open Platform is Chinese-language and normally
-requires real-name verification (Chinese mobile + Alipay), and some API
-packages require a business entity. It is not necessarily an easier gate than
-AliExpress — verify you can register before betting the roadmap on it.
-
-With no credentials set the worker logs what's missing and exits 1 without
-touching the database.
-
-**The AliExpress request signature is implemented from their published scheme
-but has not been exercised against a live approved account** — verify the first
-run's response before trusting the schedule.
-
-## Scoring
-
-`app/scoring.py`. Weights: demand 30%, margin 30%, trend 25%, competition 15%.
-
-- **margin** — gross margin from `price_usd` vs `cost_usd`; 70%+ saturates at 100.
-- **demand** — units sold, log-scaled so the top end doesn't dominate.
-- **competition** — inverted ad volume; few advertisers scores high.
-- **trend** — **order velocity between two of our own snapshots.** This is the
-  part no provider sells you: after ~2 weeks of runs, "orders grew 40%
-  week-over-week" is computed from `product_snapshots`, not bought.
-
-Any signal we lack returns a neutral **50** — never a flattering 100, and
-equally never a punishing 0. An unknown must not outrank a product with
-proven numbers, nor be buried beneath one. This matters because sources
-disagree on what they publish: TikTok gives retail with no supplier cost,
-1688 the reverse. Scoring a missing cost as *zero margin* would rank every
-TikTok product below every 1688 one for a reason that has nothing to do with
-the product. A genuine zero — price at or below cost — still scores 0. `trend` therefore stays
-neutral until history reaches `TREND_WINDOW_DAYS` back.
-
-`ai_summary` is one Claude call per product during ingestion (`app/summarize.py`),
-written only when a product has none, so re-runs cost nothing. Set
-`ANTHROPIC_API_KEY` to enable it; without it, ingestion runs and summaries stay
-empty. Model via `ANTHROPIC_MODEL` (default `claude-opus-5`).
-
-## Matching (cross-platform, v1)
-
-```bash
-python -m app.matching.runner
-```
-
-Links a retail listing (TikTok/Amazon: real price, no cost) to a supplier
-listing (1688: real cost, no retail), so margin can come from two observed
-numbers instead of the `cost x WHOLESALE_MARKUP` guess.
-
-**A wrong match is worse than no match** — it would report a confident margin
-on a pairing that doesn't exist, and a subscriber could order against it.
-Everything below follows from that:
-
-* **v1 never auto-confirms.** Confidence is hard-capped at 0.75 against a
-  0.85 confirm threshold, so every v1 match lands in a review queue and no
-  score changes automatically. Auto-confirm needs image evidence, which v1
-  does not have — the cap makes that structural, not a tuning choice.
-* **Price ratio is a veto, never evidence.** A retail/cost ratio outside
-  1.5-15x kills the match; a plausible ratio alone never creates one.
-* **Shared tokens must be distinctive.** "Premium Pet Bed" and "new pet bed"
-  share 100% of their content words and mean nothing. Category words are
-  derived from the supplier corpus by document frequency rather than a
-  hand-curated list, so the notion tracks your catalogue.
-* **Evidence is stored on every match** — shared tokens, scores, the
-  translated title. A bad margin months from now has to be debuggable.
-* Rejecting a match is sticky: re-running refreshes scores but never
-  resurrects a pair a human already rejected.
-
-Supplier titles are translated once via Claude (batched ~40 per call, cached
-on the row, needs `ANTHROPIC_API_KEY`) because 1688 titles are Chinese and
-keyword-stuffed. Without translation there is no text signal and nothing
-matches.
-
-Review happens at **/dashboard/matches**. Confirming applies the supplier's
-cost to the retail listing and rescores it immediately, so an unknown margin
-becomes an observed one without waiting for the next ingestion run. Rejecting
-is sticky. Listing never writes anything — the margin shown there is a
-preview labelled "if confirmed".
-
-> **Thresholds are provisional.** They are tuned against realistic fixtures,
-> not measured precision. The review queue exists partly to produce that
-> measurement before v2 raises confidence high enough to auto-apply margins.
+Run `migrations/007_winners.sql` and `008_free_trial.sql` (or just
+`python -m app.migrate`) before deploying.
 
 ## Billing
 
 Stripe and PayPal, selected per checkout by the `provider` query param the
-frontend already sends. Plans and quotas live in `app/config.py`; the price /
+frontend already sends. Plans live in `app/config.py` (`WINNERS_PLANS`); the price /
 plan ids come from env (`STRIPE_PRICE_*`, `PAYPAL_PLAN_*`).
 
 **Subscription state is only ever written from a verified webhook.** The
@@ -352,10 +241,12 @@ Register the webhook endpoints in each dashboard and put the signing secrets
 in `STRIPE_WEBHOOK_SECRET` / `PAYPAL_WEBHOOK_ID`. Use
 `PAYPAL_API_BASE=https://api-m.sandbox.paypal.com` while testing.
 
-Run `migrations/003_billing.sql` before deploying this.
 
 ## Remaining work
 
-Nothing blocking. Untested against live provider accounts — run Stripe's
-`stripe listen --forward-to localhost:8000/api/v1/billing/webhook/stripe` and
-a PayPal sandbox subscription before switching real keys on.
+The collectors are untested against the live sites from CI (they can't be
+reached from the build sandbox): run `python -m app.winners.worker --market US`
+once with real network access and check `winner_runs` before relying on the
+schedule. Billing is untested against live provider accounts — run Stripe's
+`stripe listen --forward-to localhost:8000/api/v1/billing/webhook/stripe` and a
+PayPal sandbox subscription before switching real keys on.

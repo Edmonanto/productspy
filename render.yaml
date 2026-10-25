@@ -1,4 +1,4 @@
-# Render blueprint for the ProductSpy Pro backend.
+# Render blueprint for the ProductSpy Pro backend (Daily Winners).
 # The Next.js frontend deploys separately on Vercel — it is not in here.
 #
 # This file MUST live at the repository root: Render only reads a Blueprint
@@ -6,6 +6,10 @@
 #
 # Both services read secrets from the "ProductSpy Env" env group, which must
 # exist under that exact name before the first deploy.
+#
+# The old productspy-ingest and productspy-match cron jobs were removed with
+# the marketplace engine — delete them in the Render dashboard too, or they
+# keep running (and failing) on their old schedule.
 
 services:
   # ── API ───────────────────────────────────────────────────────────────
@@ -16,7 +20,11 @@ services:
     plan: free
     # An empty buildCommand skips dependency installation entirely.
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Migrations first: idempotent and tracked in schema_migrations, so this
+    # costs nothing when current, and a deploy never serves a schema the code
+    # doesn't match. (preDeployCommand would be the natural home, but needs a
+    # paid instance.) A failed migration stops the deploy.
+    startCommand: python -m app.migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION
@@ -25,45 +33,23 @@ services:
         value: https://productspy.pro,https://www.productspy.pro
       - fromGroup: ProductSpy Env
 
-  # ── Ingestion worker ──────────────────────────────────────────────────
-  # Every 6 hours. Each run snapshots every product it sees, which is what
-  # trend scoring is computed from — so the schedule is the data asset, not
-  # just a refresh.
+  # ── Daily Winners ─────────────────────────────────────────────────────
+  # Once a day: Facebook Ad Library + TikTok Creative Center + TikTok videos
+  # for every market in WINNERS_MARKETS, then the 5-10 picks per market. Also
+  # runs trial housekeeping (reminder emails, downgrading expired trials).
   #
-  # Migrations run first. They are idempotent and tracked in
-  # schema_migrations, so this costs nothing when the schema is current but
-  # guarantees ingestion never runs against a stale one. Render's
-  # preDeployCommand would be the natural home for this, but it requires a
-  # paid instance type and the API above is on the free plan.
-  - type: cron
-    name: productspy-ingest
-    runtime: python
-    rootDir: backend
-    plan: starter
-    schedule: "0 */6 * * *"
-    buildCommand: pip install -r requirements.txt
-    startCommand: python -m app.migrate && python -m app.ingest.worker
-    envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.4"
-      - fromGroup: ProductSpy Env
-
-  # ── Matching worker ───────────────────────────────────────────────────
-  # Runs 30 minutes after each ingestion so it scores products that run just
-  # wrote, rather than racing it.
+  # Docker, not the python runtime: the scrapers drive headless Chromium,
+  # whose system libraries only the Playwright image provides. Chromium needs
+  # memory — "standard" (2 GB) rather than "starter" (512 MB).
   #
-  # Needs ANTHROPIC_API_KEY: 1688 titles are Chinese, and without translation
-  # there is no text signal, so the queue stays empty. Writes candidates only
-  # — no score changes until a human confirms at /dashboard/matches.
+  # 01:00 UTC = 09:00 in China, 02:00 in Paris, 21:00 (previous day) in New York.
   - type: cron
-    name: productspy-match
-    runtime: python
+    name: productspy-winners
+    runtime: docker
     rootDir: backend
-    plan: starter
-    schedule: "30 */6 * * *"
-    buildCommand: pip install -r requirements.txt
-    startCommand: python -m app.matching.runner
+    dockerfilePath: ./Dockerfile.winners
+    dockerContext: .
+    plan: standard
+    schedule: "0 1 * * *"
     envVars:
-      - key: PYTHON_VERSION
-        value: "3.12.4"
       - fromGroup: ProductSpy Env

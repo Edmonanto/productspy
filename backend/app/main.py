@@ -1,4 +1,4 @@
-"""ProductSpy Pro API.
+"""ProductSpy Pro API — Daily Winners.
 
 Mounted at /api/v1 to match NEXT_PUBLIC_API_URL in the frontend.
 """
@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import config, db
-from .routers import billing, matches, products, users, watchlist
+from .routers import billing, users, watchlist, winners
 
 
 @asynccontextmanager
@@ -33,8 +33,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-for r in (users.router, products.router, watchlist.router,
-          matches.router, billing.router):
+for r in (users.router, winners.router, watchlist.router, billing.router):
     app.include_router(r, prefix=config.API_PREFIX)
 
 

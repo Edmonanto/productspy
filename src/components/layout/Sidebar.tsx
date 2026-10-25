@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  TrendingUp, Bookmark, Search, LayoutDashboard, GitCompareArrows,
+  Bookmark, LayoutDashboard, Trophy,
   CreditCard, Settings, Zap, LogOut, X, Menu
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,10 +12,8 @@ import { useState } from "react";
 
 const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Overview" },
-  { href: "/dashboard/trending", icon: TrendingUp, label: "Trending" },
-  { href: "/dashboard/search", icon: Search, label: "Search" },
+  { href: "/dashboard/winners", icon: Trophy, label: "Daily Winners" },
   { href: "/dashboard/watchlist", icon: Bookmark, label: "Watchlist" },
-  { href: "/dashboard/matches", icon: GitCompareArrows, label: "Match review" },
 ];
 
 const BOTTOM_ITEMS = [
@@ -52,7 +50,8 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             onClick={onClose}
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
-              pathname === href
+              // Nested pages (/dashboard/winners/[id]) keep their section lit.
+              (href === "/dashboard" ? pathname === href : pathname.startsWith(href))
                 ? "bg-violet-600/20 text-violet-400 border border-violet-600/30 shadow-sm"
                 : "text-zinc-400 hover:text-white hover:bg-zinc-800"
             )}

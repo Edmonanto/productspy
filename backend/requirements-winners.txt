@@ -1,0 +1,5 @@
+# Daily Winners worker only (runs in Dockerfile.winners). The API doesn't
+# need a browser, so Playwright stays out of requirements.txt.
+-r requirements.txt
+# Must match the Playwright Docker image tag in Dockerfile.winners.
+playwright==1.49.0

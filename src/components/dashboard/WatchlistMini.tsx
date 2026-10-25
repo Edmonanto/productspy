@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { WatchlistItem } from "@/lib/api";
-import { scoreColor, formatPrice, sourceIcon } from "@/lib/utils";
-import { Bookmark, ArrowRight } from "lucide-react";
+import { scoreColor } from "@/lib/utils";
+import { Bookmark, ArrowRight, ImageOff } from "lucide-react";
 import ProductImage from "@/components/products/ProductImage";
 
 interface Props {
@@ -43,16 +43,16 @@ export default function WatchlistMini({ items, loading }: Props) {
         <div className="flex flex-col items-center py-8 text-center">
           <Bookmark size={28} className="text-zinc-700 mb-2" />
           <p className="text-zinc-600 text-xs">Nothing saved yet</p>
-          <Link href="/dashboard/trending" className="text-violet-400 text-xs mt-1 hover:text-violet-300">
-            Browse trending →
+          <Link href="/dashboard/winners" className="text-violet-400 text-xs mt-1 hover:text-violet-300">
+            Browse Daily Winners →
           </Link>
         </div>
       ) : (
         <div className="space-y-2">
           {items.slice(0, 5).map(({ product, added_at }) => {
-            const score = product.score?.overall_score ?? 0;
+            const score = product.score;
             return (
-              <Link key={product.id} href={`/dashboard/products/${product.id}`}>
+              <Link key={product.id} href={`/dashboard/winners/${product.id}${product.market ? `?market=${product.market}` : ""}`}>
                 <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-zinc-800 transition-colors group">
                   <div className="w-9 h-9 rounded-lg bg-zinc-800 overflow-hidden shrink-0">
                     <ProductImage
@@ -60,8 +60,8 @@ export default function WatchlistMini({ items, loading }: Props) {
                       alt={product.title}
                       className="w-full h-full object-cover"
                       fallback={
-                        <div className="w-full h-full flex items-center justify-center">
-                          {sourceIcon(product.source)}
+                        <div className="w-full h-full flex items-center justify-center text-zinc-600">
+                          <ImageOff size={14} />
                         </div>
                       }
                     />
@@ -74,7 +74,9 @@ export default function WatchlistMini({ items, loading }: Props) {
                       Saved {new Date(added_at).toLocaleDateString()}
                     </p>
                   </div>
-                  <span className={`text-sm font-extrabold shrink-0 ${scoreColor(score)}`}>{score}</span>
+                  {score != null && (
+                    <span className={`text-sm font-extrabold shrink-0 ${scoreColor(score)}`}>{score}</span>
+                  )}
                 </div>
               </Link>
             );

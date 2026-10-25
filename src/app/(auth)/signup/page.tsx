@@ -5,16 +5,15 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { Zap, Eye, EyeOff, AlertCircle, CheckCircle, Check } from "lucide-react";
 
-const PLANS = [
-  { id: "free", name: "Free", price: "$0/mo", features: ["5 searches/day", "Basic score"] },
-  { id: "starter", name: "Starter", price: "$29/mo", features: ["50 searches/day", "Email alerts"] },
-  { id: "pro", name: "Pro", price: "$79/mo", features: ["Unlimited", "Full AI + Ad spy"], popular: true },
-];
+const TRIAL_PERKS = [
+  "Daily Winners: 5–10 products being scaled right now",
+  "Up to 3 markets — US, Europe, UK, Australia, UAE…",
+  "The ads, stores and margins behind each pick",
+]
 
 export default function SignupPage() {
   const { signUp, signInWithGoogle } = useAuth();
   const [step, setStep] = useState<1 | 2>(1); // step 1 = form, step 2 = check email
-  const [selectedPlan, setSelectedPlan] = useState("free");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -112,40 +111,18 @@ export default function SignupPage() {
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-5">
-          {/* Plan selector */}
-          <div>
-            <p className="text-zinc-400 text-xs font-medium mb-3">Choose a plan</p>
-            <div className="grid grid-cols-3 gap-2">
-              {PLANS.map((plan) => (
-                <button
-                  key={plan.id}
-                  onClick={() => setSelectedPlan(plan.id)}
-                  className={`relative p-3 rounded-xl border text-left transition-all text-xs
-                    ${selectedPlan === plan.id
-                      ? "border-violet-500 bg-violet-600/10"
-                      : "border-zinc-700 bg-zinc-800 hover:border-zinc-600"
-                    }`}
-                >
-                  {plan.popular && (
-                    <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-violet-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full whitespace-nowrap">
-                      POPULAR
-                    </span>
-                  )}
-                  <p className={`font-bold ${selectedPlan === plan.id ? "text-violet-300" : "text-white"}`}>
-                    {plan.name}
-                  </p>
-                  <p className="text-zinc-500 mt-0.5">{plan.price}</p>
-                  <ul className="mt-2 space-y-1">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-start gap-1 text-zinc-400">
-                        <Check size={9} className="text-emerald-400 mt-0.5 shrink-0" />
-                        <span className="text-[10px] leading-tight">{f}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </button>
+          {/* Free trial — every new account starts on Pro, no card */}
+          <div className="rounded-xl border border-violet-500/40 bg-violet-600/10 p-4">
+            <p className="text-violet-200 font-semibold text-sm">7 days of Pro free — no card needed</p>
+            <ul className="mt-2 space-y-1">
+              {TRIAL_PERKS.map((f) => (
+                <li key={f} className="flex items-start gap-1.5 text-xs text-zinc-300">
+                  <Check size={12} className="text-emerald-400 mt-0.5 shrink-0" />
+                  {f}
+                </li>
               ))}
-            </div>
+            </ul>
+            <p className="text-zinc-500 text-[11px] mt-2">After 7 days you move to the Free plan automatically unless you choose a plan.</p>
           </div>
 
           {/* Google OAuth */}

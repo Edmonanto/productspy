@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useEffect, useState } from "react";
+import { IMAGE_HOSTS } from "../../../image-hosts.mjs";
 
 interface Props {
   src: string | null | undefined;
@@ -36,12 +37,32 @@ const RENDER_PX = 480;
  * the decode cost, since what arrives is already the size it is drawn at.
  * Hosts must be listed in next.config.mjs `images.remotePatterns`.
  */
+/**
+ * True when next/image is allowed to fetch this URL (same rules as
+ * images.remotePatterns: "**.example.com" = any subdomain of example.com).
+ * next/image throws on an unlisted host instead of failing softly, and Daily
+ * Winners images can come from any store's own domain.
+ */
+export function isAllowedImage(src: string): boolean {
+  let host: string;
+  try {
+    const url = new URL(src);
+    if (url.protocol !== "https:") return false;
+    host = url.hostname;
+  } catch {
+    return false;
+  }
+  return IMAGE_HOSTS.some((pattern: string) =>
+    pattern.startsWith("**.") ? host.endsWith(pattern.slice(2)) : host === pattern
+  );
+}
+
 export default function ProductImage({ src, alt, className, fallback }: Props) {
   const [failed, setFailed] = useState(false);
 
   useEffect(() => setFailed(false), [src]);
 
-  if (!src || failed) return <>{fallback}</>;
+  if (!src || failed || !isAllowedImage(src)) return <>{fallback}</>;
 
   return (
     <Image

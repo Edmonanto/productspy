@@ -10,10 +10,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from .. import config, quota, repository
+from .. import config, repository, trial
 from ..auth import CurrentUser, current_user
 from ..billing import paypal_provider, stripe_provider
-from ..schemas import BillingStatus
+from ..schemas import BillingStatus, Trial
 
 log = logging.getLogger(__name__)
 
@@ -23,14 +23,28 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 @router.get("/status", response_model=BillingStatus)
 async def get_status(user: CurrentUser = Depends(current_user)) -> BillingStatus:
     subscription, provider = await repository.subscription(user.id)
+    row = await repository.subscription_row(user.id)
     return BillingStatus(
         plan=subscription.plan,
         status=subscription.status,
         provider=provider,
         current_period_end=subscription.current_period_end,
-        search_quota=quota.search_limit(subscription.plan),
         can_manage=provider in ("stripe", "paypal"),
+        trial=Trial(**trial.trial_info(row)),
     )
+
+
+@router.post("/trial")
+async def start_free_trial(user: CurrentUser = Depends(current_user)) -> dict[str, object]:
+    """Start the no-card trial for an account created before trials existed."""
+    await repository.ensure_subscription(user.id, user.email)
+    if not await repository.start_trial(user.id, user.email):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="This account has already used its free trial or is on a paid plan.",
+        )
+    row = await repository.subscription_row(user.id)
+    return {"message": "Your free trial has started.", "trial": trial.trial_info(row)}
 
 
 @router.post("/checkout")
@@ -54,9 +68,16 @@ async def create_checkout(
         )
 
     if provider == "stripe":
+        # Paying during the free trial: billing starts when the trial ends,
+        # so nobody loses the days they have left.
+        trial_ends_at = None
+        if row and trial.trial_active(row.get("status"), row.get("provider"), row.get("trial_ends_at")):
+            trial_ends_at = row.get("trial_ends_at")
+        extra = {"trial_ends_at": trial_ends_at} if trial_ends_at else {}
         url = await stripe_provider.create_checkout(
             user.id, user.email, plan,
             customer_id=row["provider_customer_id"] if row else None,
+            **extra,
         )
     else:
         url = await paypal_provider.create_checkout(user.id, user.email, plan)

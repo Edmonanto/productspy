@@ -1,0 +1,274 @@
+"""/winners — the Daily Winners picks, evidence, and market preferences.
+
+  GET  /winners/markets                 markets, plan limits, what the user follows
+  POST /winners/preferences             {"markets": ["US", "AE"]}
+  GET  /winners?market=US&date=         today's (or the latest) 5-10 picks
+  GET  /winners/dates?market=US         archive days this plan can see
+  GET  /winners/status                  last worker run per market
+  GET  /winners/products/{id}?market=   everything behind one pick
+  GET  /winners/export.csv?market=US    CSV (Pro / Agency)
+
+Plan limits come from config.WINNERS_PLANS and are enforced here, not in the
+UI: a locked pick is returned as {rank, total, locked: true} with nothing else.
+"""
+import csv
+import io
+import json
+import uuid
+from datetime import date, datetime, timedelta, timezone
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+from .. import config, repository
+from ..auth import CurrentUser, current_user
+from ..winners import store
+from ..winners.markets import DEFAULT_MARKET, MARKETS, market_public
+
+router = APIRouter(prefix="/winners", tags=["winners"])
+
+PILLARS = ("scaling", "engagement", "demand", "margin", "freshness")
+
+
+# ── helpers ─────────────────────────────────────────────────────────────────
+async def _entitlements(user: CurrentUser) -> tuple[str, dict[str, Any]]:
+    subscription, _ = await repository.subscription(user.id)  # effective plan (trial-aware)
+    plan = subscription.plan if subscription.plan in config.WINNERS_PLANS else config.DEFAULT_PLAN
+    return plan, {"plan": plan, **config.WINNERS_PLANS[plan]}
+
+
+def _locked(error: str, message: str) -> HTTPException:
+    return HTTPException(
+        status.HTTP_403_FORBIDDEN,
+        detail={"error": error, "message": message, "upgrade_url": "/dashboard/billing"},
+    )
+
+
+async def _resolve_market(user: CurrentUser, market: str | None) -> tuple[str, dict[str, Any]]:
+    """Validate the market and enforce how many markets the plan includes."""
+    _, ent = await _entitlements(user)
+    followed = await store.followed_markets(user.id)
+    code = (market or (followed[0] if followed else DEFAULT_MARKET)).upper()
+    if code not in MARKETS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Unknown market '{code}'")
+    allowed = followed[: ent["markets"]]
+    if code in allowed:
+        return code, ent
+    if len(allowed) < ent["markets"]:
+        await store.save_followed_markets(user.id, allowed + [code])
+        return code, ent
+    raise _locked(
+        "market_locked",
+        f"Your {ent['plan']} plan includes {ent['markets']} market(s): {', '.join(allowed)}. "
+        "Switch market in Settings or upgrade.",
+    )
+
+
+def _json(value: Any) -> Any:
+    return json.loads(value) if isinstance(value, str) else value
+
+
+def _f(value: Any) -> float | None:
+    return float(value) if value is not None else None
+
+
+def serialize_pick(r: Any) -> dict[str, Any]:
+    sig = _json(r["signals"]) or {}
+    attrs = _json(r["attributes"]) or {}
+    price, cost = _f(r["price_usd"]), _f(r["cost_usd"])
+    return {
+        "rank": r["rank"], "tier": r["tier"], "total": r["total"], "locked": False,
+        "breakdown": _json(r["breakdown"]) or {p: 0 for p in PILLARS},
+        "reasons": _json(r["reasons"]) or [],
+        "penalties": _json(r["penalties"]) or [],
+        "confidence": r["confidence"],
+        "product": {
+            "id": str(r["product_id"]), "title": r["title"], "image_url": r["image_url"],
+            "category": r["category"], "price_usd": price, "cost_usd": cost,
+            "cost_estimated": bool(r["cost_estimated"]),
+            "margin_pct": round((price - cost) / price * 100) if price and cost else None,
+        },
+        "stats": {
+            "days_running": sig.get("max_days_running"),
+            "creatives": sig.get("creatives"),
+            "new_creatives_7d": sig.get("new_creatives_7d"),
+            "stores": sig.get("advertisers"),
+            "videos": sig.get("videos"),
+            "views": sig.get("total_views"),
+            "engagement_rate": sig.get("engagement_rate"),
+            "intent_ratio": sig.get("intent_ratio"),
+            "ctr": sig.get("best_ctr"),
+            "sources": [name for name, key in (("facebook_ads", "meta_ads"), ("tiktok_ads", "tiktok_ads"),
+                                               ("tiktok_organic", "videos")) if sig.get(key)],
+        },
+        "links": {
+            "store_url": r["store_url"] or (r["product_url"] or None),
+            "ad_url": r["ad_url"],
+            "supplier_url": r["supplier_url"],
+        },
+    }
+
+
+def _today() -> date:
+    return datetime.now(timezone.utc).date()
+
+
+# ── routes ──────────────────────────────────────────────────────────────────
+@router.get("/markets")
+async def list_markets(user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
+    _, ent = await _entitlements(user)
+    followed = (await store.followed_markets(user.id))[: ent["markets"]]
+    return {
+        "markets": [market_public(m) for m in MARKETS.values()],
+        "following": followed or [DEFAULT_MARKET],
+        "entitlements": ent,
+        "plans": {k: {"plan": k, **v} for k, v in config.WINNERS_PLANS.items()},
+    }
+
+
+class PreferencesIn(BaseModel):
+    markets: list[str]
+
+
+@router.post("/preferences")
+async def save_preferences(body: PreferencesIn, user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
+    _, ent = await _entitlements(user)
+    codes: list[str] = []
+    for c in body.markets:
+        c = c.upper()
+        if c not in MARKETS:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Unknown market '{c}'")
+        if c not in codes:
+            codes.append(c)
+    if not codes:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Pick at least one market")
+    if len(codes) > ent["markets"]:
+        raise _locked("too_many_markets", f"Your {ent['plan']} plan allows {ent['markets']} market(s).")
+    await store.save_followed_markets(user.id, codes)
+    return {"markets": codes, "max_markets": ent["markets"]}
+
+
+@router.get("")
+async def get_winners(
+    market: str | None = Query(None),
+    day: date | None = Query(None, alias="date"),
+    user: CurrentUser = Depends(current_user),
+) -> dict[str, Any]:
+    code, ent = await _resolve_market(user, market)
+    today = _today()
+    if day is not None and day < today - timedelta(days=int(ent["history_days"])):
+        raise _locked("history_locked",
+                      f"Your {ent['plan']} plan includes {ent['history_days']} days of history.")
+    pick_date = await store.latest_pick_date(code, day or today)
+    if not pick_date:
+        return {"market": code, "date": None, "winners": [], "locked_count": 0, "plan": ent["plan"],
+                "message": "No picks yet for this market — the first daily scan hasn't finished."}
+    rows = await store.picks(code, pick_date)
+    visible = int(ent["winners_per_day"])
+    winners = [serialize_pick(r) for r in rows[:visible]]
+    winners += [{"rank": r["rank"], "tier": r["tier"], "total": r["total"], "locked": True}
+                for r in rows[visible:]]
+    return {"market": code, "date": pick_date.isoformat(), "winners": winners,
+            "locked_count": max(0, len(rows) - visible), "plan": ent["plan"]}
+
+
+@router.get("/dates")
+async def winner_dates(market: str | None = None, user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
+    code, ent = await _resolve_market(user, market)
+    rows = await store.pick_dates(code, _today() - timedelta(days=int(ent["history_days"])))
+    return {"market": code, "history_days": ent["history_days"],
+            "dates": [{"date": r["pick_date"].isoformat(), "winners": r["winners"], "total": r["total"]}
+                      for r in rows]}
+
+
+@router.get("/status")
+async def run_status(user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
+    rows = await store.latest_runs()
+    return {"runs": [{
+        "market": r["market"], "started_at": r["started_at"], "finished_at": r["finished_at"],
+        "status": r["status"], "stats": _json(r["stats"]) or {},
+    } for r in rows]}
+
+
+@router.get("/products/{product_id}")
+async def product_evidence(product_id: str, market: str | None = None,
+                           user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
+    try:
+        uuid.UUID(product_id)
+    except ValueError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
+    code, ent = await _resolve_market(user, market)
+    p = await store.product(product_id)
+    if p is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
+
+    history = await store.score_history(product_id, code)
+    latest = history[0] if history else None
+    now = datetime.now(timezone.utc)
+    ads: dict[str, list[dict[str, Any]]] = {"meta": [], "tiktok_ads": [], "tiktok_organic": []}
+    counts: dict[str, int] = {}
+    for a in await store.product_ads(product_id, code):
+        counts[a["platform"]] = counts.get(a["platform"], 0) + 1
+        bucket = ads.setdefault(a["platform"], [])
+        if ent["ad_evidence"] and len(bucket) < 12:
+            item = dict(a)
+            item["ctr"] = _f(a["ctr"])
+            item["days_running"] = (now - a["started_at"]).days if a["started_at"] else None
+            bucket.append(item)
+
+    attrs = _json(p["attributes"]) or {}
+    price, cost = _f(p["price_usd"]), _f(p["cost_usd"])
+    return {
+        "market": code,
+        "product": {
+            "id": str(p["id"]), "title": p["title"], "image_url": p["image_url"],
+            "category": p["category"], "price_usd": price, "cost_usd": cost,
+            "cost_estimated": bool(p["cost_estimated"]),
+            "margin_pct": round((price - cost) / price * 100) if price and cost else None,
+            "product_url": p["product_url"] or None, "first_seen_at": p["first_seen_at"],
+            "attributes": {k: attrs.get(k) for k in
+                           ("wow", "problem", "demo3s", "ip_risk", "fragile_heavy", "seasonal")},
+        },
+        "score": None if latest is None else {
+            "scored_on": latest["scored_on"].isoformat(), "total": latest["total"],
+            "breakdown": _json(latest["breakdown"]), "reasons": _json(latest["reasons"]),
+            "penalties": _json(latest["penalties"]), "confidence": latest["confidence"],
+            "excluded": latest["excluded"],
+        },
+        "history": [{"date": h["scored_on"].isoformat(), "total": h["total"]} for h in reversed(history)],
+        "suppliers": [{"platform": s["platform"], "supplier_name": s["supplier_name"],
+                       "supplier_url": s["supplier_url"], "unit_cost_usd": _f(s["unit_cost_usd"])}
+                      for s in await store.product_suppliers(product_id)],
+        "ads": ads if ent["ad_evidence"] else {},
+        "ad_counts": counts,
+        "ad_evidence_locked": not ent["ad_evidence"],
+    }
+
+
+@router.get("/export.csv")
+async def export_csv(market: str | None = None, day: date | None = Query(None, alias="date"),
+                     user: CurrentUser = Depends(current_user)) -> StreamingResponse:
+    _, ent = await _entitlements(user)
+    if not ent["export_csv"]:
+        raise _locked("export_locked", "CSV export is on the Pro and Agency plans.")
+    code, _ = await _resolve_market(user, market)
+    pick_date = await store.latest_pick_date(code, day or _today())
+    rows = await store.picks(code, pick_date) if pick_date else []
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["date", "market", "rank", "tier", "score", "product", "category", "price_usd",
+                "cost_usd", "margin_pct", "days_running", "creatives", "stores", "views",
+                "store_url", "ad_url", "supplier_url", "reasons"])
+    for r in rows:
+        s = serialize_pick(r)
+        pr, st, ln = s["product"], s["stats"], s["links"]
+        w.writerow([pick_date, code, s["rank"], s["tier"], s["total"], pr["title"], pr["category"],
+                    pr["price_usd"], pr["cost_usd"], pr["margin_pct"], st["days_running"],
+                    st["creatives"], st["stores"], st["views"], ln["store_url"], ln["ad_url"],
+                    ln["supplier_url"], " | ".join(s["reasons"])])
+    return StreamingResponse(
+        iter([buf.getvalue()]), media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="winners-{code}-{pick_date or "none"}.csv"'},
+    )

@@ -30,7 +30,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const error = await res.json().catch(() => ({ detail: "Unknown error" }));
-    throw new Error(error.detail || `HTTP ${res.status}`);
+    // FastAPI sends detail as a string, or — for plan locks — as
+    // {error, message, upgrade_url}. Keep the code so pages can react to it.
+    const detail = error.detail;
+    const message =
+      typeof detail === "string" ? detail : detail?.message || detail?.error || `HTTP ${res.status}`;
+    const err = new Error(message) as Error & { status?: number; code?: string };
+    err.status = res.status;
+    err.code = typeof detail === "object" && detail ? detail.error : undefined;
+    throw err;
   }
 
   return res.json();
@@ -45,62 +53,23 @@ export const api = {
 
 // ---- Typed API calls ----
 
-export interface Product {
+/** A saved product. Mirrors schemas.WatchedProduct. */
+export interface WatchedProduct {
   id: string;
   title: string;
   image_url: string | null;
-  product_url: string;
-  category: string | null;
   price_usd: number | null;
   cost_usd: number | null;
-  /** True when price_usd was computed from cost rather than published by the
-   *  source (1688 lists wholesale only). Such a price is an estimate, and the
-   *  margin it implies is the markup constant, not a property of the product. */
-  price_is_derived?: boolean;
-  source: string;
-  score: {
-    overall_score: number;
-    demand_score: number;
-    margin_score: number;
-    competition_score: number;
-    trend_score: number;
-    ai_summary: string;
-  } | null;
-  suppliers: Supplier[];
-  ad_signals: AdSignal[];
-}
-
-export interface Supplier {
-  platform: string;
-  supplier_name: string;
-  supplier_url: string;
-  unit_cost_usd: number;
-  shipping_days: number;
-  rating: number;
-}
-
-export interface AdSignal {
-  platform: string;
-  ad_count: number;
-  last_seen_at: string;
+  /** Best Daily Winners score in the last 7 days, and the market it was in. */
+  score: number | null;
+  market: string | null;
 }
 
 export interface WatchlistItem {
   id: string;
-  product: Product;
+  product: WatchedProduct;
   added_at: string;
 }
-
-export const productsApi = {
-  trending: (params: Record<string, string | number> = {}) => {
-    const qs = new URLSearchParams(params as Record<string, string>).toString();
-    return api.get<{ products: Product[]; total: number }>(`/products/trending?${qs}`);
-  },
-  search: (q: string, minScore = 40) =>
-    api.get<{ products: Product[]; total: number }>(`/products/search?q=${encodeURIComponent(q)}&min_score=${minScore}`),
-  detail: (id: string) => api.get<Product>(`/products/${id}`),
-  rescore: (id: string) => api.post<{ score: Product["score"] }>(`/products/${id}/rescore`),
-};
 
 export const watchlistApi = {
   list: () => api.get<{ items: WatchlistItem[] }>("/watchlist/"),
@@ -113,57 +82,25 @@ export const billingApi = {
     api.post<{ checkout_url: string; provider: string }>(`/billing/checkout?plan=${plan}&provider=${provider}`),
   portal: () => api.post<{ portal_url: string }>("/billing/portal"),
   cancel: () => api.post<{ message: string }>("/billing/cancel"),
+  startTrial: () => api.post<{ message: string; trial: TrialInfo }>("/billing/trial"),
   status: () => api.get<{
     plan: string; status: string; provider: string;
-    current_period_end: string | null; search_quota: number; can_manage: boolean;
+    current_period_end: string | null; can_manage: boolean; trial: TrialInfo | null;
   }>("/billing/status"),
 };
 
-// ---- Matching ----
-
-export interface MatchSide {
-  id: string;
-  title: string;
-  title_en?: string | null;
-  image_url: string | null;
-  product_url: string;
-  price_usd?: number | null;
-  cost_usd?: number | null;
-  source: string;
-  orders_count?: number | null;
+/** Mirrors schemas.Trial. */
+export interface TrialInfo {
+  active: boolean;
+  plan: string;
+  ends_at: string | null;
+  days_left: number;
+  hours_left: number;
+  used: boolean;
+  expired: boolean;
+  eligible: boolean;
+  length_days: number;
 }
-
-export interface MatchEvidence {
-  jaccard?: number;
-  shared_tokens?: string[];
-  distinctive_tokens?: string[];
-  price_ratio?: number;
-  supplier_title_en?: string | null;
-  generic_only?: boolean;
-  capped_at?: number;
-}
-
-export interface ProductMatch {
-  id: number;
-  confidence: number;
-  method: string;
-  status: "candidate" | "confirmed" | "rejected";
-  evidence: MatchEvidence;
-  /** What margin WOULD become if confirmed. Not applied until then. */
-  projected_margin_pct: number | null;
-  retail: MatchSide;
-  supplier: MatchSide;
-}
-
-export const matchesApi = {
-  list: (status: string = "candidate", limit = 50) =>
-    api.get<{ items: ProductMatch[]; counts: Record<string, number> }>(
-      `/matches/?status=${status}&limit=${limit}`
-    ),
-  confirm: (id: number) =>
-    api.post<{ message: string; margin_score: number | null }>(`/matches/${id}/confirm`),
-  reject: (id: number) => api.post<{ message: string }>(`/matches/${id}/reject`),
-};
 
 export interface Me {
   id: string;
@@ -171,9 +108,164 @@ export interface Me {
   name: string;
   avatar_url: string | null;
   subscription: { plan: string; status: string; current_period_end: string | null };
-  quota: { plan: string; limit: number | string; used: number; remaining: number | string };
+  trial?: TrialInfo | null;
 }
 
 export const usersApi = {
   me: () => api.get<Me>("/users/me"),
+};
+
+// ---- Daily Winners ----
+
+export interface Market {
+  code: string;
+  name: string;
+  flag: string;
+  currency: string;
+  meta_official_api: boolean;
+}
+
+export interface WinnersEntitlements {
+  plan: string;
+  markets: number;
+  winners_per_day: number;
+  history_days: number;
+  ad_evidence: boolean;
+  export_csv: boolean;
+}
+
+export interface Breakdown {
+  scaling: number;
+  engagement: number;
+  demand: number;
+  margin: number;
+  freshness: number;
+}
+
+export interface Penalty { points: number; reason: string }
+
+export interface WinnerPick {
+  rank: number;
+  tier: "winner" | "rising";
+  total: number;
+  /** Beyond the plan's daily allowance: rank and score only. */
+  locked: boolean;
+  breakdown?: Breakdown;
+  reasons?: string[];
+  penalties?: Penalty[];
+  confidence?: "low" | "medium" | "high" | null;
+  product?: {
+    id: string;
+    title: string;
+    image_url: string | null;
+    category: string | null;
+    price_usd: number | null;
+    cost_usd: number | null;
+    /** Cost is an AI estimate, not a supplier listing. */
+    cost_estimated: boolean;
+    margin_pct: number | null;
+  };
+  stats?: {
+    days_running: number | null;
+    creatives: number | null;
+    new_creatives_7d: number | null;
+    stores: number | null;
+    videos: number | null;
+    views: number | null;
+    engagement_rate: number | null;
+    intent_ratio: number | null;
+    ctr: number | null;
+    sources: string[];
+  };
+  links?: { store_url: string | null; ad_url: string | null; supplier_url: string | null };
+}
+
+export interface WinnersResponse {
+  market: string;
+  date: string | null;
+  winners: WinnerPick[];
+  locked_count: number;
+  plan: string;
+  message?: string;
+}
+
+export interface AdEvidence {
+  platform: string;
+  advertiser_name: string | null;
+  ad_text: string | null;
+  landing_url: string | null;
+  landing_domain: string | null;
+  thumbnail_url: string | null;
+  ad_url: string | null;
+  started_at: string | null;
+  days_running: number | null;
+  variant_count: number | null;
+  reach: number | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  shares: number | null;
+  ctr: number | null;
+}
+
+export interface ProductEvidence {
+  market: string;
+  product: {
+    id: string; title: string; image_url: string | null; category: string | null;
+    price_usd: number | null; cost_usd: number | null; cost_estimated: boolean;
+    margin_pct: number | null; product_url: string | null; first_seen_at: string | null;
+    attributes: Record<string, unknown>;
+  };
+  score: {
+    scored_on: string; total: number; breakdown: Breakdown; reasons: string[];
+    penalties: Penalty[]; confidence: string | null; excluded: string | null;
+  } | null;
+  history: { date: string; total: number }[];
+  suppliers: { platform: string; supplier_name: string; supplier_url: string; unit_cost_usd: number | null }[];
+  ads: Record<string, AdEvidence[]>;
+  ad_counts: Record<string, number>;
+  ad_evidence_locked: boolean;
+}
+
+export interface WinnerRun {
+  market: string;
+  started_at: string;
+  finished_at: string | null;
+  status: "running" | "ok" | "partial" | "failed";
+  stats: Record<string, number>;
+}
+
+export const winnersApi = {
+  markets: () =>
+    api.get<{
+      markets: Market[];
+      following: string[];
+      entitlements: WinnersEntitlements;
+      plans: Record<string, WinnersEntitlements>;
+    }>("/winners/markets"),
+  setMarkets: (markets: string[]) =>
+    api.post<{ markets: string[]; max_markets: number }>("/winners/preferences", { markets }),
+  list: (market: string, date?: string) =>
+    api.get<WinnersResponse>(`/winners?market=${market}${date ? `&date=${date}` : ""}`),
+  dates: (market: string) =>
+    api.get<{ market: string; history_days: number; dates: { date: string; winners: number; total: number }[] }>(
+      `/winners/dates?market=${market}`
+    ),
+  status: () => api.get<{ runs: WinnerRun[] }>("/winners/status"),
+  product: (id: string, market: string) =>
+    api.get<ProductEvidence>(`/winners/products/${id}?market=${market}`),
+  /** Downloads the CSV with the auth header (a plain link can't send it). */
+  exportCsv: async (market: string, date?: string) => {
+    const token = await getToken();
+    const res = await fetch(`${BASE_URL}/winners/export.csv?market=${market}${date ? `&date=${date}` : ""}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error("CSV export is on the Pro and Agency plans.");
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `winners-${market}-${date ?? "latest"}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };

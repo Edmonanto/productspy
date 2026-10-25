@@ -5,6 +5,7 @@ the browser's redirect back to the success URL — a user can hit that URL
 without paying, so trusting it would hand out free upgrades.
 """
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException, status
@@ -35,7 +36,13 @@ def configured() -> bool:
     return bool(config.STRIPE_SECRET_KEY)
 
 
-async def create_checkout(user_id: str, email: str, plan: str, customer_id: str | None) -> str:
+async def create_checkout(
+    user_id: str,
+    email: str,
+    plan: str,
+    customer_id: str | None,
+    trial_ends_at: datetime | None = None,
+) -> str:
     stripe = _client()
     price_id = config.STRIPE_PRICE_IDS.get(plan)
     if not price_id:
@@ -54,6 +61,14 @@ async def create_checkout(user_id: str, email: str, plan: str, customer_id: str 
         "metadata": {"user_id": user_id, "plan": plan},
         "subscription_data": {"metadata": {"user_id": user_id, "plan": plan}},
     }
+    # Still inside the app's free trial: first charge on the day it ends.
+    # Stripe refuses a trial_end less than 48h out, so closer than that the
+    # customer is simply charged now.
+    if trial_ends_at is not None:
+        ends = trial_ends_at if trial_ends_at.tzinfo else trial_ends_at.replace(tzinfo=timezone.utc)
+        if ends - datetime.now(timezone.utc) > timedelta(hours=48):
+            params["subscription_data"]["trial_end"] = int(ends.timestamp())
+
     # Reuse the existing customer so a returning subscriber doesn't end up
     # with duplicate Stripe customers.
     if customer_id:

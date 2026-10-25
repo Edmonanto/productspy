@@ -1,5 +1,16 @@
-"""Runtime configuration, read from the environment."""
+"""Runtime configuration, read from the environment.
+
+Locally, backend/.env is loaded first so `python -m app.winners.worker` and
+`python -m app.migrate` work straight from a terminal. Real environment
+variables always win (override=False), so on Render — where the env group is
+injected — the file is irrelevant even if one were present.
+"""
 import os
+import pathlib
+
+from dotenv import load_dotenv
+
+load_dotenv(pathlib.Path(__file__).resolve().parent.parent / ".env", override=False)
 
 # ── Core ────────────────────────────────────────────────────────────────────
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
@@ -38,14 +49,8 @@ API_PREFIX = "/api/v1"
 
 # ── Plans ───────────────────────────────────────────────────────────────────
 # Mirrors the PLANS array in src/app/dashboard/billing/page.tsx.
+# Daily Winners limits are WINNERS_PLANS, further down.
 UNLIMITED = "unlimited"
-
-PLAN_SEARCH_LIMITS: dict[str, int | str] = {
-    "free": 5,
-    "starter": 50,
-    "pro": UNLIMITED,
-    "agency": UNLIMITED,
-}
 
 PLAN_WATCHLIST_LIMITS: dict[str, int | str] = {
     "free": 10,
@@ -56,102 +61,15 @@ PLAN_WATCHLIST_LIMITS: dict[str, int | str] = {
 
 DEFAULT_PLAN = "free"
 
-# ── Ingestion ───────────────────────────────────────────────────────────────
-INGEST_LIMIT = int(os.environ.get("INGEST_LIMIT", "50"))
-
-# How far back trend scoring looks for a comparison snapshot. Until history
-# reaches this far, trend stays neutral rather than guessed.
-TREND_WINDOW_DAYS = int(os.environ.get("TREND_WINDOW_DAYS", "7"))
-
-# AliExpress Affiliate / Dropshipping API (apply via AliExpress Portals).
-ALIEXPRESS_APP_KEY = os.environ.get("ALIEXPRESS_APP_KEY", "")
-ALIEXPRESS_APP_SECRET = os.environ.get("ALIEXPRESS_APP_SECRET", "")
-ALIEXPRESS_TRACKING_ID = os.environ.get("ALIEXPRESS_TRACKING_ID", "productspy")
-ALIEXPRESS_CATEGORY_IDS = os.environ.get("ALIEXPRESS_CATEGORY_IDS", "")
-
-# 1688 Open Platform (Alibaba domestic wholesale — real factory costs).
-# namespace/api_name are configurable: which call you may invoke depends on
-# the service package granted to your app.
-ALIBABA1688_APP_KEY = os.environ.get("ALIBABA1688_APP_KEY", "")
-ALIBABA1688_APP_SECRET = os.environ.get("ALIBABA1688_APP_SECRET", "")
-ALIBABA1688_ACCESS_TOKEN = os.environ.get("ALIBABA1688_ACCESS_TOKEN", "")
-ALIBABA1688_NAMESPACE = os.environ.get(
-    "ALIBABA1688_NAMESPACE", "com.alibaba.fenxiao.crossborder"
-)
-ALIBABA1688_API_NAME = os.environ.get(
-    "ALIBABA1688_API_NAME", "product.search.keywordQuery"
-)
-ALIBABA1688_KEYWORDS = os.environ.get("ALIBABA1688_KEYWORDS", "")
-ALIBABA1688_CATEGORY_ID = os.environ.get("ALIBABA1688_CATEGORY_ID", "")
-
-# 1688 via third-party aggregator (works without Open Platform approval).
-# NOTE: these endpoints are plain HTTP on bare IPs, so the token and the
-# response travel unencrypted. Keep the tokens in env, never in code.
-AGG1688_SEARCH_URL = os.environ.get("AGG1688_SEARCH_URL", "")
-AGG1688_SEARCH_TOKEN = os.environ.get("AGG1688_SEARCH_TOKEN", "")
-AGG1688_DETAIL_URL = os.environ.get("AGG1688_DETAIL_URL", "")
-AGG1688_DETAIL_TOKEN = os.environ.get("AGG1688_DETAIL_TOKEN", "")
-# Search terms define the catalogue — one search call returns ~60 offers.
-AGG1688_KEYWORDS = os.environ.get("AGG1688_KEYWORDS", "")
-# Detail is one call per product, so enrichment is capped. 0 disables it.
-AGG1688_ENRICH_TOP = int(os.environ.get("AGG1688_ENRICH_TOP", "0"))
-# P4P results are paid placement, not organic demand.
-AGG1688_INCLUDE_ADS = os.environ.get("AGG1688_INCLUDE_ADS", "").lower() == "true"
-AGG1688_TIMEOUT = int(os.environ.get("AGG1688_TIMEOUT", "60"))
-
-
-def agg1688_keywords() -> list[str]:
-    return [k.strip() for k in AGG1688_KEYWORDS.split(",") if k.strip()]
-
-
-# TikTok Shop via jhzyapi aggregator. The strongest demand/trend source, and
-# the only one here reporting a real USD retail price. Each response reports
-# charged_yuan/balance_yuan, which the provider logs.
-TIKTOK_API_BASE = os.environ.get(
-    "TIKTOK_API_BASE", "https://jhzyapi.com/api/tiktok/v1/shop"
-)
-TIKTOK_TOKEN = os.environ.get("TIKTOK_TOKEN", "")
-# Search terms define the catalogue; one call returns ~30 products.
-TIKTOK_KEYWORDS = os.environ.get("TIKTOK_KEYWORDS", "")
-# Optional: pull a specific seller's catalogue (same payload shape as search).
-TIKTOK_SELLER_IDS = os.environ.get("TIKTOK_SELLER_IDS", "")
-# Detail is one call per product, so enrichment is capped. 0 disables it.
-TIKTOK_ENRICH_TOP = int(os.environ.get("TIKTOK_ENRICH_TOP", "0"))
-TIKTOK_TIMEOUT = int(os.environ.get("TIKTOK_TIMEOUT", "60"))
-
-
-def tiktok_keywords() -> list[str]:
-    return [k.strip() for k in TIKTOK_KEYWORDS.split(",") if k.strip()]
-
-
-def tiktok_seller_ids() -> list[str]:
-    return [s.strip() for s in TIKTOK_SELLER_IDS.split(",") if s.strip()]
-
-
-# Amazon via jhzyapi, across marketplaces. The retail price anchor: 1688
-# gives cost with no retail, Amazon gives retail with no cost.
-AMAZON_API_BASE = os.environ.get(
-    "AMAZON_API_BASE", "https://jhzyapi.com/api/amazon/v1"
-)
-AMAZON_TOKEN = os.environ.get("AMAZON_TOKEN", "")
-AMAZON_KEYWORDS = os.environ.get("AMAZON_KEYWORDS", "")
-AMAZON_SITES = os.environ.get("AMAZON_SITES", "US")
-AMAZON_TIMEOUT = int(os.environ.get("AMAZON_TIMEOUT", "60"))
-
-# FX to USD. Non-USD marketplaces are priced in their own currency, and an
-# unconverted price is worse than none — margin would read 229 EUR as 229 USD.
+# ── Currency ────────────────────────────────────────────────────────────────
+# FX to USD for store prices. An unconverted price is worse than none — a
+# margin would read 229 EUR as 229 USD — so an unlisted currency drops the price.
 USD_PER_GBP = float(os.environ.get("USD_PER_GBP", "1.27"))
 USD_PER_EUR = float(os.environ.get("USD_PER_EUR", "1.08"))
 USD_PER_CAD = float(os.environ.get("USD_PER_CAD", "0.73"))
 USD_PER_AUD = float(os.environ.get("USD_PER_AUD", "0.66"))
-
-
-def amazon_keywords() -> list[str]:
-    return [k.strip() for k in AMAZON_KEYWORDS.split(",") if k.strip()]
-
-
-def amazon_sites() -> list[str]:
-    return [s.strip().upper() for s in AMAZON_SITES.split(",") if s.strip()]
+USD_PER_AED = float(os.environ.get("USD_PER_AED", "0.272"))
+USD_PER_SAR = float(os.environ.get("USD_PER_SAR", "0.267"))
 
 
 def usd_rates() -> dict[str, float]:
@@ -162,25 +80,15 @@ def usd_rates() -> dict[str, float]:
         "EUR": USD_PER_EUR,
         "CAD": USD_PER_CAD,
         "AUD": USD_PER_AUD,
+        "AED": USD_PER_AED,
+        "SAR": USD_PER_SAR,
     }
 
 
-# 1688 quotes wholesale CNY. Converting to USD and deriving an indicative
-# retail price keeps margin scoring meaningful on wholesale-only listings.
-CNY_PER_USD = float(os.environ.get("CNY_PER_USD", "7.15"))
-WHOLESALE_MARKUP = float(os.environ.get("WHOLESALE_MARKUP", "3.0"))
-
-
-# ── Claude (ai_summary) ─────────────────────────────────────────────────────
+# ── Claude ──────────────────────────────────────────────────────────────────
+# Names the product behind each ad, dedupes, and flags IP/restricted risk.
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-5")
-
-# ── Matching (cross-platform) ───────────────────────────────────────────────
-# Stage 2 is retail x suppliers, so both sides are capped: comparing whole
-# catalogues is quadratic and floods the review queue with weak pairs.
-MATCH_TRANSLATE_LIMIT = int(os.environ.get("MATCH_TRANSLATE_LIMIT", "120"))
-MATCH_RETAIL_LIMIT = int(os.environ.get("MATCH_RETAIL_LIMIT", "50"))
-MATCH_SUPPLIER_LIMIT = int(os.environ.get("MATCH_SUPPLIER_LIMIT", "300"))
 
 # ── Billing ─────────────────────────────────────────────────────────────────
 # Where the provider sends the customer back after checkout.
@@ -210,3 +118,70 @@ PAYPAL_PLAN_IDS: dict[str, str] = {
 }
 
 PAID_PLANS = ("starter", "pro", "agency")
+
+
+# ── Daily Winners engine ────────────────────────────────────────────────────
+# Scans the Facebook Ad Library, TikTok Creative Center (Top Ads) and TikTok
+# hashtags once a day per market, and picks the 5-10 strongest products.
+# See backend/README.md#daily-winners.
+
+# Markets the daily worker scans (codes from app/winners/markets.py).
+WINNERS_MARKETS = os.environ.get("WINNERS_MARKETS", "US,UK,EU,AU,AE,CA")
+
+# Claude names each ad's product, dedupes, and flags IP/restricted risk.
+# Without a key a URL/title heuristic stands in (fewer products recognised).
+WINNERS_MODEL = os.environ.get("WINNERS_MODEL", "") or ANTHROPIC_MODEL
+
+# Sources. All free by default; Apify replaces the scrapers when enabled.
+COLLECT_META = os.environ.get("COLLECT_META", "true").lower() == "true"
+COLLECT_TIKTOK_ADS = os.environ.get("COLLECT_TIKTOK_ADS", "true").lower() == "true"
+COLLECT_TIKTOK_ORGANIC = os.environ.get("COLLECT_TIKTOK_ORGANIC", "true").lower() == "true"
+
+# Meta Ad Library API. Only returns *commercial* ads delivered in the EU
+# (Digital Services Act), so it serves the EU/FR/DE markets; the rest use the
+# Playwright web scraper. Needs a Meta developer app with ID verification.
+META_ACCESS_TOKEN = os.environ.get("META_ACCESS_TOKEN", "")
+META_GRAPH_VERSION = os.environ.get("META_GRAPH_VERSION", "v23.0")
+META_WEB_SCRAPER = os.environ.get("META_WEB_SCRAPER", "true").lower() == "true"
+
+# Residential proxy for the scrapers. TikTok results depend on the visitor's
+# country, so PROXY_URL_<MARKET> (e.g. PROXY_URL_AE) overrides this per market.
+PROXY_URL = os.environ.get("PROXY_URL", "")
+
+# Paid, lower-maintenance sources (apify.com).
+USE_APIFY = os.environ.get("USE_APIFY", "").lower() == "true"
+APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
+APIFY_META_ACTOR = os.environ.get("APIFY_META_ACTOR", "curious_coder~facebook-ads-library-scraper")
+APIFY_TIKTOK_ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "clockworks~tiktok-scraper")
+APIFY_TIKTOK_ADS_ACTOR = os.environ.get("APIFY_TIKTOK_ADS_ACTOR", "")
+
+TIKTOK_MIN_VIEWS = int(os.environ.get("TIKTOK_MIN_VIEWS", "100000"))
+TIKTOK_CC_PERIOD = os.environ.get("TIKTOK_CC_PERIOD", "7")  # 7 | 30 | 180 days
+ENRICH_ALIEXPRESS = os.environ.get("ENRICH_ALIEXPRESS", "true").lower() == "true"
+
+
+def winners_markets() -> list[str]:
+    return [m.strip().upper() for m in WINNERS_MARKETS.split(",") if m.strip()]
+
+
+# What each plan unlocks in Daily Winners. Mirrors PLANS in
+# src/app/dashboard/billing/page.tsx.
+WINNERS_PLANS: dict[str, dict[str, int | bool]] = {
+    #            markets  picks/day  history  ad evidence  csv
+    "free":    {"markets": 1,  "winners_per_day": 3,  "history_days": 0,  "ad_evidence": False, "export_csv": False},
+    "starter": {"markets": 1,  "winners_per_day": 10, "history_days": 7,  "ad_evidence": True,  "export_csv": False},
+    "pro":     {"markets": 3,  "winners_per_day": 10, "history_days": 30, "ad_evidence": True,  "export_csv": True},
+    "agency":  {"markets": 99, "winners_per_day": 10, "history_days": 90, "ad_evidence": True,  "export_csv": True},
+}
+
+
+# ── Free trial ──────────────────────────────────────────────────────────────
+# Every new account starts on TRIAL_PLAN for TRIAL_DAYS, no card. When it ends
+# the account is Free unless the user subscribed. See app/trial.py.
+TRIAL_DAYS = int(os.environ.get("TRIAL_DAYS", "7"))
+TRIAL_PLAN = os.environ.get("TRIAL_PLAN", "pro")
+
+# Transactional email (trial reminders) via Resend. Optional: without a key
+# the trial still works, it just isn't announced by email.
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+EMAIL_FROM = os.environ.get("EMAIL_FROM", "ProductSpy Pro <hello@productspy.pro>")

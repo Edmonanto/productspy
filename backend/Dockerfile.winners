@@ -1,0 +1,22 @@
+# Daily Winners worker: Python + headless Chromium.
+#
+# The official Playwright image ships Chromium with every system library it
+# needs; Render's native Python runtime does not, and `playwright install
+# --with-deps` needs root. The tag must match playwright== in
+# requirements-winners.txt.
+FROM mcr.microsoft.com/playwright/python:v1.49.0-noble
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY requirements.txt requirements-winners.txt ./
+RUN pip install --no-cache-dir -r requirements-winners.txt
+
+COPY app ./app
+COPY migrations ./migrations
+
+# Migrations first (idempotent, tracked), then trial housekeeping, then the
+# scan. Trial housekeeping failing must not cost a day of winners, so it is
+# not chained with &&.
+CMD ["sh", "-c", "python -m app.migrate && { python -m app.trial || true; } && python -m app.winners.worker"]
