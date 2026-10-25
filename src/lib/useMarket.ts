@@ -13,7 +13,7 @@ export function useMarket() {
   const pathname = usePathname();
   const meta = useSWR("winner-markets", winnersApi.markets);
 
-  const following = meta.data?.following ?? [];
+  const following = useMemo(() => meta.data?.following ?? [], [meta.data]);
   const fromUrl = params.get("market")?.toUpperCase() ?? null;
 
   const market = useMemo(() => {

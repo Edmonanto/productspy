@@ -1,4 +1,6 @@
 -- Phase 6 — 7-day free trial, no card.
+-- (First shipped as 008_free_trial.sql; renumbered after GitHub's
+-- 007-011. Idempotent, so databases that ran it under the old name are fine.)
 --
 -- A new account's first subscription row is written with status 'trialing'
 -- and plan = TRIAL_PLAN. Provider stays 'none', which is what distinguishes

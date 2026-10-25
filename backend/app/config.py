@@ -47,6 +47,15 @@ CORS_ORIGINS = [
 
 API_PREFIX = "/api/v1"
 
+# Apply pending migrations when the API starts (see main.lifespan).
+MIGRATE_ON_START = os.environ.get("MIGRATE_ON_START", "true").lower() == "true"
+
+# Comma-separated emails of admins: they answer quote requests at
+# /dashboard/quotes (and get an "Admin" badge).
+ADMIN_EMAILS = {
+    e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()
+}
+
 # ── Plans ───────────────────────────────────────────────────────────────────
 # Mirrors the PLANS array in src/app/dashboard/billing/page.tsx.
 # Daily Winners limits are WINNERS_PLANS, further down.

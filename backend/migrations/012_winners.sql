@@ -1,4 +1,6 @@
 -- Phase 5 — Daily Winners.
+-- (First shipped as 007_winners.sql; renumbered after GitHub's
+-- 007-011. Idempotent, so databases that ran it under the old name are fine.)
 -- A second engine beside ingestion: instead of marketplace listings, it reads
 -- *advertising* (Facebook Ad Library, TikTok Creative Center) and TikTok
 -- videos per market, groups the ads into products, scores them, and picks the

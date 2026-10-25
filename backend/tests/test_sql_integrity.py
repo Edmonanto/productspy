@@ -123,16 +123,17 @@ def test_every_expected_table_is_created():
     for name in (
         "products", "suppliers", "ad_signals", "watchlists", "subscriptions",
         "billing_events", "ad_creatives", "winner_scores", "daily_winners",
-        "winner_runs", "user_preferences",
+        "winner_runs", "user_preferences", "quote_requests",
     ):
         assert name in tables, f"{name} is never created by a migration"
 
 
-DROPPED = {"product_matches", "product_snapshots", "ingestion_runs", "search_usage", "product_scores"}
+DROPPED = {"product_matches", "product_snapshots", "ingestion_runs", "search_usage",
+           "product_scores", "api_usage"}
 
 
 def test_queries_never_touch_dropped_tables():
-    """009 drops the marketplace engine's tables; nothing may still use them."""
+    """014 drops the marketplace engine's tables; nothing may still use them."""
     hits = [f"{name}(): {t}" for name, sql, _ in db_queries()
             for t in DROPPED if re.search(rf"\b{t}\b", sql)]
     assert not hits, "\n".join(hits)

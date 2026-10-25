@@ -19,7 +19,7 @@ const STEPS = [
   {
     icon: Gauge,
     title: "Only the best make the list",
-    desc: "Every product is scored 0–100 on five signals. 5–10 products scoring 70+ become that day's winners — each with its reasons, its weak points and the ads behind it.",
+    desc: "Every product is scored 0–100 on five signals. 5–10 products scoring 70+ become that day's winners — each with its reasons, its weak points and the ads behind it. Like one? Work out your profit, then request an exact sourcing quote for your quantity and country.",
   },
 ];
 
@@ -169,7 +169,7 @@ export default function LandingPage() {
       {/* Facts bar */}
       <section className="border-y border-zinc-800/60 py-6 bg-zinc-900/30">
         <div className="max-w-5xl mx-auto px-4 sm:px-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-zinc-500 text-xs sm:text-sm font-medium">
-          {["Facebook Ad Library · TikTok Top Ads · TikTok", "New picks every morning", "9 markets", "The evidence behind every pick"].map((s) => (
+          {["Facebook Ad Library · TikTok Top Ads · TikTok", "New picks every morning", "9 markets", "Exact sourcing quotes on request"].map((s) => (
             <span key={s} className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
               {s}

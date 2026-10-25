@@ -269,3 +269,41 @@ export const winnersApi = {
     URL.revokeObjectURL(url);
   },
 };
+
+// ---- Quote requests (/quotes) ----
+
+export interface Quote {
+  id: string;
+  user_email: string;
+  product_id: string | null;
+  product_title: string;
+  quantity: number;
+  destination_country: string;
+  target_price_usd: number | null;
+  notes: string;
+  status: "open" | "quoted" | "closed";
+  quoted_unit_usd: number | null;
+  quoted_shipping_usd: number | null;
+  reply: string;
+  created_at: string;
+  replied_at: string | null;
+}
+
+export interface QuoteCreate {
+  product_id: string;
+  quantity: number;
+  destination_country: string;
+  target_price_usd?: number | null;
+  notes?: string;
+}
+
+export const quotesApi = {
+  create: (body: QuoteCreate) => api.post<Quote>("/quotes/", body),
+  list: (all = false) => api.get<{ quotes: Quote[]; is_admin: boolean }>(`/quotes/${all ? "?all=true" : ""}`),
+  reply: (id: string, body: {
+    status: "quoted" | "closed";
+    quoted_unit_usd?: number | null;
+    quoted_shipping_usd?: number | null;
+    reply?: string;
+  }) => api.post<Quote>(`/quotes/${id}/reply`, body),
+};

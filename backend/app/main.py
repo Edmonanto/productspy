@@ -7,13 +7,18 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import config, db
-from .routers import billing, users, watchlist, winners
+from . import config, db, migrate
+from .routers import billing, quotes, users, watchlist, winners
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.connect()
+    # Bring the schema up to date before serving. Idempotent and
+    # ledger-tracked, so this is a no-op when current. A failure aborts
+    # startup; Render then keeps the previous version live.
+    if config.MIGRATE_ON_START and db.is_connected():
+        await migrate.apply_all()
     yield
     await db.disconnect()
 
@@ -33,7 +38,7 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type"],
 )
 
-for r in (users.router, winners.router, watchlist.router, billing.router):
+for r in (users.router, winners.router, watchlist.router, billing.router, quotes.router):
     app.include_router(r, prefix=config.API_PREFIX)
 
 

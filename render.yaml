@@ -20,11 +20,8 @@ services:
     plan: free
     # An empty buildCommand skips dependency installation entirely.
     buildCommand: pip install -r requirements.txt
-    # Migrations first: idempotent and tracked in schema_migrations, so this
-    # costs nothing when current, and a deploy never serves a schema the code
-    # doesn't match. (preDeployCommand would be the natural home, but needs a
-    # paid instance.) A failed migration stops the deploy.
-    startCommand: python -m app.migrate && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    # Pending migrations are applied on startup (app/main.py lifespan).
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: PYTHON_VERSION

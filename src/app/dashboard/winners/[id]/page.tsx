@@ -12,6 +12,8 @@ import Topbar from "@/components/layout/Topbar";
 import ScoreRing from "@/components/winners/ScoreRing";
 import PillarBars from "@/components/winners/PillarBars";
 import ProductImage from "@/components/products/ProductImage";
+import ProfitCalculator from "@/components/products/ProfitCalculator";
+import QuoteForm from "@/components/products/QuoteForm";
 import { AdEvidence, winnersApi } from "@/lib/api";
 import { cn, fmtNum, fmtPct, formatPrice, recallMarket, SOURCE_LABEL } from "@/lib/utils";
 
@@ -76,6 +78,7 @@ function EvidenceInner() {
   const params = useSearchParams();
   const market = (params.get("market") ?? recallMarket() ?? "US").toUpperCase();
   const [tab, setTab] = useState("meta");
+  const [quoteQty, setQuoteQty] = useState<number | null>(null);
   const { data, error, isLoading } = useSWR(["evidence", id, market], () => winnersApi.product(id, market));
 
   if (error) {
@@ -216,6 +219,22 @@ function EvidenceInner() {
           )}
         </div>
       </div>
+
+      {/* Profit + sourcing quote */}
+      <ProfitCalculator
+        key={p.id}
+        priceUsd={p.price_usd}
+        costUsd={p.cost_usd}
+        costEstimated={p.cost_estimated}
+        onRequestQuote={setQuoteQty}
+      />
+      <QuoteForm
+        productId={p.id}
+        productTitle={p.title}
+        initialQuantity={quoteQty ?? 100}
+        open={quoteQty != null}
+        onClose={() => setQuoteQty(null)}
+      />
 
       {/* Evidence */}
       <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 space-y-4">

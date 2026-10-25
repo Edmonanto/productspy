@@ -16,6 +16,11 @@ async def product_exists(product_id: str) -> bool:
     return bool(await db.fetchval("select 1 from products where id = $1", product_id))
 
 
+async def product_title(product_id: str) -> str | None:
+    """Title for a product (quote requests copy it at request time)."""
+    return await db.fetchval("select title from products where id = $1", product_id)
+
+
 # ── Watchlist ───────────────────────────────────────────────────────────────
 async def watchlist(user_id: str) -> list[tuple[str, WatchedProduct, Any]]:
     """Saved products with their best recent Daily Winners score (any market)."""
@@ -277,4 +282,83 @@ async def complete_billing_event(
         provider,
         event_id,
         error,
+    )
+
+# ── Quote requests ──────────────────────────────────────────────────────────
+_QUOTE_COLUMNS = (
+    "id, user_id, user_email, product_id, product_title, quantity, "
+    "destination_country, target_price_usd, notes, status, quoted_unit_usd, "
+    "quoted_shipping_usd, reply, created_at, replied_at"
+)
+
+
+async def create_quote(
+    user_id: str,
+    user_email: str,
+    product_id: str,
+    product_title: str,
+    quantity: int,
+    destination_country: str,
+    target_price_usd: float | None,
+    notes: str,
+) -> asyncpg.Record:
+    return await db.fetchrow(
+        """
+        insert into quote_requests (user_id, user_email, product_id, product_title,
+            quantity, destination_country, target_price_usd, notes)
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
+        returning id, user_id, user_email, product_id, product_title, quantity,
+            destination_country, target_price_usd, notes, status, quoted_unit_usd,
+            quoted_shipping_usd, reply, created_at, replied_at
+        """,
+        user_id, user_email, product_id, product_title, quantity,
+        destination_country, target_price_usd, notes,
+    )
+
+
+async def quotes_created_today(user_id: str) -> int:
+    return int(
+        await db.fetchval(
+            "select count(*) from quote_requests where user_id = $1 "
+            "and created_at >= (now() at time zone 'utc')::date",
+            user_id,
+        )
+        or 0
+    )
+
+
+async def list_quotes(user_id: str | None, limit: int = 100) -> list[asyncpg.Record]:
+    """A user's own quotes, or every quote when user_id is None (admins)."""
+    if user_id is None:
+        return await db.fetch(
+            f"select {_QUOTE_COLUMNS} from quote_requests "
+            "order by (status = 'open') desc, created_at desc limit $1",
+            limit,
+        )
+    return await db.fetch(
+        f"select {_QUOTE_COLUMNS} from quote_requests "
+        "where user_id = $1 order by created_at desc limit $2",
+        user_id,
+        limit,
+    )
+
+
+async def reply_quote(
+    quote_id: str,
+    status: str,
+    quoted_unit_usd: float | None,
+    quoted_shipping_usd: float | None,
+    reply: str,
+) -> asyncpg.Record | None:
+    return await db.fetchrow(
+        """
+        update quote_requests set
+            status = $2, quoted_unit_usd = $3, quoted_shipping_usd = $4,
+            reply = $5, replied_at = now()
+        where id = $1
+        returning id, user_id, user_email, product_id, product_title, quantity,
+            destination_country, target_price_usd, notes, status, quoted_unit_usd,
+            quoted_shipping_usd, reply, created_at, replied_at
+        """,
+        quote_id, status, quoted_unit_usd, quoted_shipping_usd, reply,
     )

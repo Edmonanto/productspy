@@ -105,12 +105,12 @@ A migration whose content changed after being applied is re-applied with a
 warning rather than skipped: a checksum drift means the database and this
 checkout disagree, and that should be visible.
 
-It exits non-zero on failure. Both the API (`startCommand`) and the Daily
-Winners cron chain it with `&&`, so a broken migration stops the deploy or run
-instead of letting code run against a stale schema. Render's
-`preDeployCommand` would be the natural home, but it needs a paid instance.
+The API applies pending migrations on startup (`MIGRATE_ON_START=true`, the
+default): a failure aborts startup and Render keeps the previous version live.
+The Daily Winners cron also runs `python -m app.migrate` first and chains it
+with `&&`, so a broken migration stops the run.
 
-`009_winners_only.sql` permanently deletes the old marketplace catalogue
+`014_winners_only.sql` permanently deletes the old marketplace catalogue
 (every product not from Daily Winners) and the tables only it used. Take a
 Supabase backup first if you might want it back.
 
@@ -211,8 +211,8 @@ Every new account gets **7 days of Pro, no card** (`TRIAL_DAYS`, `TRIAL_PLAN`).
   through Resend (`RESEND_API_KEY`, `EMAIL_FROM`); without a key the trial
   still works, silently.
 
-Run `migrations/007_winners.sql` and `008_free_trial.sql` (or just
-`python -m app.migrate`) before deploying.
+The API applies pending migrations on startup (`MIGRATE_ON_START`), so a
+deploy brings `012_winners.sql` / `013_free_trial.sql` in by itself.
 
 ## Billing
 

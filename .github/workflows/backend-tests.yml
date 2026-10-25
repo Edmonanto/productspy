@@ -1,0 +1,33 @@
+name: backend tests
+
+on:
+  push:
+    paths: ["backend/**", ".github/workflows/backend-tests.yml"]
+  pull_request:
+    paths: ["backend/**", ".github/workflows/backend-tests.yml"]
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      # No Postgres and no real API calls: the DB layer is stubbed and HTTP is
+      # mocked, so this needs no secrets.
+      # On failure, the tail of the output is also posted as an annotation so
+      # it shows on the PR and the run summary without opening the raw log.
+      - run: |
+          set -o pipefail
+          if ! pytest tests/ -q -rfE --tb=short 2>&1 | tee pytest.log; then
+            msg=$(tail -n 80 pytest.log | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+            echo "::error title=pytest failed::${msg}"
+            exit 1
+          fi
