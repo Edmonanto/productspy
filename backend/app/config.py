@@ -140,6 +140,12 @@ WINNERS_MARKETS = os.environ.get("WINNERS_MARKETS", "US,UK,EU,AU,AE,CA")
 # Claude names each ad's product, dedupes, and flags IP/restricted risk.
 # Without a key a URL/title heuristic stands in (fewer products recognised).
 WINNERS_MODEL = os.environ.get("WINNERS_MODEL", "") or ANTHROPIC_MODEL
+# Alternative to Claude for product naming: any OpenAI-compatible API.
+# Used only when no Anthropic key is set. OPENAI_BASE_URL also lets you point
+# at a compatible provider/reseller.
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
 
 # Sources. All free by default; Apify replaces the scrapers when enabled.
 COLLECT_META = os.environ.get("COLLECT_META", "true").lower() == "true"

@@ -286,3 +286,37 @@ async def test_heuristic_miss_is_retried_not_discarded(monkeypatch):
     stats: dict = {}
     await pipeline.extract_step("US", stats)
     assert marked == [] and stats["unidentified_ads"] == 1 and stats["linked_ads"] == 0
+
+
+async def test_openai_used_when_no_anthropic_key(monkeypatch):
+    from app import config
+    from app.winners import llm
+
+    monkeypatch.setattr(config, "ANTHROPIC_API_KEY", "")
+    monkeypatch.setattr(config, "OPENAI_API_KEY", "sk-test")
+    assert llm.provider() == "openai" and llm.llm_available()
+
+    seen = {}
+
+    class Resp:
+        status_code = 200
+        text = ""
+        def json(self):
+            return {"choices": [{"message": {"content": '```json\n[{"i": 0, "product": "Posture corrector"}]\n```'}}]}
+
+    class Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, headers=None, json=None):
+            seen.update(url=url, auth=headers["Authorization"], model=json["model"])
+            return Resp()
+
+    import httpx
+    monkeypatch.setattr(httpx, "AsyncClient", Client)
+    out = await llm.llm_json("sys", "prompt")
+    assert out == [{"i": 0, "product": "Posture corrector"}]
+    assert seen["url"].endswith("/chat/completions") and seen["auth"] == "Bearer sk-test"
+
+    monkeypatch.setattr(config, "OPENAI_API_KEY", "")
+    assert llm.provider() is None

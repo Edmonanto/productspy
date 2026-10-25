@@ -1,4 +1,6 @@
-"""Claude call returning parsed JSON, using the official anthropic SDK.
+"""LLM call returning parsed JSON: Claude (anthropic SDK) when
+ANTHROPIC_API_KEY is set, otherwise any OpenAI-compatible API when
+OPENAI_API_KEY is set.
 
 Used by extract.py to name the product behind each ad. Returns None when no
 key is configured or the call fails — the caller then falls back to the
@@ -16,8 +18,16 @@ from app import config
 log = logging.getLogger(__name__)
 
 
+def provider() -> str | None:
+    if config.ANTHROPIC_API_KEY:
+        return "anthropic"
+    if config.OPENAI_API_KEY:
+        return "openai"
+    return None
+
+
 def llm_available() -> bool:
-    return bool(config.ANTHROPIC_API_KEY)
+    return provider() is not None
 
 
 def extract_json(text: str) -> Any:
@@ -36,9 +46,44 @@ def extract_json(text: str) -> Any:
     return json.loads(text)
 
 
-async def llm_json(system: str, prompt: str, max_tokens: int = 8000) -> Any | None:
-    if not config.ANTHROPIC_API_KEY:
+async def _openai_text(system: str, prompt: str, max_tokens: int) -> str | None:
+    import httpx
+
+    try:
+        async with httpx.AsyncClient(timeout=180) as client:
+            resp = await client.post(
+                f"{config.OPENAI_BASE_URL}/chat/completions",
+                headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+                json={
+                    "model": config.OPENAI_MODEL,
+                    "max_tokens": max_tokens,
+                    "temperature": 0,
+                    "messages": [{"role": "system", "content": system},
+                                 {"role": "user", "content": prompt}],
+                },
+            )
+        if resp.status_code >= 300:
+            log.warning("winners extraction (openai) -> %s %s", resp.status_code, resp.text[:300])
+            return None
+        return resp.json()["choices"][0]["message"]["content"] or ""
+    except Exception as exc:
+        log.warning("winners extraction (openai) failed, using heuristics: %s", exc)
         return None
+
+
+async def llm_json(system: str, prompt: str, max_tokens: int = 8000) -> Any | None:
+    which = provider()
+    if which is None:
+        return None
+    if which == "openai":
+        text = await _openai_text(system, prompt, min(max_tokens, 16000))
+        if text is None:
+            return None
+        try:
+            return extract_json(text)
+        except ValueError:
+            log.warning("winners extraction returned non-JSON: %s", text[:200])
+            return None
     try:
         from anthropic import AsyncAnthropic
     except ImportError:
