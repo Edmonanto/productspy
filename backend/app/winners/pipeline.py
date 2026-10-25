@@ -15,7 +15,7 @@ from datetime import date, datetime, timezone
 from . import store
 from .collectors import Collector, active_collectors
 from .enrich import fetch_selling_price, fetch_supplier_cost
-from .extract import cluster_keys, guess_products
+from .extract import cluster_keys, guess_products_detailed
 from .markets import get_market
 from .scoring import aggregate, pick_winners, score
 
@@ -51,17 +51,22 @@ async def extract_step(market_code: str, stats: dict) -> None:
         stats["linked_ads"] = 0
         return
     ads = [store.row_to_ad(r) for r in rows]
-    guesses = cluster_keys(await guess_products(ads), await store.existing_keys())
-    touched, not_products = set(), []
-    for row, ad, guess in zip(rows, ads, guesses):
+    detailed = await guess_products_detailed(ads)
+    guesses = cluster_keys([g for g, _ in detailed], await store.existing_keys())
+    touched, not_products, unknown = set(), [], 0
+    for row, ad, guess, (_, by_ai) in zip(rows, ads, guesses, detailed):
         if guess is None:
-            not_products.append(str(row["id"]))
+            if by_ai:            # the AI said it isn't a product: never look again
+                not_products.append(str(row["id"]))
+            else:                # heuristics couldn't tell: retry next run
+                unknown += 1
             continue
         product_id = await store.upsert_product(guess, ad)
         await store.link_ad(str(row["id"]), product_id)
         touched.add(product_id)
     await store.mark_not_product(not_products)
-    stats["linked_ads"] = len(rows) - len(not_products)
+    stats["linked_ads"] = len(rows) - len(not_products) - unknown
+    stats["unidentified_ads"] = unknown
     stats["products_touched"] = len(touched)
 
 

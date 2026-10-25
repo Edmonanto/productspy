@@ -263,3 +263,26 @@ async def test_empty_collection_is_reported_not_ok(monkeypatch):
     res = await pipeline.run_market("US", collectors=[Empty()])
     assert res["status"] == "partial" and saved["status"] == "partial"
     assert "No ads collected" in saved["errors"][0]["error"]
+
+
+async def test_heuristic_miss_is_retried_not_discarded(monkeypatch):
+    """Without the AI, a TikTok video the heuristics can't name must stay
+    unlinked (retried later), not be marked 'not a product' forever."""
+    from app.winners import extract, pipeline, store
+
+    marked: list = []
+    rows = [{"id": "11111111-1111-1111-1111-111111111111"}]
+    video = AdRecord(platform="tiktok_organic", external_id="v1", market="US", ad_text="wait for it 😱")
+
+    monkeypatch.setattr(extract, "llm_available", lambda: False)
+    async def unlinked(_m, limit=600): return rows
+    async def keys(): return []
+    async def mark(ids): marked.extend(ids)
+    monkeypatch.setattr(store, "unlinked_ads", unlinked)
+    monkeypatch.setattr(store, "row_to_ad", lambda _r: video)
+    monkeypatch.setattr(store, "existing_keys", keys)
+    monkeypatch.setattr(store, "mark_not_product", mark)
+
+    stats: dict = {}
+    await pipeline.extract_step("US", stats)
+    assert marked == [] and stats["unidentified_ads"] == 1 and stats["linked_ads"] == 0

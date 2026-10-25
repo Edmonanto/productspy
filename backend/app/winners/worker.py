@@ -3,6 +3,10 @@
     python -m app.winners.worker                 # every market in WINNERS_MARKETS
     python -m app.winners.worker --market US     # one market
     python -m app.winners.worker --collectors    # which sources are active
+    python -m app.winners.worker --market US --recheck
+                                                 # re-examine recent ads that were set
+                                                 # aside as "not a product" (e.g. after
+                                                 # adding ANTHROPIC_API_KEY)
 
 Exits non-zero when no market produced picks, so a silent no-op shows up red
 in Render's cron history (same rule as app.ingest.worker).
@@ -22,10 +26,17 @@ from .pipeline import run_market
 log = logging.getLogger("winners")
 
 
-async def run(markets: list[str]) -> list[dict]:
+async def run(markets: list[str], recheck: bool = False) -> list[dict]:
     await db.connect()
     results = []
     try:
+        if recheck:
+            n = await db.fetchval(
+                "with r as (update ad_creatives set not_product = false "
+                " where market = any($1::text[]) and not_product and product_id is null "
+                "   and last_seen_at > now() - interval '3 days' returning 1) "
+                "select count(*) from r", markets)
+            log.info("recheck: %s set-aside ads will be looked at again", n)
         for m in markets:
             res = await run_market(m)
             log.info("%s -> %s %s", m, res["status"], json.dumps(res["stats"]))
@@ -42,6 +53,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--market", default="", help="market code; default: WINNERS_MARKETS")
     ap.add_argument("--collectors", action="store_true", help="list active sources and exit")
+    ap.add_argument("--recheck", action="store_true",
+                    help="re-examine recent ads previously set aside as not a product")
     args = ap.parse_args()
 
     if args.collectors:
@@ -55,7 +68,7 @@ def main() -> int:
         log.error("unknown market(s) %s; choose from %s", unknown, ", ".join(MARKETS))
         return 2
 
-    results = asyncio.run(run(markets))
+    results = asyncio.run(run(markets, recheck=args.recheck))
     produced = sum(r["stats"].get("winners", 0) + r["stats"].get("rising", 0) for r in results)
     return 0 if produced else 1
 

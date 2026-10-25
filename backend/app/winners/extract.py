@@ -180,18 +180,28 @@ async def ai_guesses(ads: list[AdRecord], batch: int = 40) -> dict[int, Optional
     return out
 
 
-async def guess_products(ads: list[AdRecord]) -> list[Optional[ProductGuess]]:
-    """One guess (or None) per ad, same order."""
+async def guess_products_detailed(ads: list[AdRecord]) -> list[tuple[Optional[ProductGuess], bool]]:
+    """(guess or None, decided_by_ai) per ad, same order.
+
+    Only the AI can say "this is not a product". A heuristic miss just means
+    "can't tell yet" — the ad stays unlinked and is looked at again on the next
+    run (e.g. once ANTHROPIC_API_KEY is set), instead of being thrown away.
+    """
     ai: dict[int, Optional[ProductGuess]] = {}
     if llm_available():
         ai = await ai_guesses(ads)
-    guesses: list[Optional[ProductGuess]] = []
+    out: list[tuple[Optional[ProductGuess], bool]] = []
     for i, ad in enumerate(ads):
         if i in ai:              # AI answered (possibly "not a product")
-            guesses.append(ai[i])
+            out.append((ai[i], True))
         else:
-            guesses.append(heuristic_guess(ad))
-    return guesses
+            out.append((heuristic_guess(ad), False))
+    return out
+
+
+async def guess_products(ads: list[AdRecord]) -> list[Optional[ProductGuess]]:
+    """One guess (or None) per ad, same order."""
+    return [g for g, _ in await guess_products_detailed(ads)]
 
 
 def cluster_keys(guesses: list[Optional[ProductGuess]], existing: list[str]) -> list[Optional[ProductGuess]]:
