@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Zap, ArrowRight, Check, Trophy, Radar, Brain, Gauge, CheckCircle2, AlertTriangle, Globe2,
 } from "lucide-react";
+import { ReviewsSection, TrustedBySection } from "@/components/landing/SocialProof";
 
 // What the product does, in the order it does it. Each claim here maps to
 // code: backend/app/winners/ (collectors, extract, scoring, worker).
@@ -88,6 +89,7 @@ export default function LandingPage() {
           </div>
           <div className="hidden sm:flex items-center gap-6">
             <a href="#how" className="text-zinc-400 hover:text-white text-sm transition-colors">How it works</a>
+            <a href="#reviews" className="text-zinc-400 hover:text-white text-sm transition-colors">Reviews</a>
             <a href="#pricing" className="text-zinc-400 hover:text-white text-sm transition-colors">Pricing</a>
             <Link href="/login" className="text-zinc-400 hover:text-white text-sm transition-colors">Sign in</Link>
             <Link href="/signup" className="bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors shadow-lg shadow-violet-900/30">
@@ -178,6 +180,9 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Trusted by (real customers, or the data sources until there are some) */}
+      <TrustedBySection />
+
       {/* How it works */}
       <section id="how" className="max-w-5xl mx-auto px-4 sm:px-8 py-16 sm:py-20">
         <div className="text-center mb-10 sm:mb-12">
@@ -234,6 +239,9 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+
+      {/* Reviews (real ones only — see src/content/social-proof.ts) */}
+      <ReviewsSection />
 
       {/* Pricing */}
       <section id="pricing" className="max-w-5xl mx-auto px-4 sm:px-8 pb-16 sm:pb-20">
