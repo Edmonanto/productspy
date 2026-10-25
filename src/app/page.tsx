@@ -3,6 +3,7 @@ import {
   Zap, ArrowRight, Check, Trophy, Radar, Brain, Gauge, CheckCircle2, AlertTriangle, Globe2,
 } from "lucide-react";
 import { ReviewsSection, TrustedBySection } from "@/components/landing/SocialProof";
+import { SiteFooter } from "@/components/legal/LegalPage";
 
 // What the product does, in the order it does it. Each claim here maps to
 // code: backend/app/winners/ (collectors, extract, scoring, worker).
@@ -277,7 +278,7 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/signup" className={`block text-center font-semibold py-2.5 rounded-xl text-sm transition-colors ${
+              <Link href={plan.name === "Agency" ? "/contact" : "/signup"} className={`block text-center font-semibold py-2.5 rounded-xl text-sm transition-colors ${
                 plan.highlight
                   ? "bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-900/30"
                   : "bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-zinc-700"
@@ -304,22 +305,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-800 px-4 sm:px-8 py-8">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-zinc-600 text-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
-              <Zap size={12} className="text-white" />
-            </div>
-            <span className="text-zinc-500 font-medium">ProductSpy Pro</span>
-            <span>© 2026</span>
-          </div>
-          <div className="flex gap-6">
-            <a href="#" className="hover:text-zinc-400 transition-colors">Privacy</a>
-            <a href="#" className="hover:text-zinc-400 transition-colors">Terms</a>
-            <a href="#" className="hover:text-zinc-400 transition-colors">Contact</a>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

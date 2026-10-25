@@ -103,8 +103,8 @@ export default function QuotesPage() {
         {!isLoading && quotes.length === 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-8 text-center space-y-2">
             <p className="text-zinc-300 text-sm">No quote requests yet.</p>
-            <Link href="/dashboard/trending" className="text-violet-400 hover:text-violet-300 text-sm">
-              Browse products →
+            <Link href="/dashboard/winners" className="text-violet-400 hover:text-violet-300 text-sm">
+              Browse Daily Winners →
             </Link>
           </div>
         )}

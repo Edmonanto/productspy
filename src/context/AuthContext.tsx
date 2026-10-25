@@ -3,7 +3,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { User, Session } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 interface AuthContextType {
   user: User | null;
@@ -22,7 +21,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
@@ -45,7 +43,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithEmail = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (!error) router.push("/dashboard");
+    if (!error) {
+      // Full load so the middleware sees the new session cookie.
+      const next = new URLSearchParams(window.location.search).get("redirectTo");
+      window.location.assign(next && next.startsWith("/dashboard") ? next : "/dashboard");
+    }
     return { error: error?.message ?? null };
   };
 
@@ -69,8 +71,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
+    // Revoke the session on Supabase, but never let a slow or blocked network
+    // keep the user signed in: give it 3 s, then clear the local session
+    // (no network call) and do a full page load so the middleware, SWR cache
+    // and every component start from a clean, signed-out state.
+    try {
+      await Promise.race([
+        supabase.auth.signOut({ scope: "global" }),
+        new Promise((resolve) => setTimeout(resolve, 3000)),
+      ]);
+    } catch {
+      /* ignore — the local sign-out below is what matters */
+    }
+    try {
+      await supabase.auth.signOut({ scope: "local" });
+    } catch {
+      /* ignore */
+    }
+    setSession(null);
+    setUser(null);
+    window.location.assign("/login");
   };
 
   const resetPassword = async (email: string) => {
