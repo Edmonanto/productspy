@@ -46,13 +46,31 @@ def _locked(error: str, message: str) -> HTTPException:
     )
 
 
+def _live() -> list[str]:
+    """Markets that are scanned and offered (WINNERS_MARKETS), in that order."""
+    live = [c for c in config.winners_markets() if c in MARKETS]
+    return live or [DEFAULT_MARKET]
+
+
+def _check_live(code: str) -> None:
+    if code not in MARKETS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Unknown market '{code}'")
+    if code not in _live():
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            detail=f"{MARKETS[code].name} isn't available yet")
+
+
+async def _followed(user_id: str) -> list[str]:
+    live = _live()
+    return [c for c in await store.followed_markets(user_id) if c in live]
+
+
 async def _resolve_market(user: CurrentUser, market: str | None) -> tuple[str, dict[str, Any]]:
     """Validate the market and enforce how many markets the plan includes."""
     _, ent = await _entitlements(user)
-    followed = await store.followed_markets(user.id)
-    code = (market or (followed[0] if followed else DEFAULT_MARKET)).upper()
-    if code not in MARKETS:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Unknown market '{code}'")
+    followed = await _followed(user.id)
+    code = (market or (followed[0] if followed else _live()[0])).upper()
+    _check_live(code)
     allowed = followed[: ent["markets"]]
     if code in allowed:
         return code, ent
@@ -119,10 +137,10 @@ def _today() -> date:
 @router.get("/markets")
 async def list_markets(user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
     _, ent = await _entitlements(user)
-    followed = (await store.followed_markets(user.id))[: ent["markets"]]
+    followed = (await _followed(user.id))[: ent["markets"]]
     return {
-        "markets": [market_public(m) for m in MARKETS.values()],
-        "following": followed or [DEFAULT_MARKET],
+        "markets": [market_public(MARKETS[c]) for c in _live()],
+        "following": followed or [_live()[0]],
         "entitlements": ent,
         "plans": {k: {"plan": k, **v} for k, v in config.WINNERS_PLANS.items()},
     }
@@ -138,8 +156,7 @@ async def save_preferences(body: PreferencesIn, user: CurrentUser = Depends(curr
     codes: list[str] = []
     for c in body.markets:
         c = c.upper()
-        if c not in MARKETS:
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, detail=f"Unknown market '{c}'")
+        _check_live(c)
         if c not in codes:
             codes.append(c)
     if not codes:

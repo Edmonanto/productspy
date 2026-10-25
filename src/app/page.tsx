@@ -34,10 +34,9 @@ const SCORE_PARTS = [
   { label: "Freshness", pts: 10, desc: "New, accelerating, and with a wow effect or a real problem solved." },
 ];
 
-const MARKETS = [
-  "🇺🇸 United States", "🇬🇧 United Kingdom", "🇪🇺 Europe", "🇫🇷 France", "🇩🇪 Germany",
-  "🇨🇦 Canada", "🇦🇺 Australia", "🇦🇪 UAE / Dubai", "🇸🇦 Saudi Arabia",
-];
+// Live markets — keep in sync with WINNERS_MARKETS on the backend.
+const MARKETS = ["🇺🇸 United States", "🇬🇧 United Kingdom", "🇫🇷 France"];
+const COMING_SOON = ["🇩🇪 Germany", "🇪🇺 Europe", "🇨🇦 Canada", "🇦🇺 Australia", "🇦🇪 UAE / Dubai", "🇸🇦 Saudi Arabia"];
 
 const PLANS = [
   {
@@ -60,7 +59,7 @@ const PLANS = [
     name: "Pro",
     price: "$79",
     desc: "For serious dropshippers",
-    features: ["All 5–10 Daily Winners", "3 markets", "Ad & video evidence + suppliers", "30-day archive + CSV export", "Priority support"],
+    features: ["All 5–10 Daily Winners", "All 3 markets", "Ad & video evidence + suppliers", "30-day archive + CSV export", "Priority support"],
     cta: "Start 7-day free trial",
     highlight: true,
   },
@@ -68,7 +67,7 @@ const PLANS = [
     name: "Agency",
     price: "$199",
     desc: "For teams & agencies",
-    features: ["Everything in Pro", "Every market", "90-day archive", "Dedicated support"],
+    features: ["Everything in Pro", "Every market, incl. new ones", "90-day archive", "Dedicated support"],
     cta: "Contact us",
     highlight: false,
   },
@@ -172,7 +171,7 @@ export default function LandingPage() {
       {/* Facts bar */}
       <section className="border-y border-zinc-800/60 py-6 bg-zinc-900/30">
         <div className="max-w-5xl mx-auto px-4 sm:px-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-zinc-500 text-xs sm:text-sm font-medium">
-          {["Facebook Ad Library · TikTok", "New picks every morning", "9 markets", "Exact sourcing quotes on request"].map((s) => (
+          {["Facebook Ad Library · TikTok", "New picks every morning", "US · UK · France", "Exact sourcing quotes on request"].map((s) => (
             <span key={s} className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
               {s}
@@ -233,12 +232,15 @@ export default function LandingPage() {
       {/* Markets */}
       <section className="max-w-5xl mx-auto px-4 sm:px-8 py-16 sm:py-20 text-center">
         <h2 className="text-2xl sm:text-3xl font-bold mb-3 flex items-center justify-center gap-2"><Globe2 size={24} className="text-violet-400" /> Picked for your market</h2>
-        <p className="text-zinc-500 text-sm mb-8">What wins in Dubai isn&apos;t what wins in Texas. Each market gets its own scan and its own list.</p>
+        <p className="text-zinc-500 text-sm mb-8">What wins in Paris isn&apos;t what wins in Texas. Each market gets its own scan and its own list.</p>
         <div className="flex flex-wrap justify-center gap-2">
           {MARKETS.map((m) => (
             <span key={m} className="bg-zinc-900 border border-zinc-800 rounded-lg px-3 py-2 text-sm text-zinc-300">{m}</span>
           ))}
         </div>
+        <p className="text-zinc-600 text-xs mt-6">
+          Coming next: {COMING_SOON.join(" · ")}
+        </p>
       </section>
 
       {/* Reviews (real ones only — see src/content/social-proof.ts) */}

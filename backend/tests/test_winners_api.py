@@ -100,19 +100,21 @@ def test_pro_sees_all_ten(make_client):
 def test_first_market_is_followed_automatically_then_locked(make_client):
     factory, state = make_client
     with factory("free") as c:
-        assert c.get("/api/v1/winners?market=AE").status_code == 200
-        assert state["followed"] == ["AE"]
+        assert c.get("/api/v1/winners?market=FR").status_code == 200
+        assert state["followed"] == ["FR"]
         r = c.get("/api/v1/winners?market=US")
     assert r.status_code == 403
     assert r.json()["detail"]["error"] == "market_locked"
 
 
-def test_preferences_respect_plan_limit(make_client):
+def test_preferences_respect_plan_limit(make_client, monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "WINNERS_MARKETS", "US,UK,FR,AU")
     factory, state = make_client
     with factory("pro") as c:
-        assert c.post("/api/v1/winners/preferences", json={"markets": ["us", "ae", "UK"]}).status_code == 200
-        assert state["followed"] == ["US", "AE", "UK"]
-        r = c.post("/api/v1/winners/preferences", json={"markets": ["US", "AE", "UK", "AU"]})
+        assert c.post("/api/v1/winners/preferences", json={"markets": ["us", "fr", "UK"]}).status_code == 200
+        assert state["followed"] == ["US", "FR", "UK"]
+        r = c.post("/api/v1/winners/preferences", json={"markets": ["US", "FR", "UK", "AU"]})
         assert r.status_code == 403
         assert c.post("/api/v1/winners/preferences", json={"markets": ["XX"]}).status_code == 400
 
@@ -183,8 +185,18 @@ def test_evidence_hidden_on_free(make_client, monkeypatch):
 
 def test_markets_endpoint(make_client):
     factory, _ = make_client
-    with factory("pro", followed=["AE"]) as c:
+    with factory("pro", followed=["AE", "FR"]) as c:
         body = c.get("/api/v1/winners/markets").json()
-    assert {m["code"] for m in body["markets"]} >= {"US", "UK", "EU", "AU", "AE"}
-    assert body["following"] == ["AE"]
+    # only launched markets (WINNERS_MARKETS) are offered; a followed market
+    # that isn't launched is ignored
+    assert [m["code"] for m in body["markets"]] == ["US", "UK", "FR"]
+    assert body["following"] == ["FR"]
     assert body["entitlements"]["markets"] == 3
+
+
+def test_unlaunched_market_is_refused(make_client):
+    factory, state = make_client
+    with factory("pro") as c:
+        r = c.get("/api/v1/winners?market=AE")
+        assert r.status_code == 400 and "isn't available yet" in r.json()["detail"]
+        assert c.post("/api/v1/winners/preferences", json={"markets": ["AE"]}).status_code == 400

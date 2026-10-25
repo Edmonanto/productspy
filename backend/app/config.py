@@ -135,7 +135,8 @@ PAID_PLANS = ("starter", "pro", "agency")
 # See backend/README.md#daily-winners.
 
 # Markets the daily worker scans (codes from app/winners/markets.py).
-WINNERS_MARKETS = os.environ.get("WINNERS_MARKETS", "US,UK,EU,AU,AE,CA")
+# Markets that are scanned daily AND offered to users (launch: US, UK, France).
+WINNERS_MARKETS = os.environ.get("WINNERS_MARKETS", "US,UK,FR")
 
 # Claude names each ad's product, dedupes, and flags IP/restricted risk.
 # Without a key a URL/title heuristic stands in (fewer products recognised).
