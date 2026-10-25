@@ -120,6 +120,8 @@ async def score_step(market_code: str, day: date, stats: dict) -> None:
     stats["scored"] = len(scored)
     stats["winners"] = sum(1 for *_, tier in chosen if tier == "winner")
     stats["rising"] = sum(1 for *_, tier in chosen if tier == "rising")
+    stats["watch"] = sum(1 for *_, tier in chosen if tier == "watch")
+    stats["top_score"] = max((r.total for _, r in scored if not r.excluded), default=0)
 
 
 async def run_market(market_code: str, day: date | None = None,

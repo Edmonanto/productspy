@@ -91,6 +91,12 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
                 Rising
               </span>
             )}
+            {pick.tier === "watch" && (
+              <span title="Below 60 — early signal, not enough evidence yet"
+                    className="text-[10px] font-semibold uppercase tracking-wide bg-sky-500/10 text-sky-300 border border-sky-500/30 rounded px-1.5 py-0.5">
+                Watch
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 text-xs text-zinc-500 flex-wrap">

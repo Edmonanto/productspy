@@ -146,7 +146,7 @@ export interface Penalty { points: number; reason: string }
 
 export interface WinnerPick {
   rank: number;
-  tier: "winner" | "rising";
+  tier: "winner" | "rising" | "watch";
   total: number;
   /** Beyond the plan's daily allowance: rank and score only. */
   locked: boolean;

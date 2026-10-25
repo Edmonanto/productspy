@@ -207,6 +207,10 @@ def test_pick_winners_threshold_and_filler():
     picks = pick_winners(scored)
     assert [p[0] for p in picks] == ["a", "b", "d", "e", "f"]
     assert [p[2] for p in picks] == ["winner", "winner", "rising", "rising", "rising"]
+    # A thin day: nothing reaches 60, so the best of the rest show as "watch".
+    thin = [("x", mk(45)), ("y", mk(31)), ("z", mk(12)), ("r", mk(65))]
+    picks = pick_winners(thin)
+    assert [(p[0], p[2]) for p in picks] == [("r", "rising"), ("x", "watch"), ("y", "watch")]
     many = [(str(i), mk(70 + i)) for i in range(15)]
     assert len(pick_winners(many)) == 10
 

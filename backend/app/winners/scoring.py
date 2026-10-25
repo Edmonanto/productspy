@@ -17,7 +17,10 @@ are available and scaled up, but capped at 60 % when less than 40 % of the
 pillar's signals are known — so a product needs real evidence to rank.
 
 Thresholds: >= 70 -> "winner". If fewer than MIN_PICKS qualify, the best
-60-69 products fill up to MIN_PICKS as "rising".
+60-69 products fill up to MIN_PICKS as "rising", and if there still aren't
+enough, the best of the rest (score >= WATCH_FLOOR) fill in as "watch" —
+early signals with thin evidence, shown with their real score so a quiet day
+or a free-data scan still gives the user something to look at.
 """
 from __future__ import annotations
 
@@ -31,6 +34,7 @@ from .collectors.base import AdRecord
 PILLARS = {"scaling": 30, "engagement": 25, "demand": 20, "margin": 15, "freshness": 10}
 WINNER_THRESHOLD = 70
 RISING_THRESHOLD = 60
+WATCH_FLOOR = 20
 MAX_PICKS = 10
 MIN_PICKS = 5
 REPICK_COOLDOWN_DAYS = 30
@@ -325,4 +329,8 @@ def pick_winners(scored: list[tuple[str, ScoreResult]], max_picks: int = MAX_PIC
         fillers = [(pid, r, "rising") for pid, r in eligible
                    if RISING_THRESHOLD <= r.total < WINNER_THRESHOLD]
         winners += fillers[: min_picks - len(winners)]
+    if len(winners) < min_picks:
+        watch = [(pid, r, "watch") for pid, r in eligible
+                 if WATCH_FLOOR <= r.total < RISING_THRESHOLD]
+        winners += watch[: min_picks - len(winners)]
     return winners

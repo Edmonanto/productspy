@@ -32,6 +32,7 @@ function WinnersInner() {
   const winners = data?.winners ?? [];
   const nWinners = winners.filter((w) => w.tier === "winner").length;
   const nRising = winners.filter((w) => w.tier === "rising").length;
+  const nWatch = winners.filter((w) => w.tier === "watch").length;
   const marketInfo = meta.data?.markets.find((m) => m.code === market);
 
   const pickDate = (d: string) => {
@@ -64,7 +65,7 @@ function WinnersInner() {
             </h2>
             <p className="text-zinc-500 text-sm">
               {data?.date
-                ? `${nWinners} winner${nWinners === 1 ? "" : "s"}${nRising ? ` + ${nRising} rising` : ""} picked on ${new Date(data.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`
+                ? `${nWinners} winner${nWinners === 1 ? "" : "s"}${nRising ? ` + ${nRising} rising` : ""}${nWatch ? ` + ${nWatch} to watch` : ""} picked on ${new Date(data.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`
                 : "Only products scoring 70+ make the list. Updated every day."}
             </p>
           </div>
@@ -150,6 +151,12 @@ function WinnersInner() {
           </div>
         ) : (
           <div className="space-y-3">
+            {nWatch > 0 && nWinners + nRising === 0 && (
+              <div className="text-xs text-sky-200 bg-sky-500/10 border border-sky-500/20 rounded-lg px-3 py-2">
+                No product reached 60 in this scan, so these are the strongest early signals — worth watching,
+                not yet proven. Scores rise as the same product shows up across more stores and platforms.
+              </div>
+            )}
             {winners.map((w) =>
               w.locked ? <LockedWinnerCard key={w.rank} pick={w} /> : <WinnerCard key={w.rank} pick={w} market={market} />
             )}

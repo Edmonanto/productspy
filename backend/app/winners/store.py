@@ -246,7 +246,7 @@ async def market_products_with_ads(market: str, window_days: int = 60) -> dict[s
 async def last_picks(market: str, before: date) -> dict[str, date]:
     rows = await db.fetch(
         "select product_id, max(pick_date) as last from daily_winners "
-        "where market = $1 and pick_date < $2 group by product_id",
+        "where market = $1 and pick_date < $2 and tier <> 'watch' group by product_id",
         market, before,
     )
     return {str(r["product_id"]): r["last"] for r in rows}
