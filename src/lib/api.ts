@@ -233,6 +233,8 @@ export interface WinnerRun {
   finished_at: string | null;
   status: "running" | "ok" | "partial" | "failed";
   stats: Record<string, number>;
+  /** First error of the run (e.g. no ads collected), or null. */
+  problem: string | null;
 }
 
 export const winnersApi = {

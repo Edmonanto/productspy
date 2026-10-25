@@ -186,9 +186,15 @@ async def winner_dates(market: str | None = None, user: CurrentUser = Depends(cu
 @router.get("/status")
 async def run_status(user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
     rows = await store.latest_runs()
+    def problem(errors: Any) -> str | None:
+        errs = _json(errors) or []
+        return errs[0].get("error") if errs and isinstance(errs[0], dict) else None
+
     return {"runs": [{
         "market": r["market"], "started_at": r["started_at"], "finished_at": r["finished_at"],
         "status": r["status"], "stats": _json(r["stats"]) or {},
+        # First error of the run, so the dashboard can say why a market is empty.
+        "problem": problem(r["errors"]),
     } for r in rows]}
 
 

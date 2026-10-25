@@ -131,8 +131,19 @@ async def run_market(market_code: str, day: date | None = None,
     run_id = await store.start_run(market_code)
     status = "ok"
     try:
-        await collect_step(market_code, collectors if collectors is not None else active_collectors(),
-                           stats, errors)
+        chosen_collectors = collectors if collectors is not None else active_collectors()
+        await collect_step(market_code, chosen_collectors, stats, errors)
+        collected = sum(v for k, v in stats.items() if k.startswith("collected_"))
+        if chosen_collectors and collected == 0:
+            # Every source came back empty without raising — almost always the
+            # sites being unreachable (no VPN from mainland China, a blocked
+            # IP) rather than a genuinely quiet day. Say so instead of "ok".
+            errors.append({
+                "step": "collect",
+                "error": "No ads collected from any source. Facebook/TikTok were probably "
+                         "unreachable or blocked (VPN off, or this server's IP blocked) — "
+                         "set PROXY_URL or USE_APIFY=true.",
+            })
         await extract_step(market_code, stats)
         try:
             await enrich_step(market_code, stats)

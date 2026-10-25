@@ -24,6 +24,8 @@ function WinnersInner() {
     { refreshInterval: 15 * 60_000 }
   );
   const { data: dates } = useSWR(market ? ["winner-dates", market] : null, () => winnersApi.dates(market!));
+  const { data: runs } = useSWR("winner-status", winnersApi.status);
+  const lastRun = runs?.runs.find((r) => r.market === market);
 
   const ent = meta.data?.entitlements;
   const err = error as (Error & { code?: string }) | undefined;
@@ -135,7 +137,16 @@ function WinnersInner() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-10 text-center space-y-2">
             <Trophy className="mx-auto text-zinc-600" />
             <p className="text-white font-medium">No picks yet for this market</p>
-            <p className="text-zinc-500 text-sm">{data?.message ?? "The daily scan runs every morning. Check back soon."}</p>
+            <p className="text-zinc-500 text-sm">
+              {lastRun
+                ? `Last scan ${new Date(lastRun.finished_at ?? lastRun.started_at).toLocaleString()} · ${lastRun.stats?.scored ?? 0} products scored`
+                : data?.message ?? "The daily scan runs every morning. Check back soon."}
+            </p>
+            {lastRun?.problem && (
+              <p className="text-amber-300 text-xs max-w-lg mx-auto bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                {lastRun.problem}
+              </p>
+            )}
           </div>
         ) : (
           <div className="space-y-3">

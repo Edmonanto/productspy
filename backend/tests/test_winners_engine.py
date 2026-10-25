@@ -229,3 +229,33 @@ def test_extract_json_tolerates_fences():
     from app.winners.llm import extract_json
     assert extract_json('```json\n[{"i": 0}]\n```') == [{"i": 0}]
     assert extract_json('Here you go: {"a": 1} thanks') == {"a": 1}
+
+
+async def test_empty_collection_is_reported_not_ok(monkeypatch):
+    """Sources that silently return nothing must not produce an 'ok' run."""
+    from app.winners import pipeline, store
+    from app.winners.collectors.base import Collector
+
+    class Empty(Collector):
+        name = "empty"
+        def enabled(self): return True
+        async def collect(self, market, limit=100): return []
+
+    saved = {}
+
+    async def start_run(_m): return 1
+    async def finish_run(_id, status, stats, errors): saved.update(status=status, errors=errors)
+    async def unlinked(_m, limit=600): return []
+    async def priced(_m, limit=40): return []
+    async def products(_m, window_days=60): return {}
+    async def picks(_m, _d): return {}
+    async def save_winners(*_a): return None
+
+    for name, fn in dict(start_run=start_run, finish_run=finish_run, unlinked_ads=unlinked,
+                         products_needing_price=priced, market_products_with_ads=products,
+                         last_picks=picks, save_winners=save_winners).items():
+        monkeypatch.setattr(store, name, fn)
+
+    res = await pipeline.run_market("US", collectors=[Empty()])
+    assert res["status"] == "partial" and saved["status"] == "partial"
+    assert "No ads collected" in saved["errors"][0]["error"]
