@@ -3,6 +3,7 @@
     python -m app.winners.worker                 # every market in WINNERS_MARKETS
     python -m app.winners.worker --market US     # one market
     python -m app.winners.worker --collectors    # which sources are active
+    (a run over every market ends by sending the daily winners email — see digest.py)
     python -m app.winners.worker --market US --recheck
                                                  # re-examine recent ads that were set
                                                  # aside as "not a product" (e.g. after
@@ -86,6 +87,7 @@ def main() -> int:
     ap.add_argument("--collectors", action="store_true", help="list active sources and exit")
     ap.add_argument("--recheck", action="store_true",
                     help="re-examine recent ads previously set aside as not a product")
+    ap.add_argument("--no-email", action="store_true", help="don't send the daily winners email")
     ap.add_argument("--rebuild", action="store_true",
                     help="remove products named by guesswork (before an AI key) and re-name their ads")
     args = ap.parse_args()
@@ -102,6 +104,10 @@ def main() -> int:
         return 2
 
     results = asyncio.run(run(markets, recheck=args.recheck, rebuild=args.rebuild))
+    if not args.market and not args.no_email:
+        # The scheduled run covers every market: email today's picks.
+        from .digest import _run as send_daily_email
+        log.info("daily email: %s", asyncio.run(send_daily_email(None)))
     produced = sum(r["stats"].get("winners", 0) + r["stats"].get("rising", 0) for r in results)
     return 0 if produced else 1
 

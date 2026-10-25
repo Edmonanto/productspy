@@ -254,6 +254,9 @@ export const winnersApi = {
       `/winners/dates?market=${market}`
     ),
   status: () => api.get<{ runs: WinnerRun[] }>("/winners/status"),
+  /** Daily winners email on/off. */
+  digest: () => api.get<{ on: boolean }>("/winners/digest"),
+  setDigest: (on: boolean) => api.post<{ on: boolean }>("/winners/digest", { on }),
   product: (id: string, market: string) =>
     api.get<ProductEvidence>(`/winners/products/${id}?market=${market}`),
   /** Downloads the CSV with the auth header (a plain link can't send it). */

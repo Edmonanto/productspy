@@ -7,6 +7,7 @@ import Topbar from "@/components/layout/Topbar";
 import { useAuth } from "@/context/AuthContext";
 import { LogOut, ExternalLink } from "lucide-react";
 import MarketSettings from "@/components/winners/MarketSettings";
+import EmailSettings from "@/components/winners/EmailSettings";
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -45,6 +46,8 @@ export default function SettingsPage() {
         </section>
 
         <MarketSettings />
+
+        <EmailSettings />
 
         <section className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
           <h2 className="text-white font-semibold text-sm mb-2">Plan</h2>

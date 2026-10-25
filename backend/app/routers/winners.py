@@ -19,12 +19,12 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
 from .. import config, repository
 from ..auth import CurrentUser, current_user
-from ..winners import store
+from ..winners import digest, store
 from ..winners.markets import DEFAULT_MARKET, MARKETS, market_public
 
 router = APIRouter(prefix="/winners", tags=["winners"])
@@ -148,6 +148,39 @@ async def list_markets(user: CurrentUser = Depends(current_user)) -> dict[str, A
 
 class PreferencesIn(BaseModel):
     markets: list[str]
+
+
+class DigestIn(BaseModel):
+    on: bool
+
+
+@router.get("/digest")
+async def get_digest(user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
+    """Is the daily winners email on for this user?"""
+    return {"on": await digest.get_digest(user.id)}
+
+
+@router.post("/digest")
+async def set_digest(body: DigestIn, user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
+    await digest.set_digest(user.id, body.on)
+    return {"on": body.on}
+
+
+@router.get("/digest/unsubscribe", response_class=HTMLResponse)
+async def unsubscribe(u: str = Query(...), t: str = Query(...)) -> HTMLResponse:
+    """One-click unsubscribe from the email footer (signed link, no login)."""
+    try:
+        uuid.UUID(u)
+    except ValueError:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid link")
+    if not digest.valid_token(u, t):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, detail="Invalid link")
+    await digest.set_digest(u, False)
+    return HTMLResponse(
+        '<div style="font-family:Arial,sans-serif;max-width:420px;margin:80px auto;text-align:center">'
+        "<h2>You're unsubscribed</h2><p>You won't get the daily winners email any more. "
+        f'You can switch it back on in <a href="{config.APP_URL}/dashboard/settings">Settings</a>.</p></div>'
+    )
 
 
 @router.post("/preferences")
