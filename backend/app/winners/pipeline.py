@@ -18,6 +18,7 @@ from .enrich import fetch_selling_price, fetch_supplier_cost
 from .extract import cluster_keys, guess_products_detailed
 from .markets import get_market
 from .scoring import aggregate, pick_winners, score
+from .verify import CANDIDATES, ad_key, verify_product
 
 log = logging.getLogger("winners")
 
@@ -92,33 +93,76 @@ async def enrich_step(market_code: str, stats: dict) -> None:
     stats["priced"] = done
 
 
+def _signals(prod, ads, day: date, now: datetime, last) -> "object":
+    attrs = _attrs(prod["attributes"])
+    return aggregate(
+        ads, now=now,
+        sell_price_usd=float(prod["price_usd"]) if prod["price_usd"] is not None else None,
+        cost_usd=float(prod["cost_usd"]) if prod["cost_usd"] is not None else None,
+        cost_estimated=bool(prod["cost_estimated"]),
+        wow=attrs.get("wow"), problem=attrs.get("problem"),
+        ip_risk=attrs.get("ip_risk") or "none", restricted=bool(attrs.get("restricted")),
+        fragile_heavy=bool(attrs.get("fragile_heavy")), seasonal=bool(attrs.get("seasonal")),
+        physical=attrs.get("physical", True) is not False,
+        last_picked_days_ago=(day - last).days if last else None,
+    )
+
+
+async def verify_step(market_code: str, products: dict, results: dict, stats: dict,
+                      day: date, now: datetime, picked: dict) -> None:
+    """Make sure the ads behind the leading products really advertise them."""
+    ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
+                    key=lambda pid: results[pid][0].total, reverse=True)[:CANDIDATES]
+    rejected = renamed = 0
+    for pid in ranked:
+        prod, ads = products[pid]
+        attrs = _attrs(prod["attributes"])
+        verdict = await verify_product(prod["title"], ads, set(attrs.get("verified_ads") or []))
+        if not verdict.checked:
+            continue
+        if verdict.reject:
+            await store.reject_ads(market_code, pid, verdict.reject)
+            rejected += len(verdict.reject)
+        await store.mark_verified(
+            pid, [ad_key(a) for a in verdict.keep],
+            verdict.best.thumbnail_url if verdict.best and verdict.best.thumbnail_url else None,
+            verdict.name if verdict.name and verdict.name != prod["title"] else None,
+        )
+        renamed += bool(verdict.name and verdict.name != prod["title"])
+        if not verdict.keep:
+            res = score(_signals(prod, [], day, now, picked.get(pid)))
+            res.excluded = "its ads don't show this product"
+            results[pid] = (res, [])
+        elif verdict.reject:
+            sig = _signals(prod, verdict.keep, day, now, picked.get(pid))
+            results[pid] = (score(sig), verdict.keep)
+    stats["ads_rejected"] = rejected
+    stats["renamed"] = renamed
+
+
 async def score_step(market_code: str, day: date, stats: dict) -> None:
     now = datetime.now(timezone.utc)
     products = await store.market_products_with_ads(market_code)
     picked = await store.last_picks(market_code, day)
-    scored, score_ids = [], {}
+    results: dict = {}
     for pid, (prod, ads) in products.items():
-        attrs = _attrs(prod["attributes"])
-        last = picked.get(pid)
-        sig = aggregate(
-            ads, now=now,
-            sell_price_usd=float(prod["price_usd"]) if prod["price_usd"] is not None else None,
-            cost_usd=float(prod["cost_usd"]) if prod["cost_usd"] is not None else None,
-            cost_estimated=bool(prod["cost_estimated"]),
-            wow=attrs.get("wow"), problem=attrs.get("problem"),
-            ip_risk=attrs.get("ip_risk") or "none", restricted=bool(attrs.get("restricted")),
-            fragile_heavy=bool(attrs.get("fragile_heavy")), seasonal=bool(attrs.get("seasonal")),
-            physical=attrs.get("physical", True) is not False,
-            last_picked_days_ago=(day - last).days if last else None,
-        )
-        res = score(sig)
+        results[pid] = (score(_signals(prod, ads, day, now, picked.get(pid))), ads)
+
+    try:
+        await verify_step(market_code, products, results, stats, day, now, picked)
+    except Exception:   # a failed check must not cost the day's picks
+        log.exception("[%s] verification failed", market_code)
+
+    scored, score_ids = [], {}
+    for pid, (res, ads) in results.items():
         score_ids[pid] = await store.save_score(pid, market_code, day, res)
         scored.append((pid, res))
+        sig = res.signals or {}
         # Product pages elsewhere in the app read ad_signals.
-        if sig.meta_ads:
-            await store.record_ad_signal(pid, "facebook", sig.advertisers or sig.meta_ads)
-        if sig.tiktok_ads:
-            await store.record_ad_signal(pid, "tiktok", sig.tiktok_ads)
+        if sig.get("meta_ads"):
+            await store.record_ad_signal(pid, "facebook", sig.get("advertisers") or sig["meta_ads"])
+        if sig.get("tiktok_ads"):
+            await store.record_ad_signal(pid, "tiktok", sig["tiktok_ads"])
 
     chosen = pick_winners(scored)
     await store.save_winners(market_code, day, chosen, score_ids)

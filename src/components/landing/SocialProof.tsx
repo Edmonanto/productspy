@@ -35,7 +35,7 @@ export function TrustedBySection() {
       <p className="text-center text-zinc-500 text-xs font-semibold uppercase tracking-widest mb-6 flex items-center justify-center gap-2">
         <Database size={13} /> Built on the public data serious dropshippers already check by hand
       </p>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {DATA_SOURCES.map((s) => (
           <div key={s.name} className="bg-zinc-900/60 border border-zinc-800 rounded-xl px-4 py-3.5 text-center">
             <div className="text-zinc-200 font-semibold text-sm">{s.name}</div>

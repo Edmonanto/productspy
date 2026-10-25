@@ -320,3 +320,70 @@ async def test_openai_used_when_no_anthropic_key(monkeypatch):
 
     monkeypatch.setattr(config, "OPENAI_API_KEY", "")
     assert llm.provider() is None
+
+
+async def test_verify_keeps_only_ads_that_show_the_product(monkeypatch):
+    from app.winners import verify
+
+    ads = [AdRecord(platform="meta", external_id=str(i), market="US", ad_text=t, thumbnail_url=f"img{i}")
+           for i, t in enumerate(["Posture corrector, fix your back", "Summer sale on everything",
+                                  "This posture brace changed my life"])]
+
+    async def fake_llm(system, prompt, max_tokens=8000):
+        assert "Posture Corrector" in prompt
+        return {"matches": [0, 2], "best": 2, "name": "posture corrector brace"}
+
+    monkeypatch.setattr(verify, "llm_available", lambda: True)
+    monkeypatch.setattr(verify, "llm_json", fake_llm)
+    v = await verify.verify_product("Posture Corrector", ads, already_ok=set())
+    assert v.checked and [a.external_id for a in v.keep] == ["0", "2"]
+    assert [a.external_id for a in v.reject] == ["1"]
+    assert v.best.thumbnail_url == "img2" and v.name == "Posture Corrector Brace"
+
+    # already-verified ads are not sent again; nothing new -> no call, nothing changes
+    called = False
+    async def never(*a, **k):
+        nonlocal called; called = True
+    monkeypatch.setattr(verify, "llm_json", never)
+    v2 = await verify.verify_product("Posture Corrector", ads, already_ok={"meta:0", "meta:1", "meta:2"})
+    assert not called and not v2.checked and len(v2.keep) == 3
+
+
+async def test_verify_without_ai_changes_nothing(monkeypatch):
+    from app.winners import verify
+    monkeypatch.setattr(verify, "llm_available", lambda: False)
+    ads = [AdRecord(platform="meta", external_id="1", market="US", ad_text="x")]
+    v = await verify.verify_product("Thing", ads, set())
+    assert not v.checked and v.keep == ads and not v.reject
+
+
+async def test_verify_step_drops_product_whose_ads_dont_match(monkeypatch):
+    from datetime import date, datetime, timezone
+    from app.winners import pipeline, store, verify
+
+    good = [AdRecord(platform="meta", external_id="g", market="US", ad_text="LED mirror",
+                     started_at=NOW - timedelta(days=20), variant_count=6)]
+    bad = [AdRecord(platform="meta", external_id="b", market="US", ad_text="Huge sale",
+                    started_at=NOW - timedelta(days=30), variant_count=9)]
+    prod = lambda t: {"title": t, "attributes": {"physical": True}, "price_usd": None,
+                      "cost_usd": None, "cost_estimated": False}
+    products = {"p1": (prod("Led Mirror"), good), "p2": (prod("Sale"), bad)}
+    day, now = date(2026, 10, 25), NOW
+    results = {pid: (pipeline.score(pipeline._signals(p, a, day, now, None)), a) for pid, (p, a) in products.items()}
+
+    async def fake_verify(name, ads, ok):
+        if name == "Sale":
+            return verify.Verdict(reject=list(ads), checked=True)
+        return verify.Verdict(keep=list(ads), best=ads[0], checked=True)
+    rejected, marked = [], []
+    async def rej(m, pid, ads): rejected.append((pid, [a.external_id for a in ads]))
+    async def mark(pid, keys, img, name): marked.append((pid, keys))
+    monkeypatch.setattr(pipeline, "verify_product", fake_verify)
+    monkeypatch.setattr(store, "reject_ads", rej)
+    monkeypatch.setattr(store, "mark_verified", mark)
+
+    stats: dict = {}
+    await pipeline.verify_step("US", products, results, stats, day, now, {})
+    assert rejected == [("p2", ["b"])] and stats["ads_rejected"] == 1
+    assert results["p2"][0].excluded == "its ads don't show this product"
+    assert results["p1"][0].excluded is None and ("p1", ["meta:g"]) in marked

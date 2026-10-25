@@ -243,6 +243,37 @@ async def market_products_with_ads(market: str, window_days: int = 60) -> dict[s
     return {str(p["id"]): (p, ads[str(p["id"])]) for p in prods}
 
 
+async def reject_ads(market: str, product_id: str, ads: list[AdRecord]) -> None:
+    """Take ads off a product they don't advertise; they are not re-used."""
+    for a in ads:
+        await db.execute(
+            "update ad_creatives set product_id = null, not_product = true, "
+            "raw = coalesce(raw, '{}'::jsonb) || jsonb_build_object('rejected_from', $4::text) "
+            "where platform = $1 and external_id = $2 and market = $3",
+            a.platform, a.external_id, market, product_id,
+        )
+
+
+async def mark_verified(product_id: str, ad_keys: list[str], image_url: str | None,
+                        name: str | None) -> None:
+    await db.execute(
+        """
+        update products set
+            attributes = coalesce(attributes, '{}'::jsonb) || jsonb_build_object(
+                'verified_ads',
+                (select coalesce(jsonb_agg(k), '[]'::jsonb) from (
+                    select distinct k from jsonb_array_elements_text(
+                        coalesce(attributes -> 'verified_ads', '[]'::jsonb) || $2::jsonb) k
+                    limit 300) x)),
+            image_url = coalesce($3, image_url),
+            title = coalesce($4, title),
+            updated_at = now()
+         where id = $1
+        """,
+        product_id, _j(ad_keys), image_url, name,
+    )
+
+
 async def last_picks(market: str, before: date) -> dict[str, date]:
     rows = await db.fetch(
         "select product_id, max(pick_date) as last from daily_winners "

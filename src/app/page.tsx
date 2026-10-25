@@ -11,12 +11,12 @@ const STEPS = [
   {
     icon: Radar,
     title: "We read the ads, every day",
-    desc: "The Facebook Ad Library, TikTok's Top Ads and product videos on TikTok — per country, once a day. How long each ad has been running, how many versions, how many stores, how people react.",
+    desc: "The Facebook Ad Library and product videos on TikTok — per country, once a day. How long each ad has been running, how many versions, how many stores, how people react.",
   },
   {
     icon: Brain,
     title: "AI turns ads into products",
-    desc: "Claude names the product behind every ad, merges duplicates across stores and platforms, and flags brand copies, restricted items and fragile goods before they reach you.",
+    desc: "AI names the product behind every ad, merges duplicates across stores and platforms, double-checks that every ad behind a pick really shows that product, and flags brand copies, restricted items and fragile goods before they reach you.",
   },
   {
     icon: Gauge,
@@ -115,7 +115,7 @@ export default function LandingPage() {
           </span>
         </h1>
         <p className="text-zinc-400 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
-          ProductSpy Pro reads the Facebook Ad Library, TikTok&apos;s Top Ads and TikTok every day, in your market,
+          ProductSpy Pro reads the Facebook Ad Library and TikTok every day, in your market,
           and hands you the 5–10 strongest products — with the ads, stores and margins behind each one.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -143,7 +143,7 @@ export default function LandingPage() {
             <div className="flex-1 space-y-2.5">
               <div className="text-white font-semibold">#1 · the product name</div>
               <div className="flex flex-wrap gap-1.5 text-[11px]">
-                {["Facebook Ads", "TikTok Ads", "TikTok", "high confidence"].map((t) => (
+                {["Facebook Ads", "TikTok", "high confidence"].map((t) => (
                   <span key={t} className="bg-zinc-800 text-zinc-300 rounded px-1.5 py-0.5">{t}</span>
                 ))}
               </div>
@@ -172,7 +172,7 @@ export default function LandingPage() {
       {/* Facts bar */}
       <section className="border-y border-zinc-800/60 py-6 bg-zinc-900/30">
         <div className="max-w-5xl mx-auto px-4 sm:px-8 flex flex-wrap items-center justify-center gap-x-10 gap-y-3 text-zinc-500 text-xs sm:text-sm font-medium">
-          {["Facebook Ad Library · TikTok Top Ads · TikTok", "New picks every morning", "9 markets", "Exact sourcing quotes on request"].map((s) => (
+          {["Facebook Ad Library · TikTok", "New picks every morning", "9 markets", "Exact sourcing quotes on request"].map((s) => (
             <span key={s} className="flex items-center gap-2">
               <span className="w-1.5 h-1.5 rounded-full bg-violet-500 shrink-0" />
               {s}

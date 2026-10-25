@@ -45,7 +45,6 @@ export const TRUSTED_BY: TrustedBy[] = [
 /** Public sources the scan reads — shown while TRUSTED_BY is empty. */
 export const DATA_SOURCES = [
   { name: "Facebook Ad Library", desc: "Ads running in your market" },
-  { name: "TikTok Creative Center", desc: "Top-performing TikTok ads" },
   { name: "TikTok", desc: "Product videos and comments" },
   { name: "AliExpress", desc: "Supplier costs" },
 ];
