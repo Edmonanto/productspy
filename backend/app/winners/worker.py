@@ -6,7 +6,11 @@
     python -m app.winners.worker --market US --recheck
                                                  # re-examine recent ads that were set
                                                  # aside as "not a product" (e.g. after
-                                                 # adding ANTHROPIC_API_KEY)
+                                                 # adding an AI key)
+    python -m app.winners.worker --market US --rebuild
+                                                 # throw away products that were named
+                                                 # by guesswork before an AI key was set,
+                                                 # and let the AI name their ads again
 
 Exits non-zero when no market produced picks, so a silent no-op shows up red
 in Render's cron history (same rule as app.ingest.worker).
@@ -26,10 +30,37 @@ from .pipeline import run_market
 log = logging.getLogger("winners")
 
 
-async def run(markets: list[str], recheck: bool = False) -> list[dict]:
+REBUILD_SQL = """
+with guessed as (
+    select p.id from products p
+     where p.source = 'winners'
+       and not (coalesce(p.attributes, '{}'::jsonb) ? 'physical')   -- never seen by the AI
+       and not exists (select 1 from watchlists w where w.product_id = p.id)
+       and not exists (select 1 from quote_requests q where q.product_id = p.id)
+), freed as (
+    update ad_creatives set product_id = null, not_product = false
+     where product_id in (select id from guessed)
+    returning 1
+), gone as (
+    delete from products where id in (select id from guessed) returning 1
+)
+select (select count(*) from gone) as products, (select count(*) from freed) as ads
+"""
+
+
+async def run(markets: list[str], recheck: bool = False, rebuild: bool = False) -> list[dict]:
     await db.connect()
     results = []
     try:
+        if rebuild:
+            from .llm import llm_available
+            if not llm_available():
+                log.error("--rebuild needs ANTHROPIC_API_KEY or OPENAI_API_KEY; skipping it")
+            else:
+                row = await db.fetchrow(REBUILD_SQL)
+                log.info("rebuild: removed %s guessed products, %s ads will be named again",
+                         row["products"], row["ads"])
+                recheck = True
         if recheck:
             n = await db.fetchval(
                 "with r as (update ad_creatives set not_product = false "
@@ -55,6 +86,8 @@ def main() -> int:
     ap.add_argument("--collectors", action="store_true", help="list active sources and exit")
     ap.add_argument("--recheck", action="store_true",
                     help="re-examine recent ads previously set aside as not a product")
+    ap.add_argument("--rebuild", action="store_true",
+                    help="remove products named by guesswork (before an AI key) and re-name their ads")
     args = ap.parse_args()
 
     if args.collectors:
@@ -68,7 +101,7 @@ def main() -> int:
         log.error("unknown market(s) %s; choose from %s", unknown, ", ".join(MARKETS))
         return 2
 
-    results = asyncio.run(run(markets, recheck=args.recheck))
+    results = asyncio.run(run(markets, recheck=args.recheck, rebuild=args.rebuild))
     produced = sum(r["stats"].get("winners", 0) + r["stats"].get("rising", 0) for r in results)
     return 0 if produced else 1
 
