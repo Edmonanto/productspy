@@ -20,7 +20,10 @@ export function TrendBadge({ trend, className }: { trend?: string | null; classN
 }
 
 /** Demand & trend: direction, the dated signals behind it, and the time series when we have one. */
-export default function TrendPanel({ trend, why, signals, history }: Props) {
+export default function TrendPanel({ trend, why, signals: rawSignals, history: rawHistory }: Props) {
+  // Tolerate older API responses (no signals / history fields).
+  const signals = rawSignals ?? {};
+  const history = rawHistory ?? [];
   const facts: [string, string | null][] = [
     ["New ads, last 7 days", n(signals.new_creatives_7d) != null ? String(signals.new_creatives_7d) : null],
     ["New ads, last 14 days", n(signals.new_creatives_14d) != null ? String(signals.new_creatives_14d) : null],
@@ -37,7 +40,7 @@ export default function TrendPanel({ trend, why, signals, history }: Props) {
     <div className="space-y-4">
       <div className="flex items-start gap-3 flex-wrap">
         <TrendBadge trend={trend} className="text-xs px-2 py-1" />
-        <p className="text-sm text-zinc-300 flex-1 min-w-[200px]">{why ?? TREND[trend]?.hint}</p>
+        <p className="text-sm text-zinc-300 flex-1 min-w-[200px]">{why ?? (TREND[trend] ?? TREND.unknown).hint}</p>
       </div>
       {shown.length > 0 && (
         <dl className="grid grid-cols-2 md:grid-cols-4 gap-2">

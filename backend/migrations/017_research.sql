@@ -57,7 +57,23 @@ create table if not exists validation_results (
     primary key (user_id, product_id)
 );
 
--- Metering: tokens and dataset items on top of call counts.
+-- Metering of paid APIs (app/usage.py). 014 dropped the old 1688-era table,
+-- so it is (re)created here; the alters cover a database that still has it.
+create table if not exists api_usage (
+    provider          text not null,
+    endpoint          text not null,
+    usage_day         date not null default (now() at time zone 'utc')::date,
+    calls             int  not null default 0,
+    failures          int  not null default 0,
+    tokens_in         bigint not null default 0,
+    tokens_out        bigint not null default 0,
+    items             bigint not null default 0,
+    last_balance      int,
+    last_error        text,
+    out_of_credits_at timestamptz,
+    updated_at        timestamptz not null default now(),
+    primary key (provider, endpoint, usage_day)
+);
 alter table api_usage add column if not exists tokens_in bigint not null default 0;
 alter table api_usage add column if not exists tokens_out bigint not null default 0;
 alter table api_usage add column if not exists items bigint not null default 0;

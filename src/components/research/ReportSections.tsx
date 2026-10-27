@@ -198,7 +198,7 @@ export function SupplierSection({
       <div className="grid md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <h4 className="text-xs font-semibold text-zinc-300">Supplier listings</h4>
-          {suppliers.length ? suppliers.map((s) => (
+          {suppliers?.length ? suppliers.map((s) => (
             <a key={s.supplier_url} href={s.supplier_url} target="_blank" rel="noreferrer"
                className="flex items-center justify-between gap-2 text-sm bg-zinc-800/60 hover:bg-zinc-800 rounded-lg px-3 py-2 min-h-[44px]">
               <span className="text-zinc-300">{s.supplier_name}</span>
@@ -241,12 +241,12 @@ export function RisksSection({
       <div className="grid md:grid-cols-2 gap-4">
         <div>
           <h4 className="text-xs font-semibold text-zinc-300 mb-2">Weak points in the evidence</h4>
-          {weaknesses.length ? <Bullets items={weaknesses} icon={<AlertTriangle size={13} className="text-amber-400 mt-0.5 shrink-0" />} /> : <Empty>None flagged by the score.</Empty>}
+          {weaknesses?.length ? <Bullets items={weaknesses} icon={<AlertTriangle size={13} className="text-amber-400 mt-0.5 shrink-0" />} /> : <Empty>None flagged by the score.</Empty>}
         </div>
         <div>
           <h4 className="text-xs font-semibold text-zinc-300 mb-2">Not measured yet</h4>
           <Bullets items={[
-            ...missing.map((m) => `${m.replace("_", " ")} — no data, left out of the score`),
+            ...(missing ?? []).map((m) => `${m.replace("_", " ")} — no data, left out of the score`),
             "Search-trend volume (no source connected)",
             "Real sales or conversion rates (not visible from public ads)",
           ]} />

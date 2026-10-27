@@ -23,7 +23,7 @@ import {
 } from "@/components/research/ReportSections";
 import { AdEvidence, researchApi, watchlistApi, winnersApi } from "@/lib/api";
 import { useCompare } from "@/lib/compare";
-import { cn, fmtNum, fmtPct, formatPrice, recallMarket, SOURCE_LABEL, timeAgo } from "@/lib/utils";
+import { cn, fmtNum, fmtPct, formatPrice, recallMarket, scoreBand, SOURCE_LABEL, timeAgo } from "@/lib/utils";
 import { computeEconomics, DEFAULT_ASSUMPTIONS } from "@/lib/profit";
 
 const TABS = [
@@ -116,7 +116,7 @@ function EvidenceInner() {
   const { data: watch, mutate: mutateWatch } = useSWR("watchlist", watchlistApi.list);
   const saved = !!watch?.items.some((w) => w.product.id === id);
 
-  const ads = useMemo(() => Object.values(data?.ads ?? {}).flat(), [data]);
+  const ads = useMemo(() => Object.values(data?.ads ?? {}).flat().filter(Boolean), [data]);
 
   if (error) return <div className="p-6 text-red-300 text-sm">{(error as Error).message}</div>;
   if (isLoading || !data) {
@@ -135,8 +135,8 @@ function EvidenceInner() {
   const criteria = score?.criteria ?? {};
   const mk = markets?.markets.find((m) => m.code === market);
   const econ = computeEconomics({ price: p.price_usd, productCost: p.cost_usd, cpa: null, ...DEFAULT_ASSUMPTIONS });
-  const firstTabWithAds = TABS.find((t) => (data.ads[t.key] ?? []).length)?.key;
-  const activeTab = (data.ads[tab] ?? []).length ? tab : firstTabWithAds ?? tab;
+  const firstTabWithAds = TABS.find((t) => (data.ads?.[t.key] ?? []).length)?.key;
+  const activeTab = (data.ads?.[tab] ?? []).length ? tab : firstTabWithAds ?? tab;
 
   const generate = async (refresh = false) => {
     setGenBusy(true); setGenError(null);
@@ -239,7 +239,7 @@ function EvidenceInner() {
                 <div className="flex items-center gap-3">
                   <ScoreRing score={score.total} size={84} stroke={7} />
                   <div className="text-xs space-y-1">
-                    <div className="text-zinc-200 font-medium leading-snug">{score.band}</div>
+                    <div className="text-zinc-200 font-medium leading-snug">{score.band ?? scoreBand(score.total)}</div>
                     <div className="capitalize text-zinc-400">{score.confidence} confidence</div>
                     <TrendBadge trend={score.trend} />
                   </div>
@@ -267,7 +267,7 @@ function EvidenceInner() {
                 “winner” needs medium or high confidence. Tags show where each point comes from: observed in ads,
                 calculated by ProductSpy, AI-assessed, or an assumption you can change in the calculator.
               </p>
-              {data.history.length > 1 && (
+              {(data.history ?? []).length > 1 && (
                 <div>
                   <div className="text-[11px] text-zinc-500 mb-1">Score over time</div>
                   <div className="h-24">
@@ -291,7 +291,7 @@ function EvidenceInner() {
       <Section id="demand" n={3} title="Demand & trend analysis">
         {score ? (
           <>
-            <TrendPanel trend={score.trend} why={score.trend_why} signals={score.signals} history={data.history} />
+            <TrendPanel trend={score.trend ?? "unknown"} why={score.trend_why ?? null} signals={score.signals ?? {}} history={data.history ?? []} />
             {ready && <p className="text-sm text-zinc-300 border-t border-zinc-800 pt-3"><span className="text-violet-300 text-xs mr-1">AI summary</span>{ready.ai.demand_summary}</p>}
           </>
         ) : <Empty>No demand data yet.</Empty>}
@@ -303,26 +303,26 @@ function EvidenceInner() {
         {data.ad_evidence_locked ? (
           <div className="text-center py-8 space-y-2">
             <Lock className="mx-auto text-violet-300" />
-            <p className="text-zinc-300 text-sm">{Object.values(data.ad_counts).reduce((a, b) => a + b, 0)} ads & videos found for this product.</p>
+            <p className="text-zinc-300 text-sm">{Object.values(data.ad_counts ?? {}).reduce((a, b) => a + b, 0)} ads & videos found for this product.</p>
             <Link href="/dashboard/billing" className="inline-block px-4 py-2 rounded-lg bg-violet-600 text-white text-sm hover:bg-violet-500">Upgrade to see them</Link>
           </div>
         ) : (
           <div className="grid lg:grid-cols-[1fr_300px] gap-5">
             <div className="space-y-3 min-w-0">
               <div className="flex gap-1 overflow-x-auto -mx-1 px-1 print:hidden" role="tablist">
-                {TABS.filter((t) => t.key === activeTab || (data.ad_counts[t.key] ?? 0) > 0).map((t) => (
+                {TABS.filter((t) => t.key === activeTab || (data.ad_counts?.[t.key] ?? 0) > 0).map((t) => (
                   <button key={t.key} role="tab" aria-selected={activeTab === t.key} onClick={() => setTab(t.key)}
                           className={cn("px-3 py-2 md:py-1.5 max-md:min-h-[44px] rounded-lg text-xs whitespace-nowrap shrink-0",
                             activeTab === t.key ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-white")}>
-                    {t.label} <span className="text-zinc-500">{data.ad_counts[t.key] ?? 0}</span>
+                    {t.label} <span className="text-zinc-500">{data.ad_counts?.[t.key] ?? 0}</span>
                   </button>
                 ))}
               </div>
-              {(data.ads[activeTab] ?? []).length === 0 ? (
+              {(data.ads?.[activeTab] ?? []).length === 0 ? (
                 <Empty>Nothing from {SOURCE_LABEL[activeTab]} for this product yet.</Empty>
               ) : (
                 <div className="grid grid-cols-1 min-[420px]:grid-cols-2 xl:grid-cols-3 gap-3">
-                  {data.ads[activeTab].map((ad, i) => <AdCard key={`${ad.ad_url}-${i}`} ad={ad} />)}
+                  {(data.ads?.[activeTab] ?? []).map((ad, i) => <AdCard key={`${ad.ad_url}-${i}`} ad={ad} />)}
                 </div>
               )}
             </div>
@@ -355,7 +355,7 @@ function EvidenceInner() {
 
       {/* 9 Supplier */}
       <Section id="supplier" n={9} title="Supplier & fulfilment">
-        <SupplierSection suppliers={data.suppliers} criteria={criteria} costUsd={p.cost_usd} costEstimated={p.cost_estimated}
+        <SupplierSection suppliers={data.suppliers ?? []} criteria={criteria} costUsd={p.cost_usd} costEstimated={p.cost_estimated}
                          onQuote={() => setQuoteQty(100)} report={ready} />
       </Section>
 

@@ -14,7 +14,7 @@ export default function CriteriaBreakdown({
   return (
     <div className={cn("grid gap-3", !only && "md:grid-cols-2")}>
       {keys.map((k) => {
-        const c = criteria[k];
+        const c = criteria?.[k];
         const max = c?.max ?? PILLAR_MAX[k];
         const known = !!c?.known && c.score != null;
         const ratio = known ? (c!.score as number) / max : 0;
