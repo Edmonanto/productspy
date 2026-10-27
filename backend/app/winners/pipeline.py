@@ -18,6 +18,7 @@ from .enrich import fetch_selling_price, fetch_supplier_cost
 from .extract import cluster_keys, guess_products_detailed
 from .markets import get_market
 from .scoring import aggregate, pick_winners, score
+from .llm import llm_available
 from .verify import CANDIDATES, ad_key, verify_product
 
 log = logging.getLogger("winners")
@@ -109,15 +110,30 @@ def _signals(prod, ads, day: date, now: datetime, last) -> "object":
 
 
 async def verify_step(market_code: str, products: dict, results: dict, stats: dict,
-                      day: date, now: datetime, picked: dict) -> None:
-    """Make sure the ads behind the leading products really advertise them."""
+                      day: date, now: datetime, picked: dict) -> set[str]:
+    """Make sure the ads behind the leading products really advertise them.
+
+    Returns the ids of products whose ads have all been checked (this run or
+    an earlier one). Products that aren't physical products are excluded.
+    """
     ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
                     key=lambda pid: results[pid][0].total, reverse=True)[:CANDIDATES]
-    rejected = renamed = 0
+    rejected = renamed = dropped = 0
+    verified: set[str] = set()
     for pid in ranked:
         prod, ads = products[pid]
         attrs = _attrs(prod["attributes"])
         verdict = await verify_product(prod["title"], ads, set(attrs.get("verified_ads") or []))
+        if verdict.not_product:
+            await store.reject_ads(market_code, pid, ads)
+            await store.mark_not_physical(pid)
+            res = score(_signals(prod, [], day, now, picked.get(pid)))
+            res.excluded = "not a physical product"
+            results[pid] = (res, [])
+            dropped += 1
+            continue
+        if verdict.verified:
+            verified.add(pid)
         if not verdict.checked:
             continue
         if verdict.reject:
@@ -133,11 +149,15 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
             res = score(_signals(prod, [], day, now, picked.get(pid)))
             res.excluded = "its ads don't show this product"
             results[pid] = (res, [])
+            verified.discard(pid)
         elif verdict.reject:
             sig = _signals(prod, verdict.keep, day, now, picked.get(pid))
             results[pid] = (score(sig), verdict.keep)
     stats["ads_rejected"] = rejected
     stats["renamed"] = renamed
+    stats["not_products_dropped"] = dropped
+    stats["verified"] = len(verified)
+    return verified
 
 
 async def score_step(market_code: str, day: date, stats: dict) -> None:
@@ -148,10 +168,20 @@ async def score_step(market_code: str, day: date, stats: dict) -> None:
     for pid, (prod, ads) in products.items():
         results[pid] = (score(_signals(prod, ads, day, now, picked.get(pid))), ads)
 
+    verified: set[str] | None = None
     try:
-        await verify_step(market_code, products, results, stats, day, now, picked)
+        verified = await verify_step(market_code, products, results, stats, day, now, picked)
     except Exception:   # a failed check must not cost the day's picks
         log.exception("[%s] verification failed", market_code)
+
+    # With an AI key, only products whose ads were all checked can be picked —
+    # so every pick is backed by ads that really sell it. (If the AI was down
+    # and nothing could be checked, fall back to the unchecked ranking rather
+    # than show an empty day.)
+    if llm_available() and verified:
+        for pid, (res, ads) in results.items():
+            if pid not in verified and not res.excluded:
+                res.excluded = "ads not checked yet"
 
     scored, score_ids = [], {}
     for pid, (res, ads) in results.items():

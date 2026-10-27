@@ -254,6 +254,14 @@ async def reject_ads(market: str, product_id: str, ads: list[AdRecord]) -> None:
         )
 
 
+async def mark_not_physical(product_id: str) -> None:
+    await db.execute(
+        "update products set attributes = coalesce(attributes, '{}'::jsonb) || "
+        "'{\"physical\": false}'::jsonb, updated_at = now() where id = $1",
+        product_id,
+    )
+
+
 async def mark_verified(product_id: str, ad_keys: list[str], image_url: str | None,
                         name: str | None) -> None:
     await db.execute(

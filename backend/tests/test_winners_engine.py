@@ -167,15 +167,40 @@ def test_weak_single_source_product_scores_low():
                     started_at=NOW - timedelta(days=2))]
     res = score(aggregate(ads, now=NOW))
     assert res.total < 40
-    assert any("one platform" in p["reason"] for p in res.penalties)
+    assert res.confidence == "low"
 
 
-def test_missing_data_is_not_zero_but_capped():
+def test_missing_pillar_is_left_out_not_zero():
     # only organic, very strong — no paid ads at all
     ads = [a for a in _ads_strong() if a.platform == "tiktok_organic"]
     res = score(aggregate(ads, now=NOW, sell_price_usd=30, cost_usd=6))
-    assert res.breakdown["scaling"] == 0
-    assert 45 <= res.total < 75
+    assert res.breakdown["scaling"] is None
+    assert "scaling" in res.signals["missing_pillars"]
+    assert 60 <= res.total <= 85          # one platform: capped at 85
+    assert res.confidence == "low"
+
+
+def test_facebook_only_long_runner_is_rising_not_buried():
+    # The real case that scored 44 before: 229 days running, 12 versions,
+    # 3 stores, no TikTok data, no price found.
+    ads = [AdRecord(platform="meta", external_id=f"f{i}", market="US", advertiser_id=f"s{i % 3}",
+                    landing_url=f"https://shop{i % 3}.com/products/x", variant_count=3,
+                    started_at=NOW - timedelta(days=229 if i == 0 else 120)) for i in range(4)]
+    res = score(aggregate(ads, now=NOW))
+    assert res.breakdown["engagement"] is None and res.breakdown["margin"] is None
+    assert 60 <= res.total <= 85, res
+    assert res.confidence == "low"
+    assert pick_winners([("p", res)])[0][2] == "rising"   # low confidence can't be "winner"
+
+
+def test_single_strong_signal_cannot_score_high():
+    # only scaling known (30 pts) -> scaled to KNOWN_FLOOR, not to 100
+    ads = [AdRecord(platform="meta", external_id=f"z{i}", market="US", advertiser_id="one",
+                    variant_count=5, started_at=NOW - timedelta(days=60)) for i in range(4)]
+    sig = aggregate(ads, now=NOW)
+    sig.first_seen_days = None
+    res = score(sig)
+    assert res.total <= 70
 
 
 def test_saturation_penalty():
@@ -201,7 +226,7 @@ def test_estimated_cost_trusted_less():
 
 def test_pick_winners_threshold_and_filler():
     from app.winners.scoring import ScoreResult
-    mk = lambda t, x=None: ScoreResult(total=t, breakdown={}, excluded=x)
+    mk = lambda t, x=None, c="medium": ScoreResult(total=t, breakdown={}, excluded=x, confidence=c)
     scored = [("a", mk(91)), ("b", mk(75)), ("c", mk(72, "restricted")), ("d", mk(66)), ("e", mk(64)),
               ("f", mk(62)), ("g", mk(50))]
     picks = pick_winners(scored)
@@ -211,6 +236,8 @@ def test_pick_winners_threshold_and_filler():
     thin = [("x", mk(45)), ("y", mk(31)), ("z", mk(12)), ("r", mk(65))]
     picks = pick_winners(thin)
     assert [(p[0], p[2]) for p in picks] == [("r", "rising"), ("x", "watch"), ("y", "watch")]
+    # 70+ with low confidence (one platform, little data) is "rising", not "winner"
+    assert pick_winners([("lo", mk(78, c="low"))]) [0][2] == "rising"
     many = [(str(i), mk(70 + i)) for i in range(15)]
     assert len(pick_winners(many)) == 10
 
@@ -387,3 +414,54 @@ async def test_verify_step_drops_product_whose_ads_dont_match(monkeypatch):
     assert rejected == [("p2", ["b"])] and stats["ads_rejected"] == 1
     assert results["p2"][0].excluded == "its ads don't show this product"
     assert results["p1"][0].excluded is None and ("p1", ["meta:g"]) in marked
+
+
+async def test_verify_flags_a_non_product(monkeypatch):
+    from app.winners import verify
+    ads = [AdRecord(platform="meta", external_id="1", market="US", ad_text="Learn dropshipping in 30 days")]
+
+    async def fake_llm(system, prompt, max_tokens=8000):
+        return {"is_product": False, "matches": [], "best": None, "name": None}
+    monkeypatch.setattr(verify, "llm_available", lambda: True)
+    monkeypatch.setattr(verify, "llm_json", fake_llm)
+    v = await verify.verify_product("Dropshipping Course", ads, set())
+    assert v.not_product and not v.keep
+
+
+async def test_verify_step_excludes_non_products(monkeypatch):
+    from datetime import date
+    from app.winners import pipeline, store, verify
+    ads = [AdRecord(platform="meta", external_id="c", market="US", ad_text="Join my course",
+                    started_at=NOW - timedelta(days=40), variant_count=8)]
+    prod = {"title": "Online Course", "attributes": {"physical": True}, "price_usd": None,
+            "cost_usd": None, "cost_estimated": False}
+    products = {"p": (prod, ads)}
+    day = date(2026, 10, 25)
+    results = {"p": (pipeline.score(pipeline._signals(prod, ads, day, NOW, None)), ads)}
+
+    async def fake_verify(name, ads, ok):
+        return verify.Verdict(reject=list(ads), checked=True, not_product=True)
+    calls = []
+    async def rej(m, pid, a): calls.append(("reject", pid))
+    async def phys(pid): calls.append(("not_physical", pid))
+    monkeypatch.setattr(pipeline, "verify_product", fake_verify)
+    monkeypatch.setattr(store, "reject_ads", rej)
+    monkeypatch.setattr(store, "mark_not_physical", phys)
+    stats: dict = {}
+    verified = await pipeline.verify_step("US", products, results, stats, day, NOW, {})
+    assert results["p"][0].excluded == "not a physical product"
+    assert ("not_physical", "p") in calls and stats["not_products_dropped"] == 1
+    assert "p" not in verified
+
+
+async def test_with_ai_key_no_guesswork_products(monkeypatch):
+    from app.winners import extract
+    ads = [AdRecord(platform="meta", external_id="1", market="US",
+                    ad_text="Spring Collection | Shop now", landing_url="https://x.com/products/spring-collection")]
+
+    async def failed_ai(ads, batch=40):
+        return {}            # AI batch failed / didn't answer
+    monkeypatch.setattr(extract, "llm_available", lambda: True)
+    monkeypatch.setattr(extract, "ai_guesses", failed_ai)
+    out = await extract.guess_products_detailed(ads)
+    assert out == [(None, False)]     # left for the next run, not turned into a product

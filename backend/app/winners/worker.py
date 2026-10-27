@@ -12,6 +12,10 @@
                                                  # throw away products that were named
                                                  # by guesswork before an AI key was set,
                                                  # and let the AI name their ads again
+    python -m app.winners.worker --clean         # AI reviews every product and removes
+                                                 # anything that isn't a physical product
+                                                 # (apps, courses, store-wide sales...),
+                                                 # then rescans so today's picks are clean
 
 Exits non-zero when no market produced picks, so a silent no-op shows up red
 in Render's cron history (same rule as app.ingest.worker).
@@ -49,7 +53,8 @@ select (select count(*) from gone) as products, (select count(*) from freed) as 
 """
 
 
-async def run(markets: list[str], recheck: bool = False, rebuild: bool = False) -> list[dict]:
+async def run(markets: list[str], recheck: bool = False, rebuild: bool = False,
+              clean: bool = False) -> list[dict]:
     await db.connect()
     results = []
     try:
@@ -62,6 +67,9 @@ async def run(markets: list[str], recheck: bool = False, rebuild: bool = False) 
                 log.info("rebuild: removed %s guessed products, %s ads will be named again",
                          row["products"], row["ads"])
                 recheck = True
+        if clean:
+            from .cleanup import clean as clean_products
+            log.info("clean: %s", json.dumps(await clean_products(markets), ensure_ascii=False))
         if recheck:
             n = await db.fetchval(
                 "with r as (update ad_creatives set not_product = false "
@@ -90,6 +98,8 @@ def main() -> int:
     ap.add_argument("--no-email", action="store_true", help="don't send the daily winners email")
     ap.add_argument("--rebuild", action="store_true",
                     help="remove products named by guesswork (before an AI key) and re-name their ads")
+    ap.add_argument("--clean", action="store_true",
+                    help="remove products that aren't physical products, then rescan")
     args = ap.parse_args()
 
     if args.collectors:
@@ -103,7 +113,7 @@ def main() -> int:
         log.error("unknown market(s) %s; choose from %s", unknown, ", ".join(MARKETS))
         return 2
 
-    results = asyncio.run(run(markets, recheck=args.recheck, rebuild=args.rebuild))
+    results = asyncio.run(run(markets, recheck=args.recheck, rebuild=args.rebuild, clean=args.clean))
     if not args.market and not args.no_email:
         # The scheduled run covers every market: email today's picks.
         from .digest import _run as send_daily_email

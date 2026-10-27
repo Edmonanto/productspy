@@ -12,9 +12,18 @@ Winning-product score (0-100).
     Hard filters        restricted items, high IP risk, not a physical product,
                         already picked in the last 30 days
 
-Missing data never counts as zero: each pillar is scored on the signals that
-are available and scaled up, but capped at 60 % when less than 40 % of the
-pillar's signals are known — so a product needs real evidence to rank.
+Missing data never counts as zero:
+  * inside a pillar, the signals that are known are scaled up (capped at 60 %
+    of the pillar when less than 40 % of its signals are known);
+  * a pillar with no data at all (e.g. engagement for a product only seen in
+    Facebook ads — likes and comments come from TikTok) is left out, and the
+    total is the known pillars scaled to 100. At least KNOWN_FLOOR points of
+    pillars must be known, otherwise the scale-up is limited, so one strong
+    signal on its own can't produce a high score.
+  * a product seen on one platform only is capped at SINGLE_SOURCE_CAP, and
+    a "winner" needs medium or high confidence (two platforms, or most
+    pillars known) — a low-confidence 70+ is shown as "rising".
+  * breakdown values are None for pillars with no data ("no data" in the app).
 
 Thresholds: >= 70 -> "winner". If fewer than MIN_PICKS qualify, the best
 60-69 products fill up to MIN_PICKS as "rising", and if there still aren't
@@ -38,6 +47,8 @@ WATCH_FLOOR = 20
 MAX_PICKS = 10
 MIN_PICKS = 5
 REPICK_COOLDOWN_DAYS = 30
+KNOWN_FLOOR = 50          # points of pillars that must be known before full scale-up
+SINGLE_SOURCE_CAP = 85    # max score for a product seen on one platform only
 
 
 @dataclass
@@ -181,7 +192,7 @@ def _pillar(parts: list[tuple[Optional[float], float]], pillar_max: float) -> tu
     known = [(e, m) for e, m in parts if e is not None]
     avail = sum(m for _, m in known)
     if avail == 0:
-        return 0.0, 0.0
+        return None, 0.0
     coverage = avail / full
     score = pillar_max * sum(e for e, _ in known) / avail
     if coverage < 0.4:
@@ -254,21 +265,18 @@ def score(s: Signals) -> ScoreResult:
                        (f", {s.total_views:,} views" if s.total_views else ""))
 
     # ---------- 4. margin (15)
+    mult_pts = price_pts = None
+    if s.sell_price_usd:
+        p = s.sell_price_usd
+        price_pts = 5.0 if 20 <= p <= 60 else 3.0 if (15 <= p < 20 or 60 < p <= 90) else 1.0
     if s.sell_price_usd and s.cost_usd:
         mult = s.sell_price_usd / s.cost_usd
-        m_pts = _tier(mult, [(4, 10), (3, 8), (2.5, 5), (2, 2)])
-        p = s.sell_price_usd
-        price_pts = 5 if 20 <= p <= 60 else 3 if (15 <= p < 20 or 60 < p <= 90) else 1
-        margin = float(m_pts + price_pts)
+        mult_pts = _tier(mult, [(4, 10), (3, 8), (2.5, 5), (2, 2)])
         if s.cost_estimated:
-            margin *= 0.8
-        reasons.append(f"Sells ${p:.2f} vs {'~' if s.cost_estimated else ''}${s.cost_usd:.2f} cost ({mult:.1f}×)")
-    elif s.sell_price_usd:
-        p = s.sell_price_usd
-        margin = 6.0 + (2 if 20 <= p <= 60 else 0)
-    else:
-        margin = 6.0  # unknown -> neutral
-    cov_mar = 1.0 if (s.sell_price_usd and s.cost_usd) else 0.3
+            mult_pts *= 0.8
+        reasons.append(f"Sells ${s.sell_price_usd:.2f} vs {'~' if s.cost_estimated else ''}"
+                       f"${s.cost_usd:.2f} cost ({mult:.1f}×)")
+    margin, cov_mar = _pillar([(mult_pts, 10), (price_pts, 5)], 15)
 
     # ---------- 5. freshness (10)
     new_pts = _tier(-(s.first_seen_days), [(-14, 4), (-30, 3), (-60, 2), (-10_000, 1)]) if s.first_seen_days is not None else None
@@ -295,25 +303,31 @@ def score(s: Signals) -> ScoreResult:
         pen(3, "Seasonal demand")
     if s.ip_risk == "low":
         pen(3, "Possible brand look-alike")
-    if len(s.sources) <= 1:
-        pen(5, "Seen on one platform only")
     if s.max_days_running is not None and s.max_days_running < 4 and not s.videos:
         pen(5, "Ads too new to prove anything")
 
-    breakdown = {
-        "scaling": round(scaling, 1), "engagement": round(engagement, 1), "demand": round(demand, 1),
-        "margin": round(margin, 1), "freshness": round(freshness, 1),
-    }
-    raw_total = sum(breakdown.values()) - sum(p["points"] for p in penalties)
-    total = int(round(max(0, min(100, raw_total))))
-
+    pillars = {"scaling": scaling, "engagement": engagement, "demand": demand,
+               "margin": margin, "freshness": freshness}
+    breakdown = {k: (round(v, 1) if v is not None else None) for k, v in pillars.items()}
+    known_max = sum(PILLARS[k] for k, v in pillars.items() if v is not None)
+    earned = sum(v for v in pillars.values() if v is not None)
+    raw = 100 * earned / max(known_max, KNOWN_FLOOR) if known_max else 0.0
     n_src = len(s.sources)
-    coverage = (cov_scaling + cov_eng + cov_dem + cov_mar + cov_fr) / 5
-    confidence = "high" if n_src >= 3 or (n_src == 2 and coverage >= 0.6) else "medium" if n_src == 2 or coverage >= 0.5 else "low"
+    if n_src <= 1 and raw > SINGLE_SOURCE_CAP:
+        raw = SINGLE_SOURCE_CAP
+    raw -= sum(p["points"] for p in penalties)
+    total = int(round(max(0, min(100, raw))))
+
+    confidence = ("high" if n_src >= 2 and known_max >= 75
+                  else "medium" if n_src >= 2 or known_max >= 75 else "low")
+    missing = [k for k, v in pillars.items() if v is None]
+    sig = asdict(s)
+    sig["known_points"] = known_max
+    sig["missing_pillars"] = missing
 
     return ScoreResult(
         total=total, breakdown=breakdown, penalties=penalties, reasons=reasons[:7],
-        confidence=confidence, excluded=excluded, signals=asdict(s),
+        confidence=confidence, excluded=excluded, signals=sig,
     )
 
 
@@ -324,10 +338,13 @@ def pick_winners(scored: list[tuple[str, ScoreResult]], max_picks: int = MAX_PIC
     """scored = [(product_id, result)]. Returns [(product_id, result, tier)] ranked."""
     eligible = sorted((x for x in scored if not x[1].excluded), key=lambda x: (x[1].total, x[1].confidence == "high"),
                       reverse=True)
-    winners = [(pid, r, "winner") for pid, r in eligible if r.total >= WINNER_THRESHOLD][:max_picks]
+    def is_winner(r: ScoreResult) -> bool:
+        return r.total >= WINNER_THRESHOLD and r.confidence != "low"
+
+    winners = [(pid, r, "winner") for pid, r in eligible if is_winner(r)][:max_picks]
     if len(winners) < min_picks:
         fillers = [(pid, r, "rising") for pid, r in eligible
-                   if RISING_THRESHOLD <= r.total < WINNER_THRESHOLD]
+                   if r.total >= RISING_THRESHOLD and not is_winner(r)]
         winners += fillers[: min_picks - len(winners)]
     if len(winners) < min_picks:
         watch = [(pid, r, "watch") for pid, r in eligible

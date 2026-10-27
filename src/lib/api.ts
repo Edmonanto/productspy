@@ -135,11 +135,11 @@ export interface WinnersEntitlements {
 }
 
 export interface Breakdown {
-  scaling: number;
-  engagement: number;
-  demand: number;
-  margin: number;
-  freshness: number;
+  scaling: number | null;
+  engagement: number | null;
+  demand: number | null;
+  margin: number | null;
+  freshness: number | null;
 }
 
 export interface Penalty { points: number; reason: string }

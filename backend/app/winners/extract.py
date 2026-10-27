@@ -130,8 +130,17 @@ Return a JSON array with one object per ad:
   "seasonal": <true if it only sells in one season/holiday>,
   "est_cost_usd": <typical AliExpress/1688 unit cost in USD incl. cheap shipping, number>}}
 
-Use "product": null for apps, services, courses, events, general clothing stores, food, or when no
-single product is identifiable. Use the SAME key for the same product across ads.
+Only ads that sell ONE specific physical product count. Use "product": null when the ad is:
+- an app, game, software, website, SaaS, AI tool or online service
+- a course, coaching, ebook, webinar, event, membership, subscription box or info product
+- a local business or service (restaurant, salon, clinic, gym, cleaning, real estate, travel, car dealer)
+- finance, insurance, crypto, loans, jobs, recruiting, education, charity, politics, news, media, music
+- food, drinks, groceries or meal delivery; medicines or supplements
+- a store-wide sale, a catalogue, a brand campaign or an ad showing several different products
+- a general fashion/clothing/shoe/jewellery store (no single hero item)
+- a giveaway, contest, creator/influencer content, entertainment or a meme with nothing to buy
+- too vague to know what single item is sold
+When in doubt, use null. Use the SAME key for the same product across ads.
 
 Ads:
 {ads}
@@ -183,20 +192,18 @@ async def ai_guesses(ads: list[AdRecord], batch: int = 40) -> dict[int, Optional
 async def guess_products_detailed(ads: list[AdRecord]) -> list[tuple[Optional[ProductGuess], bool]]:
     """(guess or None, decided_by_ai) per ad, same order.
 
-    Only the AI can say "this is not a product". A heuristic miss just means
-    "can't tell yet" — the ad stays unlinked and is looked at again on the next
-    run (e.g. once ANTHROPIC_API_KEY is set), instead of being thrown away.
+    Only the AI can say "this is not a product". A miss (no AI key and no
+    heuristic hit, or an AI batch that failed) just means "can't tell yet" —
+    the ad stays unlinked and is looked at again on the next run.
     """
-    ai: dict[int, Optional[ProductGuess]] = {}
-    if llm_available():
-        ai = await ai_guesses(ads)
-    out: list[tuple[Optional[ProductGuess], bool]] = []
-    for i, ad in enumerate(ads):
-        if i in ai:              # AI answered (possibly "not a product")
-            out.append((ai[i], True))
-        else:
-            out.append((heuristic_guess(ad), False))
-    return out
+    if not llm_available():
+        # Free mode (no AI key): best-effort guesses from store URLs / titles.
+        return [(heuristic_guess(ad), False) for ad in ads]
+    ai = await ai_guesses(ads)
+    # With an AI key, only the AI creates products: an ad it didn't answer for
+    # (failed batch) stays unlinked and is retried next run — guesswork could
+    # turn a non-product ad into a "product".
+    return [(ai[i], True) if i in ai else (None, False) for i in range(len(ads))]
 
 
 async def guess_products(ads: list[AdRecord]) -> list[Optional[ProductGuess]]:
