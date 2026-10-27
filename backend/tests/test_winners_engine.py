@@ -530,3 +530,10 @@ def test_risk_evidence_not_labelled_ai_when_ai_never_looked():
                     started_at=NOW - timedelta(days=40)) for i in range(3)]
     ev = score(aggregate(ads, now=NOW)).signals["criteria"]["risk"]["evidence"]
     assert ev and all(e["kind"] != "ai" for e in ev)
+
+
+def test_all_prompts_format_without_errors():
+    from app.winners import cleanup, extract, verify
+    assert '{"items"' in extract.PROMPT.format(ads="x")
+    verify.PROMPT.format(name="n", ads="a")
+    cleanup.PROMPT.format(items="i")

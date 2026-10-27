@@ -117,7 +117,7 @@ SYSTEM = (
 
 PROMPT = """For each ad below, identify the single physical product it sells.
 
-Return a JSON object {"items": [...]} with one object per ad:
+Return a JSON object {{"items": [...]}} with one object per ad:
 {{"i": <index>, "product": "<generic product name in English, 2-5 words, no brand>" or null,
   "key": "<kebab-case canonical key, e.g. posture-corrector>",
   "category": "<one of: home, kitchen, beauty, health, fitness, pets, baby, kids-toys, fashion-accessories, tech-gadgets, car, outdoor, tools, other>",
