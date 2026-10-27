@@ -21,6 +21,7 @@ import logging
 
 from app import db
 
+from .filters import NON_PRODUCT_ADVERTISERS, non_product_reason
 from .llm import llm_available, llm_json
 
 log = logging.getLogger("winners.cleanup")
@@ -83,11 +84,31 @@ async def _remove(product_id) -> str:
 
 async def clean(markets: list[str]) -> dict:
     """Run on an open db connection. Returns counts."""
-    if not llm_available():
-        log.error("--clean needs OPENAI_API_KEY or ANTHROPIC_API_KEY")
-        return {"checked": 0, "removed": 0, "error": "no AI key"}
-    items = await _candidates(markets)
     removed, unanswered, names = 0, 0, []
+    # 1. Ads from app / media brands are never products, whatever they were linked to.
+    pattern = "(" + "|".join(NON_PRODUCT_ADVERTISERS) + ")"
+    freed = await db.fetchval(
+        """
+        with r as (update ad_creatives set product_id = null, not_product = true
+                    where market = any($1::text[]) and advertiser_name ~* $2 returning 1)
+        select count(*) from r
+        """, markets, r"\m" + pattern + r"\M")
+    log.info("clean: %s ads from app/media advertisers set aside", freed)
+    # 2. Names that can't be a physical product (apps, dramas, courses...) — no AI needed.
+    items = []
+    for it in await _candidates(markets):
+        why = non_product_reason(it["title"])
+        if why:
+            outcome = await _remove(it["id"])
+            removed += 1
+            names.append(it["title"])
+            log.info("not a product: %s (%s) — %s", it["title"], why, outcome)
+        else:
+            items.append(it)
+    if not llm_available():
+        log.warning("--clean: no AI key, only the rule-based pass ran")
+        return {"checked": 0, "removed": removed, "examples": names[:15], "note": "rules only (no AI key)"}
+    # 3. The AI reviews the rest.
     for start in range(0, len(items), BATCH):
         chunk = items[start:start + BATCH]
         lines = "\n".join(json.dumps({"i": i, "product": it["title"], "ads": (it["sample"] or "")[:320]},

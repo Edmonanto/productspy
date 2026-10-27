@@ -16,6 +16,7 @@ from app import db
 
 from .collectors.base import AdRecord
 from .extract import ProductGuess
+from .filters import non_product_reason
 from .scoring import ScoreResult
 
 SOURCE = "winners"
@@ -236,7 +237,7 @@ async def market_products_with_ads(market: str, window_days: int = 60) -> dict[s
     if not ads:
         return {}
     prods = await db.fetch(
-        "select id, title, price_usd, cost_usd, cost_estimated, attributes "
+        "select id, title, category, image_url, price_usd, cost_usd, cost_estimated, attributes "
         "from products where id = any($1::uuid[])",
         list(ads),
     )
@@ -252,6 +253,11 @@ async def reject_ads(market: str, product_id: str, ads: list[AdRecord]) -> None:
             "where platform = $1 and external_id = $2 and market = $3",
             a.platform, a.external_id, market, product_id,
         )
+
+
+async def set_image(product_id: str, url: str) -> None:
+    await db.execute("update products set image_url = $2, updated_at = now() where id = $1 and image_url is null",
+                     product_id, url)
 
 
 async def mark_not_physical(product_id: str) -> None:
@@ -354,8 +360,8 @@ async def latest_pick_date(market: str, on_or_before: date) -> date | None:
     )
 
 
-async def picks(market: str, day: date) -> list[asyncpg.Record]:
-    return await db.fetch(
+async def picks(market: str, day: date) -> list[dict]:
+    rows = await db.fetch(
         """
         select dw.rank, dw.tier, dw.total, dw.product_id, dw.pick_date,
                ws.breakdown, ws.reasons, ws.penalties, ws.confidence, ws.signals,
@@ -379,6 +385,16 @@ async def picks(market: str, day: date) -> list[asyncpg.Record]:
         """,
         market, day,
     )
+    # Shown picks are physical products with a picture — even ones saved
+    # before these rules existed. Ranks are renumbered 1..n.
+    out = []
+    for r in rows:
+        if not r["image_url"] or non_product_reason(r["title"], r["category"]):
+            continue
+        d = dict(r)
+        d["rank"] = len(out) + 1
+        out.append(d)
+    return out
 
 
 async def pick_dates(market: str, since: date) -> list[asyncpg.Record]:

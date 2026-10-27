@@ -16,6 +16,7 @@ from . import store
 from .collectors import Collector, active_collectors
 from .enrich import fetch_selling_price, fetch_supplier_cost
 from .extract import cluster_keys, guess_products_detailed
+from .filters import non_product_advertiser, non_product_reason
 from .markets import get_market
 from .scoring import aggregate, pick_winners, score
 from .llm import llm_available
@@ -52,8 +53,20 @@ async def extract_step(market_code: str, stats: dict) -> None:
     if not rows:
         stats["linked_ads"] = 0
         return
+    # App / media brands (Canva, short-drama apps...) never sell a product: skip the AI.
+    blocked = [str(r["id"]) for r in rows if non_product_advertiser(r.get("advertiser_name"))]
+    if blocked:
+        await store.mark_not_product(blocked)
+        rows = [r for r in rows if str(r["id"]) not in set(blocked)]
+    stats["blocked_advertisers"] = len(blocked)
+    if not rows:
+        stats["linked_ads"] = 0
+        return
     ads = [store.row_to_ad(r) for r in rows]
     detailed = await guess_products_detailed(ads)
+    # The AI's product name must not be an app, service or digital item.
+    detailed = [((None, True) if g is not None and non_product_reason(g.name, g.category) else (g, ai))
+                for g, ai in detailed]
     guesses = cluster_keys([g for g, _ in detailed], await store.existing_keys())
     touched, not_products, unknown = set(), [], 0
     for row, ad, guess, (_, by_ai) in zip(rows, ads, guesses, detailed):
@@ -112,7 +125,8 @@ def _signals(prod, ads, day: date, now: datetime, last, history: list | None = N
         restricted=bool(attrs.get("restricted")),
         fragile_heavy=_opt_bool(attrs.get("fragile_heavy")) if ai_seen else None,
         seasonal=_opt_bool(attrs.get("seasonal")) if ai_seen else None,
-        physical=attrs.get("physical", True) is not False,
+        physical=attrs.get("physical", True) is not False
+                 and not non_product_reason(prod["title"], prod.get("category")),
         last_picked_days_ago=(day - last).days if last else None,
         paid_ads_history=list(history or []),
     )
@@ -192,6 +206,21 @@ async def score_step(market_code: str, day: date, stats: dict) -> None:
         for pid, (res, ads) in results.items():
             if pid not in verified and not res.excluded:
                 res.excluded = "ads not checked yet"
+
+    # Every pick needs a picture: use the product's own, else the best ad thumbnail.
+    no_image = 0
+    for pid, (res, ads) in results.items():
+        prod = products[pid][0]
+        if prod["image_url"]:
+            continue
+        thumb = next((a.thumbnail_url for a in sorted(ads, key=lambda a: a.platform != "meta")
+                      if a.thumbnail_url and a.thumbnail_url.startswith("http")), None)
+        if thumb:
+            await store.set_image(pid, thumb)
+        elif not res.excluded:
+            res.excluded = "no product image"
+            no_image += 1
+    stats["no_image"] = no_image
 
     scored, score_ids = [], {}
     for pid, (res, ads) in results.items():

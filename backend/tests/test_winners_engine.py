@@ -483,7 +483,7 @@ async def test_verify_step_excludes_non_products(monkeypatch):
     from app.winners import pipeline, store, verify
     ads = [AdRecord(platform="meta", external_id="c", market="US", ad_text="Join my course",
                     started_at=NOW - timedelta(days=40), variant_count=8)]
-    prod = {"title": "Online Course", "attributes": {"physical": True}, "price_usd": None,
+    prod = {"title": "Wellness Starter Pack", "attributes": {"physical": True}, "price_usd": None,
             "cost_usd": None, "cost_estimated": False}
     products = {"p": (prod, ads)}
     day = date(2026, 10, 25)
@@ -537,3 +537,33 @@ def test_all_prompts_format_without_errors():
     assert '{"items"' in extract.PROMPT.format(ads="x")
     verify.PROMPT.format(name="n", ads="a")
     cleanup.PROMPT.format(items="i")
+
+
+def test_apps_and_media_are_never_products():
+    from app.winners.filters import non_product_advertiser, non_product_reason
+    for bad in ["Canva Design App", "AI Drama Short Series", "Short Drama Episodes", "Meal Kit Subscription",
+                "Photo Editor App", "Online Fitness Course", "ReelShort", "Gut Health Supplement"]:
+        assert non_product_reason(bad), bad
+    for good in ["Posture Corrector Brace", "Power Bank 20000mAh", "Travel Neck Pillow", "Hair Extension Clip",
+                 "Streaming Microphone USB", "Game Controller Grip", "App Controlled LED Strip Light",
+                 "Kindle Case Cover", "Card Game For Families"]:
+        assert non_product_reason(good) is None, good
+    assert non_product_advertiser("Canva") and non_product_advertiser("DramaBox Official")
+    assert not non_product_advertiser("BackFix Store")
+    res = score(aggregate(_ads_strong(), now=NOW, physical=False))
+    assert res.excluded == "not a physical product"
+
+
+async def test_shown_picks_skip_non_products_and_imageless(monkeypatch):
+    from datetime import date
+    from app import db as dbm
+    from app.winners import store
+    rows = [{"rank": 1, "title": "Canva Pro App", "category": "other", "image_url": "https://x/i.jpg"},
+            {"rank": 2, "title": "Posture Brace", "category": "health", "image_url": None},
+            {"rank": 3, "title": "LED Projector", "category": "home", "image_url": "https://x/p.jpg"}]
+
+    async def fetch(*a, **k):
+        return rows
+    monkeypatch.setattr(dbm, "fetch", fetch)
+    out = await store.picks("US", date.today())
+    assert [(r["rank"], r["title"]) for r in out] == [(1, "LED Projector")]
