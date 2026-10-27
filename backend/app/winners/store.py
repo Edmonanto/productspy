@@ -291,6 +291,29 @@ async def last_picks(market: str, before: date) -> dict[str, date]:
     return {str(r["product_id"]): r["last"] for r in rows}
 
 
+async def paid_ads_history(market: str, product_ids: list[str], before: date,
+                           days: int = 21) -> dict[str, list[int]]:
+    """Active paid ads per product on earlier scans (oldest first) — the time series
+    behind the trend status. Read from the signals stored with each daily score."""
+    if not product_ids:
+        return {}
+    rows = await db.fetch(
+        """
+        select product_id, scored_on,
+               coalesce((signals ->> 'meta_ads')::int, 0) + coalesce((signals ->> 'tiktok_ads')::int, 0) as paid
+          from winner_scores
+         where market = $1 and product_id = any($2::uuid[])
+           and scored_on < $3 and scored_on >= $3 - $4::int
+         order by scored_on
+        """,
+        market, product_ids, before, days,
+    )
+    out: dict[str, list[int]] = {}
+    for r in rows:
+        out.setdefault(str(r["product_id"]), []).append(int(r["paid"]))
+    return out
+
+
 async def save_score(product_id: str, market: str, day: date, res: ScoreResult) -> str:
     return str(await db.fetchval(
         """

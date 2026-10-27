@@ -151,63 +151,93 @@ def _ads_strong():
     return ads
 
 
+AI_ATTRS = dict(wow=7, problem=8, demo3s=True, upsell=6, brandable=7, ip_risk="none",
+                fragile_heavy=False, seasonal=False)
+
+
 def test_strong_product_is_a_winner():
-    sig = aggregate(_ads_strong(), now=NOW, sell_price_usd=34.99, cost_usd=6.0, wow=7, problem=8)
+    sig = aggregate(_ads_strong(), now=NOW, sell_price_usd=34.99, cost_usd=6.0, **AI_ATTRS)
     assert sig.advertisers == 7  # tiktok ad has no store info -> not counted
     assert sig.max_days_running == 35 and sig.new_creatives_7d == 5
     res = score(sig)
     assert res.total >= 80, res
     assert res.confidence == "high"
-    assert any("stores selling it" in r for r in res.reasons)
+    assert set(res.breakdown) == {"demand", "profitability", "competition", "creative",
+                                  "differentiation", "logistics", "market_fit", "risk"}
+    assert all(v is not None for v in res.breakdown.values())
+    assert any("stores running ads" in r for r in res.reasons)
     assert res.excluded is None
+    assert pick_winners([("p", res)])[0][2] == "winner"
+
+
+def test_every_criterion_has_tagged_evidence():
+    res = score(aggregate(_ads_strong(), now=NOW, sell_price_usd=34.99, cost_usd=6.0, **AI_ATTRS))
+    crit = res.signals["criteria"]
+    for k, info in crit.items():
+        assert info["known"] and info["evidence"], k
+        assert all(e["kind"] in {"observed", "calculated", "ai", "assumption"} for e in info["evidence"])
+    kinds = {e["kind"] for e in crit["profitability"]["evidence"]}
+    assert {"calculated", "assumption"} <= kinds
+    # views are never presented as sales
+    demand_text = " ".join(e["text"] for e in crit["demand"]["evidence"])
+    assert "views are not sales" in demand_text
+
+
+def test_weights_sum_to_100_and_can_be_overridden():
+    from app.winners.scoring import CRITERIA, load_weights
+    assert abs(sum(CRITERIA.values()) - 100) < 1e-6 and CRITERIA["demand"] == 20 and CRITERIA["risk"] == 5
+    w = load_weights('{"demand": 40, "risk": 0}')
+    assert abs(sum(w.values()) - 100) < 1e-6 and w["risk"] == 0 and w["demand"] > 20
+    assert load_weights("not json") == load_weights("")
 
 
 def test_weak_single_source_product_scores_low():
     ads = [AdRecord(platform="meta", external_id="x", market="US", advertiser_id="a",
                     started_at=NOW - timedelta(days=2))]
     res = score(aggregate(ads, now=NOW))
-    assert res.total < 40
+    assert res.total < 55
     assert res.confidence == "low"
+    assert pick_winners([("p", res)]) == [] or pick_winners([("p", res)])[0][2] == "watch"
 
 
-def test_missing_pillar_is_left_out_not_zero():
+def test_missing_criterion_is_left_out_not_zero():
     # only organic, very strong — no paid ads at all
     ads = [a for a in _ads_strong() if a.platform == "tiktok_organic"]
-    res = score(aggregate(ads, now=NOW, sell_price_usd=30, cost_usd=6))
-    assert res.breakdown["scaling"] is None
-    assert "scaling" in res.signals["missing_pillars"]
-    assert 60 <= res.total <= 85          # one platform: capped at 85
-    assert res.confidence == "low"
+    res = score(aggregate(ads, now=NOW, sell_price_usd=30, cost_usd=6, **AI_ATTRS))
+    assert res.breakdown["competition"] is None          # no stores seen advertising
+    assert "competition" in res.signals["missing_pillars"]
+    assert not res.signals["criteria"]["competition"]["known"]
+    assert res.total <= 85                                 # one platform: capped
+    assert res.confidence in ("low", "medium")
 
 
-def test_facebook_only_long_runner_is_rising_not_buried():
-    # The real case that scored 44 before: 229 days running, 12 versions,
-    # 3 stores, no TikTok data, no price found.
+def test_facebook_only_long_runner_is_not_buried():
     ads = [AdRecord(platform="meta", external_id=f"f{i}", market="US", advertiser_id=f"s{i % 3}",
                     landing_url=f"https://shop{i % 3}.com/products/x", variant_count=3,
                     started_at=NOW - timedelta(days=229 if i == 0 else 120)) for i in range(4)]
     res = score(aggregate(ads, now=NOW))
-    assert res.breakdown["engagement"] is None and res.breakdown["margin"] is None
-    assert 60 <= res.total <= 85, res
+    assert res.breakdown["profitability"] is None and res.breakdown["creative"] is None
+    assert 55 <= res.total <= 85, res
     assert res.confidence == "low"
     assert pick_winners([("p", res)])[0][2] == "rising"   # low confidence can't be "winner"
 
 
 def test_single_strong_signal_cannot_score_high():
-    # only scaling known (30 pts) -> scaled to KNOWN_FLOOR, not to 100
     ads = [AdRecord(platform="meta", external_id=f"z{i}", market="US", advertiser_id="one",
                     variant_count=5, started_at=NOW - timedelta(days=60)) for i in range(4)]
-    sig = aggregate(ads, now=NOW)
-    sig.first_seen_days = None
-    res = score(sig)
-    assert res.total <= 70
+    res = score(aggregate(ads, now=NOW))
+    assert res.total <= 75
 
 
-def test_saturation_penalty():
-    sig = aggregate(_ads_strong(), now=NOW, sell_price_usd=34.99, cost_usd=6.0)
+def test_competition_is_not_punished_per_se_but_saturation_is():
+    base = dict(sell_price_usd=34.99, cost_usd=6.0, **AI_ATTRS)
+    ok = score(aggregate(_ads_strong(), now=NOW, **base))
+    sig = aggregate(_ads_strong(), now=NOW, **base)
     sig.advertisers = 80
-    res = score(sig)
-    assert any(p["points"] == 10 for p in res.penalties)
+    sat = score(sig)
+    assert sat.breakdown["competition"] < ok.breakdown["competition"]
+    assert any("saturated" in e["text"] for e in sat.signals["criteria"]["competition"]["evidence"])
+    assert ok.breakdown["competition"] == ok.signals["criteria"]["competition"]["max"]
 
 
 def test_hard_filters():
@@ -221,23 +251,43 @@ def test_hard_filters():
 def test_estimated_cost_trusted_less():
     a = score(aggregate(_ads_strong(), now=NOW, sell_price_usd=34.99, cost_usd=6.0))
     b = score(aggregate(_ads_strong(), now=NOW, sell_price_usd=34.99, cost_usd=6.0, cost_estimated=True))
-    assert b.breakdown["margin"] < a.breakdown["margin"]
+    assert b.breakdown["profitability"] < a.breakdown["profitability"]
+    assert any(e["kind"] == "ai" for e in b.signals["criteria"]["profitability"]["evidence"])
+
+
+def test_trend_status_from_time_series():
+    from app.winners.scoring import trend_status
+    ads = [AdRecord(platform="meta", external_id=f"t{i}", market="US", advertiser_id=f"s{i}",
+                    started_at=NOW - timedelta(days=90)) for i in range(2)]
+    falling = aggregate(ads, now=NOW, paid_ads_history=[8, 9, 8, 2])
+    assert trend_status(falling)[0] == "declining"
+    rising = aggregate(ads * 3, now=NOW, paid_ads_history=[1, 2, 2, 6])
+    assert trend_status(rising)[0] == "growing"
+    assert trend_status(aggregate([], now=NOW))[0] == "unknown"
+    assert trend_status(aggregate([], now=NOW, seasonal=True))[0] == "seasonal"
+    res = score(falling)
+    assert res.signals["trend"] == "declining"
+
+
+def test_band_labels():
+    from app.winners.scoring import band
+    assert band(90).startswith("Exceptional") and band(72).startswith("Strong")
+    assert band(60).startswith("Promising") and band(45).startswith("Weak") and band(10).startswith("Low")
 
 
 def test_pick_winners_threshold_and_filler():
     from app.winners.scoring import ScoreResult
     mk = lambda t, x=None, c="medium": ScoreResult(total=t, breakdown={}, excluded=x, confidence=c)
     scored = [("a", mk(91)), ("b", mk(75)), ("c", mk(72, "restricted")), ("d", mk(66)), ("e", mk(64)),
-              ("f", mk(62)), ("g", mk(50))]
+              ("f", mk(58)), ("g", mk(50))]
     picks = pick_winners(scored)
     assert [p[0] for p in picks] == ["a", "b", "d", "e", "f"]
     assert [p[2] for p in picks] == ["winner", "winner", "rising", "rising", "rising"]
-    # A thin day: nothing reaches 60, so the best of the rest show as "watch".
-    thin = [("x", mk(45)), ("y", mk(31)), ("z", mk(12)), ("r", mk(65))]
+    # A thin day: few reach 55, so the best of the rest (40+) show as "watch".
+    thin = [("x", mk(45)), ("y", mk(41)), ("z", mk(32)), ("r", mk(65))]
     picks = pick_winners(thin)
     assert [(p[0], p[2]) for p in picks] == [("r", "rising"), ("x", "watch"), ("y", "watch")]
-    # 70+ with low confidence (one platform, little data) is "rising", not "winner"
-    assert pick_winners([("lo", mk(78, c="low"))]) [0][2] == "rising"
+    assert pick_winners([("lo", mk(78, c="low"))])[0][2] == "rising"
     many = [(str(i), mk(70 + i)) for i in range(15)]
     assert len(pick_winners(many)) == 10
 
@@ -465,3 +515,18 @@ async def test_with_ai_key_no_guesswork_products(monkeypatch):
     monkeypatch.setattr(extract, "ai_guesses", failed_ai)
     out = await extract.guess_products_detailed(ads)
     assert out == [(None, False)]     # left for the next run, not turned into a product
+
+
+def test_price_without_cost_is_not_scored_as_profitable():
+    ads = [AdRecord(platform="meta", external_id=f"q{i}", market="US", advertiser_id=f"s{i % 3}",
+                    started_at=NOW - timedelta(days=30)) for i in range(4)]
+    res = score(aggregate(ads, now=NOW, sell_price_usd=24.99))
+    assert res.breakdown["profitability"] is None
+    assert "no product cost" in res.signals["criteria"]["profitability"]["evidence"][0]["text"]
+
+
+def test_risk_evidence_not_labelled_ai_when_ai_never_looked():
+    ads = [AdRecord(platform="meta", external_id=f"r{i}", market="US", advertiser_id="s",
+                    started_at=NOW - timedelta(days=40)) for i in range(3)]
+    ev = score(aggregate(ads, now=NOW)).signals["criteria"]["risk"]["evidence"]
+    assert ev and all(e["kind"] != "ai" for e in ev)

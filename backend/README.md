@@ -250,3 +250,37 @@ once with real network access and check `winner_runs` before relying on the
 schedule. Billing is untested against live provider accounts — run Stripe's
 `stripe listen --forward-to localhost:8000/api/v1/billing/webhook/stripe` and a
 PayPal sandbox subscription before switching real keys on.
+
+## Research engine (scoring v2, AI reports, validation)
+
+**Score** (`app/winners/scoring.py`): eight criteria, default weights demand 20 · profitability 20 ·
+competition 15 · creative 10 · differentiation 10 · logistics 10 · market fit 10 · risk 5
+(override with `WINNERS_WEIGHTS='{"demand": 25}'`, always rescaled to 100). Each criterion stores
+its evidence tagged observed / calculated / ai / assumption. Criteria without data are left out
+(never zero); single-platform products cap at 85; a "winner" (70+) needs medium/high confidence.
+Bands: 85+ exceptional · 70–84 strong · 55–69 promising · 40–54 weak · <40 low.
+
+**Unit economics** (`app/winners/economics.py`, mirrored in `src/lib/profit.ts`): contribution
+before/after ads, break-even CPA and ROAS, scenarios, sensitivity. Deterministic; missing inputs
+→ incomplete. Tests: `tests/test_economics.py`.
+
+**AI research report** (`app/winners/research.py`, `POST /research/{id}/report`): evidence pack
+(ads, safely fetched competitor pages — `safe_fetch.py` blocks private/internal addresses —,
+suppliers, calculated score/economics) → OpenAI JSON mode → pydantic validation (one retry) →
+source-id check, unverified-number check, price-range sanity check → cached
+`RESEARCH_CACHE_DAYS` (7). Plan limit `reports_per_day` in `WINNERS_PLANS`.
+
+**Validation workflow**: `GET/PUT /research/{id}/validation[/{stage}]`, `PUT /research/{id}/results`.
+**Compare**: `GET /research/compare?ids=…` (plan `compare_max`). **Usage**: `GET /research/usage` (admins).
+
+| Env | Default | |
+|---|---|---|
+| `OPENAI_RESEARCH_MODEL` | `OPENAI_MODEL` | model for reports |
+| `LLM_DAILY_CALL_CAP` | 3000 | AI calls/day, 0 = no cap |
+| `APIFY_DAILY_RUN_CAP` | 60 | Apify runs/day, 0 = no cap |
+| `RESEARCH_CONCURRENCY` | 3 | reports generated at once |
+| `RESEARCH_CACHE_DAYS` | 7 | reuse a report this long |
+| `WINNERS_WEIGHTS` | — | JSON weight overrides |
+
+Migration `017_research.sql` adds `product_reports`, `report_requests`, `validation_steps`,
+`validation_results` and token/item columns on `api_usage`.

@@ -147,6 +147,14 @@ WINNERS_MODEL = os.environ.get("WINNERS_MODEL", "") or ANTHROPIC_MODEL
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 OPENAI_MODEL = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
 OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1").rstrip("/")
+# Model for the per-product AI research report (defaults to OPENAI_MODEL).
+OPENAI_RESEARCH_MODEL = os.environ.get("OPENAI_RESEARCH_MODEL", "") or OPENAI_MODEL
+
+# Cost controls for paid APIs (app/usage.py). A cap of 0 means no cap.
+LLM_DAILY_CALL_CAP = int(os.environ.get("LLM_DAILY_CALL_CAP", "3000"))
+APIFY_DAILY_RUN_CAP = int(os.environ.get("APIFY_DAILY_RUN_CAP", "60"))
+RESEARCH_CONCURRENCY = int(os.environ.get("RESEARCH_CONCURRENCY", "3"))
+RESEARCH_CACHE_DAYS = int(os.environ.get("RESEARCH_CACHE_DAYS", "7"))
 
 # Sources. All free by default; Apify replaces the scrapers when enabled.
 COLLECT_META = os.environ.get("COLLECT_META", "true").lower() == "true"
@@ -183,11 +191,15 @@ def winners_markets() -> list[str]:
 # What each plan unlocks in Daily Winners. Mirrors PLANS in
 # src/app/dashboard/billing/page.tsx.
 WINNERS_PLANS: dict[str, dict[str, int | bool]] = {
-    #            markets  picks/day  history  ad evidence  csv
-    "free":    {"markets": 1,  "winners_per_day": 3,  "history_days": 0,  "ad_evidence": False, "export_csv": False},
-    "starter": {"markets": 1,  "winners_per_day": 10, "history_days": 7,  "ad_evidence": True,  "export_csv": False},
-    "pro":     {"markets": 3,  "winners_per_day": 10, "history_days": 30, "ad_evidence": True,  "export_csv": True},
-    "agency":  {"markets": 99, "winners_per_day": 10, "history_days": 90, "ad_evidence": True,  "export_csv": True},
+    #            markets  picks/day  history  ad evidence  csv  AI reports/day  compare
+    "free":    {"markets": 1,  "winners_per_day": 3,  "history_days": 0,  "ad_evidence": False, "export_csv": False,
+                "reports_per_day": 1, "compare_max": 2},
+    "starter": {"markets": 1,  "winners_per_day": 10, "history_days": 7,  "ad_evidence": True,  "export_csv": False,
+                "reports_per_day": 5, "compare_max": 3},
+    "pro":     {"markets": 3,  "winners_per_day": 10, "history_days": 30, "ad_evidence": True,  "export_csv": True,
+                "reports_per_day": 20, "compare_max": 5},
+    "agency":  {"markets": 99, "winners_per_day": 10, "history_days": 90, "ad_evidence": True,  "export_csv": True,
+                "reports_per_day": 100, "compare_max": 5},
 }
 
 

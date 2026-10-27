@@ -18,7 +18,7 @@ export default function PillarBars({ breakdown, compact = false }: Props) {
         const ratio = val / max;
         return (
           <div key={k} className="flex items-center gap-2">
-            <span className={cn("text-zinc-400 shrink-0", compact ? "w-24 text-[11px]" : "w-28 text-xs")}>
+            <span className={cn("text-zinc-400 shrink-0", compact ? "w-[6.5rem] text-[11px]" : "w-28 text-xs")}>
               {PILLAR_LABEL[k]}
             </span>
             <div

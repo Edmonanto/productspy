@@ -94,18 +94,27 @@ async def enrich_step(market_code: str, stats: dict) -> None:
     stats["priced"] = done
 
 
-def _signals(prod, ads, day: date, now: datetime, last) -> "object":
+def _opt_bool(v):
+    return None if v is None else bool(v)
+
+
+def _signals(prod, ads, day: date, now: datetime, last, history: list | None = None) -> "object":
     attrs = _attrs(prod["attributes"])
+    ai_seen = "physical" in attrs          # attributes written by the AI pass
     return aggregate(
         ads, now=now,
         sell_price_usd=float(prod["price_usd"]) if prod["price_usd"] is not None else None,
         cost_usd=float(prod["cost_usd"]) if prod["cost_usd"] is not None else None,
         cost_estimated=bool(prod["cost_estimated"]),
-        wow=attrs.get("wow"), problem=attrs.get("problem"),
-        ip_risk=attrs.get("ip_risk") or "none", restricted=bool(attrs.get("restricted")),
-        fragile_heavy=bool(attrs.get("fragile_heavy")), seasonal=bool(attrs.get("seasonal")),
+        wow=attrs.get("wow"), problem=attrs.get("problem"), demo3s=_opt_bool(attrs.get("demo3s")),
+        upsell=attrs.get("upsell"), brandable=attrs.get("brandable"),
+        ip_risk=attrs.get("ip_risk") or ("none" if ai_seen else None),
+        restricted=bool(attrs.get("restricted")),
+        fragile_heavy=_opt_bool(attrs.get("fragile_heavy")) if ai_seen else None,
+        seasonal=_opt_bool(attrs.get("seasonal")) if ai_seen else None,
         physical=attrs.get("physical", True) is not False,
         last_picked_days_ago=(day - last).days if last else None,
+        paid_ads_history=list(history or []),
     )
 
 
@@ -164,9 +173,10 @@ async def score_step(market_code: str, day: date, stats: dict) -> None:
     now = datetime.now(timezone.utc)
     products = await store.market_products_with_ads(market_code)
     picked = await store.last_picks(market_code, day)
+    history = await store.paid_ads_history(market_code, list(products), day)
     results: dict = {}
     for pid, (prod, ads) in products.items():
-        results[pid] = (score(_signals(prod, ads, day, now, picked.get(pid))), ads)
+        results[pid] = (score(_signals(prod, ads, day, now, picked.get(pid), history.get(pid))), ads)
 
     verified: set[str] | None = None
     try:

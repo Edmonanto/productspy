@@ -8,6 +8,7 @@ import { CalendarDays, Download, Info, Lock, Trophy } from "lucide-react";
 import Topbar from "@/components/layout/Topbar";
 import MarketPicker from "@/components/winners/MarketPicker";
 import WinnerCard, { LockedWinnerCard } from "@/components/winners/WinnerCard";
+import CompareTray from "@/components/research/CompareTray";
 import { winnersApi } from "@/lib/api";
 import { useMarket } from "@/lib/useMarket";
 
@@ -55,7 +56,7 @@ function WinnersInner() {
     <div className="flex flex-col min-h-full">
       <Topbar title="Daily Winners" />
 
-      <div className="p-4 md:p-6 space-y-5 max-w-6xl w-full mx-auto">
+      <div className="p-4 md:p-6 pb-24 space-y-5 max-w-6xl w-full mx-auto">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
           <div className="space-y-1">
@@ -66,7 +67,7 @@ function WinnersInner() {
             <p className="text-zinc-500 text-sm">
               {data?.date
                 ? `${nWinners} winner${nWinners === 1 ? "" : "s"}${nRising ? ` + ${nRising} rising` : ""}${nWatch ? ` + ${nWatch} to watch` : ""} picked on ${new Date(data.date + "T00:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`
-                : "Only products scoring 70+ make the list. Updated every day."}
+                : "Products are scored 0–100 on eight criteria, with the evidence for each. Updated every day."}
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -154,7 +155,7 @@ function WinnersInner() {
           <div className="space-y-3">
             {nWatch > 0 && nWinners + nRising === 0 && (
               <div className="text-xs text-sky-200 bg-sky-500/10 border border-sky-500/20 rounded-lg px-3 py-2">
-                No product reached 60 in this scan, so these are the strongest early signals — worth watching,
+                No product reached 55 in this scan, so these are the strongest early signals (40–54) — worth watching,
                 not yet proven. Scores rise as the same product shows up across more stores and platforms.
               </div>
             )}
@@ -170,15 +171,19 @@ function WinnersInner() {
             <Info size={14} /> How products are scored
           </summary>
           <div className="mt-3 grid md:grid-cols-2 gap-x-8 gap-y-1.5 text-xs leading-relaxed">
-            <p><b className="text-zinc-200">Scaling proof (30)</b> — ads running 14+ days, 5+ creatives, new creatives this week, reach / budget.</p>
-            <p><b className="text-zinc-200">Engagement (25)</b> — TikTok engagement rate, shares, &quot;where can I buy&quot; comments, ad CTR.</p>
-            <p><b className="text-zinc-200">Proven demand (20)</b> — 3–15 different stores selling it, many creators, total views.</p>
-            <p><b className="text-zinc-200">Margin (15)</b> — sells for 3×+ the supplier cost, ideally $20–60.</p>
-            <p><b className="text-zinc-200">Freshness (10)</b> — new, accelerating, and has a wow / problem-solving effect.</p>
-            <p><b className="text-zinc-200">Removed</b> — restricted items, brand copies, saturated (50+ stores), already picked in the last 30 days.</p>
+            <p><b className="text-zinc-200">Demand & trend (20)</b> — stores advertising it, how long ads keep running, new ads in the last 14 days, creators, recent video velocity.</p>
+            <p><b className="text-zinc-200">Profitability (20)</b> — contribution margin after cost, shipping, fees and returns; price band; markup.</p>
+            <p><b className="text-zinc-200">Competition (15)</b> — 3–15 stores is validated but open; 1 is unproven; 30+ is crowded.</p>
+            <p><b className="text-zinc-200">Creative potential (10)</b> — scroll-stopping, problem-solving, shown in 3 seconds; observed engagement.</p>
+            <p><b className="text-zinc-200">Differentiation (10)</b> — bundle/upsell and branding potential (AI-assessed).</p>
+            <p><b className="text-zinc-200">Logistics (10)</b> — fragile/heavy, shipping cost relative to price.</p>
+            <p><b className="text-zinc-200">Market fit (10)</b> — advertised to shoppers in this market, local price found.</p>
+            <p><b className="text-zinc-200">Risk (5)</b> — brand look-alike, seasonality, declining ads.</p>
+            <p className="md:col-span-2"><b className="text-zinc-200">Honest scoring</b> — criteria without data are left out, not counted as zero; single-platform products are capped at 85; a “winner” (70+) needs medium or high confidence. 55–69 is promising, 40–54 is an early signal. Restricted items, brand copies and products picked in the last 30 days are removed. Scores support your decision — they don&apos;t guarantee sales.</p>
           </div>
         </details>
       </div>
+      <CompareTray market={market} />
     </div>
   );
 }

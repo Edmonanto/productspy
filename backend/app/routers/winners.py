@@ -29,7 +29,10 @@ from ..winners.markets import DEFAULT_MARKET, MARKETS, market_public
 
 router = APIRouter(prefix="/winners", tags=["winners"])
 
-PILLARS = ("scaling", "engagement", "demand", "margin", "freshness")
+from ..winners.scoring import CRITERIA, CRITERIA_LABEL, band
+from ..winners import economics
+
+PILLARS = tuple(CRITERIA)
 
 
 # ── helpers ─────────────────────────────────────────────────────────────────
@@ -96,9 +99,21 @@ def serialize_pick(r: Any) -> dict[str, Any]:
     sig = _json(r["signals"]) or {}
     attrs = _json(r["attributes"]) or {}
     price, cost = _f(r["price_usd"]), _f(r["cost_usd"])
+    econ = economics.for_product(price, cost)
     return {
         "rank": r["rank"], "tier": r["tier"], "total": r["total"], "locked": False,
-        "breakdown": _json(r["breakdown"]) or {p: 0 for p in PILLARS},
+        "band": sig.get("band") or band(r["total"]),
+        "trend": sig.get("trend") or "unknown",
+        "trend_why": sig.get("trend_why"),
+        "strengths": sig.get("strengths") or [],
+        "weaknesses": sig.get("weaknesses") or [],
+        "missing": sig.get("missing_pillars") or [],
+        "scored_on": r["pick_date"].isoformat() if r.get("pick_date") else None,
+        "economics": {"complete": econ.complete,
+                      "contribution_before_ads_usd": econ.contribution_before_ads_usd,
+                      "contribution_margin_pct": econ.contribution_margin_pct,
+                      "break_even_roas": econ.break_even_roas},
+        "breakdown": _json(r["breakdown"]) or {},
         "reasons": _json(r["reasons"]) or [],
         "penalties": _json(r["penalties"]) or [],
         "confidence": r["confidence"],
@@ -248,6 +263,27 @@ async def run_status(user: CurrentUser = Depends(current_user)) -> dict[str, Any
     } for r in rows]}
 
 
+def _score_out(latest: Any) -> dict[str, Any]:
+    sig = _json(latest["signals"]) or {}
+    return {
+        "scored_on": latest["scored_on"].isoformat(), "total": latest["total"],
+        "breakdown": _json(latest["breakdown"]), "reasons": _json(latest["reasons"]),
+        "penalties": _json(latest["penalties"]), "confidence": latest["confidence"],
+        "excluded": latest["excluded"],
+        "band": sig.get("band") or band(latest["total"]),
+        "criteria": sig.get("criteria") or {},
+        "trend": sig.get("trend") or "unknown", "trend_why": sig.get("trend_why"),
+        "strengths": sig.get("strengths") or [], "weaknesses": sig.get("weaknesses") or [],
+        "missing": sig.get("missing_pillars") or [],
+        "known_points": sig.get("known_points"),
+        "signals": {k: sig.get(k) for k in (
+            "advertisers", "creatives", "new_creatives_7d", "new_creatives_14d", "new_creatives_30d",
+            "max_days_running", "median_days_running", "meta_ads", "tiktok_ads", "videos", "creators",
+            "total_views", "engagement_rate", "intent_ratio", "views_per_hour", "first_seen_days",
+            "paid_ads_history")},
+    }
+
+
 @router.get("/products/{product_id}")
 async def product_evidence(product_id: str, market: str | None = None,
                            user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
@@ -285,15 +321,16 @@ async def product_evidence(product_id: str, market: str | None = None,
             "margin_pct": round((price - cost) / price * 100) if price and cost else None,
             "product_url": p["product_url"] or None, "first_seen_at": p["first_seen_at"],
             "attributes": {k: attrs.get(k) for k in
-                           ("wow", "problem", "demo3s", "ip_risk", "fragile_heavy", "seasonal")},
+                           ("wow", "problem", "demo3s", "upsell", "brandable", "ip_risk", "fragile_heavy", "seasonal")},
         },
-        "score": None if latest is None else {
-            "scored_on": latest["scored_on"].isoformat(), "total": latest["total"],
-            "breakdown": _json(latest["breakdown"]), "reasons": _json(latest["reasons"]),
-            "penalties": _json(latest["penalties"]), "confidence": latest["confidence"],
-            "excluded": latest["excluded"],
-        },
-        "history": [{"date": h["scored_on"].isoformat(), "total": h["total"]} for h in reversed(history)],
+        "score": None if latest is None else _score_out(latest),
+        "criteria_labels": CRITERIA_LABEL,
+        "assumptions": economics.DEFAULTS,
+        "history": [{"date": h["scored_on"].isoformat(), "total": h["total"],
+                     "paid_ads": ((_json(h["signals"]) or {}).get("meta_ads") or 0)
+                                 + ((_json(h["signals"]) or {}).get("tiktok_ads") or 0),
+                     "videos": (_json(h["signals"]) or {}).get("videos") or 0}
+                    for h in reversed(history)],
         "suppliers": [{"platform": s["platform"], "supplier_name": s["supplier_name"],
                        "supplier_url": s["supplier_url"], "unit_cost_usd": _f(s["unit_cost_usd"])}
                       for s in await store.product_suppliers(product_id)],

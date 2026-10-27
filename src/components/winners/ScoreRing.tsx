@@ -7,15 +7,15 @@ interface Props {
   className?: string;
 }
 
-/** Circular 0-100 score. Green >= 70 (winner), amber 60-69 (rising), red below. */
+/** Circular 0-100 score. Green >= 70 (strong), amber 55-69 (promising), grey 40-54, red below 40. */
 export default function ScoreRing({ score, size = 64, stroke = 6, className }: Props) {
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
   const pct = Math.max(0, Math.min(100, score)) / 100;
-  const color = score >= 70 ? "#34d399" : score >= 60 ? "#fbbf24" : "#f87171";
+  const color = score >= 70 ? "#34d399" : score >= 55 ? "#fbbf24" : score >= 40 ? "#a1a1aa" : "#f87171";
 
   return (
-    <div className={cn("relative shrink-0", className)} style={{ width: size, height: size }}>
+    <div className={cn("relative shrink-0", className)} style={{ width: size, height: size }} role="img" aria-label={`Score ${score} out of 100`}>
       <svg width={size} height={size} className="-rotate-90">
         <circle cx={size / 2} cy={size / 2} r={r} stroke="#27272a" strokeWidth={stroke} fill="none" />
         <circle

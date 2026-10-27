@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Bookmark, LayoutDashboard, Trophy, Receipt,
+  Bookmark, Columns3, LayoutDashboard, Trophy, Receipt,
   CreditCard, Settings, Zap, LogOut, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,6 +17,7 @@ const NAV_ITEMS = [
   { href: "/dashboard", icon: LayoutDashboard, label: "Overview" },
   { href: "/dashboard/winners", icon: Trophy, label: "Daily Winners" },
   { href: "/dashboard/watchlist", icon: Bookmark, label: "Watchlist" },
+  { href: "/dashboard/compare", icon: Columns3, label: "Compare" },
   { href: "/dashboard/quotes", icon: Receipt, label: "Quotes" },
 ];
 

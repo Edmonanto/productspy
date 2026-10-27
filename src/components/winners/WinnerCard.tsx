@@ -3,14 +3,26 @@
 import Link from "next/link";
 import { useState } from "react";
 import {
-  ArrowRight, Bookmark, CheckCircle2, Clock, ExternalLink, Layers, Store,
+  ArrowRight, Bookmark, CheckCircle2, Clock, Columns3, ExternalLink, Layers, Store,
   TrendingUp, MessageCircle, AlertTriangle, Lock, ImageOff,
 } from "lucide-react";
 import { WinnerPick, watchlistApi } from "@/lib/api";
-import { cn, fmtNum, fmtPct, formatPrice, SOURCE_LABEL } from "@/lib/utils";
+import { useCompare } from "@/lib/compare";
+import { cn, fmtNum, fmtPct, formatPrice, scoreBand, SOURCE_LABEL } from "@/lib/utils";
 import ScoreRing from "./ScoreRing";
 import PillarBars from "./PillarBars";
 import ProductImage from "@/components/products/ProductImage";
+import { TrendBadge } from "@/components/research/TrendPanel";
+
+/** Competition label from the number of stores advertising it (scoring.py, criterion C). */
+function competition(stores: number | null | undefined): { label: string; tone: string } | null {
+  if (!stores) return null;
+  if (stores === 1) return { label: "1 store · unproven", tone: "text-zinc-300" };
+  if (stores <= 2) return { label: `${stores} stores · early`, tone: "text-sky-300" };
+  if (stores <= 15) return { label: `${stores} stores · validated`, tone: "text-emerald-300" };
+  if (stores <= 50) return { label: `${stores} stores · crowded`, tone: "text-amber-300" };
+  return { label: `${stores} stores · saturated`, tone: "text-red-300" };
+}
 
 function Stat({ icon: Icon, label, value }: { icon: typeof Clock; label: string; value: string }) {
   return (
@@ -47,9 +59,11 @@ export function LockedWinnerCard({ pick }: { pick: WinnerPick }) {
 
 export default function WinnerCard({ pick, market }: { pick: WinnerPick; market: string }) {
   const [saved, setSaved] = useState(false);
+  const compare = useCompare();
   const p = pick.product!;
   const s = pick.stats!;
-  const mult = p.price_usd && p.cost_usd ? p.price_usd / p.cost_usd : null;
+  const margin = pick.economics?.complete ? pick.economics.contribution_margin_pct : null;
+  const comp = competition(s.stores);
   const href = `/dashboard/winners/${p.id}?market=${market}`;
 
   const toggleSave = async () => {
@@ -103,7 +117,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
               </Link>
               <div className="mt-1 text-xs flex items-center gap-1.5 flex-wrap">
                 <span className="text-white font-semibold">{formatPrice(p.price_usd)}</span>
-                {mult && <span className="text-emerald-400">{mult.toFixed(1)}× cost{p.cost_estimated ? " (est.)" : ""}</span>}
+                {margin != null && <span className={margin >= 30 ? "text-emerald-400" : "text-amber-300"}>{margin}% margin before ads{p.cost_estimated ? " (est.)" : ""}</span>}
                 {pick.tier === "rising" && <span className="text-[10px] font-semibold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded px-1">Rising</span>}
                 {pick.tier === "watch" && <span className="text-[10px] font-semibold uppercase bg-sky-500/10 text-sky-300 border border-sky-500/30 rounded px-1">Watch</span>}
               </div>
@@ -121,7 +135,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
               </span>
             )}
             {pick.tier === "watch" && (
-              <span title="Below 60 — early signal, not enough evidence yet"
+              <span title="Scored 40–54 — early signal, not enough evidence yet"
                     className="text-[10px] font-semibold uppercase tracking-wide bg-sky-500/10 text-sky-300 border border-sky-500/30 rounded px-1.5 py-0.5">
                 Watch
               </span>
@@ -135,6 +149,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
                 {SOURCE_LABEL[src] ?? src}
               </span>
             ))}
+            <TrendBadge trend={pick.trend} />
             {pick.confidence && (
               <span className={cn(
                 "rounded px-1.5 py-0.5",
@@ -144,6 +159,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
                 {pick.confidence} confidence
               </span>
             )}
+            {pick.scored_on && <span className="text-zinc-500">updated {new Date(pick.scored_on + "T00:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span>}
           </div>
 
           {/* Why it's a winner */}
@@ -154,10 +170,10 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
                 <span>{r}</span>
               </li>
             ))}
-            {(pick.penalties ?? []).slice(0, 2).map((pen) => (
-              <li key={pen.reason} className="flex items-start gap-2 text-sm text-zinc-400">
+            {(pick.weaknesses ?? []).slice(0, 1).map((w) => (
+              <li key={w} className="flex items-start gap-2 text-sm text-zinc-400">
                 <AlertTriangle size={14} className="text-amber-400 mt-0.5 shrink-0" />
-                <span>{pen.reason} <span className="text-zinc-500">(−{pen.points})</span></span>
+                <span>{w}</span>
               </li>
             ))}
           </ul>
@@ -165,7 +181,12 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
           <div className="flex flex-wrap gap-1.5">
             {s.days_running != null && <Stat icon={Clock} label="days running" value={String(s.days_running)} />}
             {!!s.creatives && <Stat icon={Layers} label="ads" value={String(s.creatives)} />}
-            {!!s.stores && <Stat icon={Store} label="stores" value={String(s.stores)} />}
+            {comp && (
+              <div className="flex items-center gap-1.5 bg-zinc-800/60 border border-zinc-800 rounded-md px-2 py-1">
+                <Store size={12} className="text-zinc-500" />
+                <span className={cn("text-xs font-medium", comp.tone)}>{comp.label}</span>
+              </div>
+            )}
             {!!s.views && <Stat icon={TrendingUp} label="views" value={fmtNum(s.views)} />}
             {s.engagement_rate != null && <Stat icon={MessageCircle} label="engagement" value={fmtPct(s.engagement_rate)} />}
           </div>
@@ -175,14 +196,13 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
         <div className="hidden md:block md:w-60 shrink-0 space-y-3 md:border-l md:border-zinc-800 md:pl-4">
           <div className="hidden md:flex items-center gap-3">
             <ScoreRing score={pick.total} />
-            <div className="text-xs space-y-0.5">
-              <div className="text-zinc-500">Sell price</div>
+            <div className="text-xs space-y-0.5 min-w-0">
+              <div className="text-zinc-300 font-medium leading-snug">{(pick.band ?? scoreBand(pick.total)).split(" — ")[0]}</div>
               <div className="text-white font-semibold">{formatPrice(p.price_usd)}</div>
-              {mult && (
-                <div className="text-emerald-400 font-medium">
-                  {mult.toFixed(1)}× cost{p.cost_estimated && <span className="text-zinc-500"> (est.)</span>}
-                </div>
-              )}
+              <div className={cn("font-medium", margin == null ? "text-zinc-500" : margin >= 30 ? "text-emerald-400" : "text-amber-300")}>
+                {margin == null ? "Margin: incomplete" : `${margin}% margin before ads`}
+                {margin != null && p.cost_estimated && <span className="text-zinc-500"> (est.)</span>}
+              </div>
             </div>
           </div>
           {pick.breakdown && <div className="hidden md:block"><PillarBars breakdown={pick.breakdown} compact /></div>}
@@ -209,13 +229,18 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
             <ExternalLink size={12} /> Supplier
           </a>
         )}
+        <button onClick={() => compare.toggle(p.id)} aria-pressed={compare.has(p.id)}
+                className={cn("flex items-center gap-1 px-2.5 py-2 md:py-1.5 max-md:min-h-[44px] rounded-md hover:bg-zinc-800",
+                  compare.has(p.id) ? "text-violet-300" : "text-zinc-400 hover:text-white")}>
+          <Columns3 size={12} /> {compare.has(p.id) ? "Comparing" : "Compare"}
+        </button>
         <button onClick={toggleSave}
                 className={cn("flex items-center gap-1 px-2.5 py-2 md:py-1.5 max-md:min-h-[44px] rounded-md hover:bg-zinc-800",
                   saved ? "text-violet-300" : "text-zinc-400 hover:text-white")}>
           <Bookmark size={12} fill={saved ? "currentColor" : "none"} /> {saved ? "Saved" : "Save"}
         </button>
         <Link href={href} className="ml-auto flex items-center gap-1 px-2.5 py-2 md:py-1.5 max-md:min-h-[44px] rounded-md text-violet-300 hover:text-violet-200 hover:bg-violet-500/10 font-medium">
-          Full evidence <ArrowRight size={12} />
+          Full research <ArrowRight size={12} />
         </Link>
       </div>
     </article>

@@ -128,7 +128,7 @@ def build_email(sections: list[tuple[str, list[Any]]], day: date, unsubscribe: s
         f'<div style="font-size:13px;color:#7c3aed;font-weight:700">ProductSpy Pro</div>'
         f'<h1 style="font-size:22px;margin:6px 0 2px">Daily winners · {nice_day}</h1>'
         f'<p style="font-size:14px;color:#52525b;margin:0">{winners} winner{"s" if winners != 1 else ""}, '
-        f'{total} products in total. Scores of 70+ are winners; 60–69 rising; below that, early signals.</p>'
+        f'{total} products in total. Scores of 70+ are strong candidates; 55–69 promising; 40–54 early signals. Scores support your research — they are not sales guarantees.</p>'
         + "".join(blocks) +
         f'<p style="margin-top:24px"><a href="{config.APP_URL}/dashboard/winners" style="background:#7c3aed;'
         'color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600">'

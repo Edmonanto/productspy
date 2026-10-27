@@ -1,3 +1,4 @@
+import type { CriterionKey } from "@/lib/utils";
 /**
  * API client — thin wrapper around fetch with auth headers.
  */
@@ -48,6 +49,8 @@ export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: "POST", body: JSON.stringify(body) }),
+  put: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: "PUT", body: JSON.stringify(body) }),
   delete: <T>(path: string) => request<T>(path, { method: "DELETE" }),
 };
 
@@ -134,12 +137,24 @@ export interface WinnersEntitlements {
   export_csv: boolean;
 }
 
-export interface Breakdown {
-  scaling: number | null;
-  engagement: number | null;
-  demand: number | null;
-  margin: number | null;
-  freshness: number | null;
+/** Points per criterion; null = no data (left out of the score). */
+export type Breakdown = Partial<Record<CriterionKey, number | null>>;
+
+export interface EvidenceItem { text: string; kind: "observed" | "calculated" | "ai" | "assumption" }
+
+export interface Criterion {
+  score: number | null;
+  max: number;
+  known: boolean;
+  coverage: number;
+  evidence: EvidenceItem[];
+}
+
+export interface PickEconomics {
+  complete: boolean;
+  contribution_before_ads_usd: number | null;
+  contribution_margin_pct: number | null;
+  break_even_roas: number | null;
 }
 
 export interface Penalty { points: number; reason: string }
@@ -154,6 +169,14 @@ export interface WinnerPick {
   reasons?: string[];
   penalties?: Penalty[];
   confidence?: "low" | "medium" | "high" | null;
+  band?: string;
+  trend?: string;
+  trend_why?: string | null;
+  strengths?: string[];
+  weaknesses?: string[];
+  missing?: string[];
+  scored_on?: string | null;
+  economics?: PickEconomics;
   product?: {
     id: string;
     title: string;
@@ -219,8 +242,14 @@ export interface ProductEvidence {
   score: {
     scored_on: string; total: number; breakdown: Breakdown; reasons: string[];
     penalties: Penalty[]; confidence: string | null; excluded: string | null;
+    band: string; criteria: Partial<Record<CriterionKey, Criterion>>;
+    trend: string; trend_why: string | null; strengths: string[]; weaknesses: string[];
+    missing: string[]; known_points: number | null;
+    signals: Record<string, number | number[] | null>;
   } | null;
-  history: { date: string; total: number }[];
+  criteria_labels?: Record<string, string>;
+  assumptions?: Record<string, number>;
+  history: { date: string; total: number; paid_ads?: number; videos?: number }[];
   suppliers: { platform: string; supplier_name: string; supplier_url: string; unit_cost_usd: number | null }[];
   ads: Record<string, AdEvidence[]>;
   ad_counts: Record<string, number>;
@@ -273,6 +302,106 @@ export const winnersApi = {
     a.click();
     URL.revokeObjectURL(url);
   },
+};
+
+// ---- Research: AI report, validation workflow, comparison (/research) ----
+
+export type FindingType = "fact" | "calculated" | "estimate" | "hypothesis";
+
+export interface AIReport {
+  product_name: string;
+  category: string;
+  description: string;
+  target_audience: string[];
+  primary_problem: string;
+  demand_summary: string;
+  competition_summary: string;
+  commercial_potential: string;
+  criteria_comments: Partial<Record<CriterionKey, string>>;
+  key_findings: { text: string; type: FindingType; sources: string[] }[];
+  risks: { area: string; description: string; severity: "low" | "medium" | "high" }[];
+  suggested_price_range: { low: number; high: number; basis: string } | null;
+  offer_ideas: string[];
+  bundle_ideas: string[];
+  creative_angles: { angle: string; hook: string; format: string }[];
+  personas: { name: string; description: string; pain_points: string[] }[];
+  ugc_script: string;
+  product_page_headlines: string[];
+  competitor_insights: { doing_well: string[]; gaps: string[]; differentiation: string[]; unverified_claims: string[] };
+  market_adaptation: { suggestion: string; basis: "evidence" | "hypothesis" }[];
+  next_validation_steps: string[];
+  missing_data: string[];
+  recommendation: { verdict: "validate_now" | "investigate_further" | "monitor" | "pass"; rationale: string };
+}
+
+export interface CompetitorPage {
+  domain: string; url: string; title: string; price: number | null; currency: string | null;
+  price_usd: number | null; description: string; offer_cues: string[];
+}
+
+export interface ResearchReport {
+  id: string;
+  status: "pending" | "ready" | "failed";
+  report: {
+    ai: AIReport;
+    sources: { id: string; kind: string; label: string; url: string | null }[];
+    competitors: CompetitorPage[];
+    evidence_summary: { ads: number; competitor_pages: number; suppliers: number };
+    not_available: string[];
+    generated_at: string;
+  } | null;
+  warnings: string[];
+  model?: string | null;
+  error?: string | null;
+  created_at: string;
+  finished_at?: string | null;
+}
+
+export type StepStatus = "not_started" | "in_progress" | "completed" | "blocked";
+
+export interface ValidationStep {
+  stage: string; label: string; status: StepStatus; notes: string; links: string[]; updated_at: string | null;
+}
+
+export interface ValidationResults {
+  supplier_quote_usd?: number | null; shipping_quote_usd?: number | null; selling_price_usd?: number | null;
+  ad_spend_usd?: number | null; orders?: number | null; revenue_usd?: number | null; refunds?: number | null;
+  decision?: "launch" | "iterate" | "drop" | null;
+}
+
+export interface Validation {
+  product_id: string;
+  steps: ValidationStep[];
+  progress: { completed: number; total: number };
+  results: ValidationResults;
+  comparison: { planned: Record<string, unknown>; actual: Record<string, number>; notes: string[] } | null;
+}
+
+export interface CompareItem {
+  id: string; title: string; image_url: string | null; category: string | null;
+  price_usd: number | null; cost_usd: number | null; cost_estimated: boolean;
+  score: number | null; confidence: string | null; scored_on: string | null;
+  breakdown: Breakdown; trend: string | null; band: string | null;
+  stores: number | null; videos: number | null; weaknesses: string[]; excluded: string | null;
+  economics: { complete: boolean; contribution_before_ads_usd: number | null; contribution_margin_pct: number | null;
+               break_even_roas: number | null; break_even_cpa_usd: number | null };
+}
+
+export const researchApi = {
+  report: (id: string, market: string) =>
+    api.get<{ market: string; report: ResearchReport | null; quota: { used: number; limit: number } }>(
+      `/research/${id}/report?market=${market}`),
+  generate: (id: string, market: string, refresh = false) =>
+    api.post<{ market: string; report: ResearchReport; cached: boolean }>(
+      `/research/${id}/report?market=${market}${refresh ? "&refresh=true" : ""}`),
+  validation: (id: string) => api.get<Validation>(`/research/${id}/validation`),
+  setStep: (id: string, stage: string, body: { status: StepStatus; notes: string; links: string[] }) =>
+    api.put<{ stage: string; status: StepStatus }>(`/research/${id}/validation/${stage}`, body),
+  setResults: (id: string, body: ValidationResults) =>
+    api.put<{ results: ValidationResults; comparison: Validation["comparison"] }>(`/research/${id}/results`, body),
+  compare: (ids: string[], market: string) =>
+    api.get<{ market: string; items: CompareItem[]; max: number; criteria: { key: CriterionKey; label: string; max: number }[] }>(
+      `/research/compare?ids=${ids.map(encodeURIComponent).join(",")}&market=${market}`),
 };
 
 // ---- Quote requests (/quotes) ----

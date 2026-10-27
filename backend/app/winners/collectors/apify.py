@@ -28,18 +28,32 @@ APIFY_RUN = "https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items"
 
 
 async def run_actor(actor: str, payload: dict, timeout: int = 600) -> list[Any]:
-    token = config.APIFY_TOKEN
-    async with httpx.AsyncClient(timeout=timeout + 30) as client:
-        resp = await client.post(
-            APIFY_RUN.format(actor=actor.replace("/", "~")),
-            params={"token": token, "timeout": timeout},
-            json=payload,
-        )
-        if resp.status_code >= 300:
-            log.warning("[apify] %s -> %s %s", actor, resp.status_code, resp.text[:300])
-            return []
-        data = resp.json()
-        return data if isinstance(data, list) else []
+    """Run an actor synchronously and return its dataset. Metered and capped
+    (app/usage.py); the token goes in a header, never in a logged URL."""
+    from app import usage
+
+    if not await usage.allowed("apify"):
+        return []
+    endpoint = actor.split("~")[-1].split("/")[-1][:60]
+    try:
+        async with httpx.AsyncClient(timeout=timeout + 30) as client:
+            resp = await client.post(
+                APIFY_RUN.format(actor=actor.replace("/", "~")),
+                headers={"Authorization": f"Bearer {config.APIFY_TOKEN}"},
+                params={"timeout": timeout},
+                json=payload,
+            )
+    except httpx.HTTPError as exc:
+        await usage.record("apify", endpoint, ok=False, error=f"network: {exc}")
+        raise
+    if resp.status_code >= 300:
+        log.warning("[apify] %s -> %s %s", actor, resp.status_code, resp.text[:300])
+        await usage.record("apify", endpoint, ok=False, error=f"{resp.status_code} {resp.text[:200]}")
+        return []
+    data = resp.json()
+    items = data if isinstance(data, list) else []
+    await usage.record("apify", endpoint, ok=True, items=len(items))
+    return items
 
 
 def _apify_on() -> bool:

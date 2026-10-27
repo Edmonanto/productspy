@@ -5,12 +5,30 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-/** Daily Winners colours: 70+ is a winner, 60-69 rising. */
+/** Score colours: 70+ strong (green), 55-69 promising (amber), below that grey. */
 export function scoreColor(score: number): string {
   if (score >= 70) return "text-emerald-400";
-  if (score >= 60) return "text-amber-400";
+  if (score >= 55) return "text-amber-400";
   return "text-zinc-400";
 }
+
+/** Interpretation bands (backend: winners/scoring.py BANDS). Decision support, not proof. */
+export function scoreBand(score: number): string {
+  if (score >= 85) return "Exceptional research candidate";
+  if (score >= 70) return "Strong candidate worth validating";
+  if (score >= 55) return "Promising — needs further investigation";
+  if (score >= 40) return "Weak or uncertain opportunity";
+  return "Low priority on current evidence";
+}
+
+export const TREND: Record<string, { label: string; tone: string; hint: string }> = {
+  emerging: { label: "Emerging", tone: "text-sky-300 bg-sky-500/10 border-sky-500/25", hint: "Recently appeared, new ads still launching" },
+  growing: { label: "Growing", tone: "text-emerald-300 bg-emerald-500/10 border-emerald-500/25", hint: "More ads or faster views than before" },
+  stable: { label: "Stable", tone: "text-zinc-300 bg-zinc-800 border-zinc-700", hint: "Ads keep running, little change" },
+  declining: { label: "Declining", tone: "text-red-300 bg-red-500/10 border-red-500/25", hint: "Fewer active ads than on earlier scans" },
+  seasonal: { label: "Seasonal", tone: "text-amber-300 bg-amber-500/10 border-amber-500/25", hint: "Depends on the time of year" },
+  unknown: { label: "Trend unclear", tone: "text-zinc-400 bg-zinc-800 border-zinc-700", hint: "Not enough dated evidence yet" },
+};
 
 export function formatPrice(usd: number | null): string {
   if (usd == null) return "N/A";
@@ -36,15 +54,32 @@ export function fmtPct(ratio: number | null | undefined, digits = 1): string {
   return `${(ratio * 100).toFixed(digits)}%`;
 }
 
-/** Daily Winners score pillars and their maximum points (backend: winners/scoring.py). */
-export const PILLAR_MAX = { scaling: 30, engagement: 25, demand: 20, margin: 15, freshness: 10 } as const;
+/** The eight scoring criteria and default weights (backend: winners/scoring.py CRITERIA). */
+export const PILLAR_MAX = {
+  demand: 20, profitability: 20, competition: 15, creative: 10,
+  differentiation: 10, logistics: 10, market_fit: 10, risk: 5,
+} as const;
+export type CriterionKey = keyof typeof PILLAR_MAX;
 
-export const PILLAR_LABEL: Record<keyof typeof PILLAR_MAX, string> = {
-  scaling: "Scaling proof",
-  engagement: "Engagement",
-  demand: "Proven demand",
-  margin: "Margin",
-  freshness: "Freshness",
+export const PILLAR_LABEL: Record<CriterionKey, string> = {
+  demand: "Demand & trend",
+  profitability: "Profitability",
+  competition: "Competition",
+  creative: "Creative potential",
+  differentiation: "Differentiation",
+  logistics: "Logistics",
+  market_fit: "Market fit",
+  risk: "Risk",
+};
+
+export const EVIDENCE_KIND: Record<string, { label: string; tone: string }> = {
+  observed: { label: "Observed", tone: "text-emerald-300 bg-emerald-500/10" },
+  calculated: { label: "Calculated", tone: "text-sky-300 bg-sky-500/10" },
+  ai: { label: "AI-assessed", tone: "text-violet-300 bg-violet-500/10" },
+  assumption: { label: "Assumption", tone: "text-amber-300 bg-amber-500/10" },
+  fact: { label: "Fact", tone: "text-emerald-300 bg-emerald-500/10" },
+  estimate: { label: "Estimate", tone: "text-amber-300 bg-amber-500/10" },
+  hypothesis: { label: "Hypothesis", tone: "text-zinc-300 bg-zinc-800" },
 };
 
 export const SOURCE_LABEL: Record<string, string> = {

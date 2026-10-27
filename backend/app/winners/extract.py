@@ -21,7 +21,7 @@ from typing import Optional
 from urllib.parse import urlparse
 
 from .collectors.base import AdRecord
-from .llm import llm_available, llm_json
+from .llm import _unwrap_list, llm_available, llm_json
 
 STOPWORDS = {
     "the", "a", "an", "and", "for", "with", "of", "to", "in", "on", "new", "best", "pro", "premium",
@@ -117,13 +117,15 @@ SYSTEM = (
 
 PROMPT = """For each ad below, identify the single physical product it sells.
 
-Return a JSON array with one object per ad:
+Return a JSON object {"items": [...]} with one object per ad:
 {{"i": <index>, "product": "<generic product name in English, 2-5 words, no brand>" or null,
   "key": "<kebab-case canonical key, e.g. posture-corrector>",
   "category": "<one of: home, kitchen, beauty, health, fitness, pets, baby, kids-toys, fashion-accessories, tech-gadgets, car, outdoor, tools, other>",
   "wow": <0-10 how visually impressive / scroll-stopping>,
   "problem": <0-10 how strongly it solves a real everyday problem>,
   "demo3s": <true if the benefit can be shown in a 3-second video>,
+  "upsell": <0-10 bundle / upsell / accessory potential>,
+  "brandable": <0-10 potential to brand, customise or improve packaging>,
   "ip_risk": "none" | "low" | "high"   (high = copies a famous brand, character or patented design),
   "restricted": <true for weapons, drugs, supplements making medical claims, adult, tobacco/vapes, counterfeit>,
   "fragile_heavy": <true if glass/ceramic, liquid, battery-heavy or > 2 kg>,
@@ -159,7 +161,7 @@ async def ai_guesses(ads: list[AdRecord], batch: int = 40) -> dict[int, Optional
     for start in range(0, len(ads), batch):
         chunk = ads[start:start + batch]
         lines = "\n".join(_ad_line(start + j, ad) for j, ad in enumerate(chunk))
-        result = await llm_json(SYSTEM, PROMPT.format(ads=lines))
+        result = _unwrap_list(await llm_json(SYSTEM, PROMPT.format(ads=lines)))
         if not isinstance(result, list):
             continue
         for row in result:
@@ -181,6 +183,7 @@ async def ai_guesses(ads: list[AdRecord], batch: int = 40) -> dict[int, Optional
                 est_cost_usd=float(cost) if isinstance(cost, (int, float)) and cost > 0 else None,
                 attributes={
                     "wow": row.get("wow"), "problem": row.get("problem"), "demo3s": row.get("demo3s"),
+                    "upsell": row.get("upsell"), "brandable": row.get("brandable"),
                     "ip_risk": row.get("ip_risk", "none"), "restricted": bool(row.get("restricted")),
                     "fragile_heavy": bool(row.get("fragile_heavy")), "seasonal": bool(row.get("seasonal")),
                     "physical": True,
