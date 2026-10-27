@@ -20,6 +20,7 @@ class WatchedProduct(BaseModel):
     # Best Daily Winners score in the last 7 days, and the market it was in.
     score: int | None
     market: str | None
+    category: str | None = None
 
 
 class WatchlistItem(BaseModel):

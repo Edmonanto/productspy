@@ -66,6 +66,7 @@ export interface WatchedProduct {
   /** Best Daily Winners score in the last 7 days, and the market it was in. */
   score: number | null;
   market: string | null;
+  category?: string | null;
 }
 
 export interface WatchlistItem {

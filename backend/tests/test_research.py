@@ -221,6 +221,8 @@ def client(monkeypatch):
     monkeypatch.setattr(research, "reports_today", today)
     monkeypatch.setattr(research, "start", start)
     monkeypatch.setattr(research, "generate", gen)
+    import app.winners.llm as llm_mod
+    monkeypatch.setattr(llm_mod, "llm_available", lambda: state.get("ai", True))
     app.dependency_overrides[current_user] = lambda: USER
     yield TestClient(app), state
     app.dependency_overrides.clear()
@@ -289,3 +291,11 @@ def test_actuals_compared_with_assumptions():
     assert out["actual"]["refund_rate_pct"] == 5.0
     assert any("break-even" in n for n in out["notes"])
     assert any("above the estimated cost" in n for n in out["notes"])
+
+
+def test_no_ai_key_is_a_clear_error_and_costs_nothing(client):
+    c, state = client
+    state["ai"] = False
+    with c:
+        r = c.post(f"/api/v1/research/{PID}/report?market=US")
+    assert r.status_code == 503 and "no AI key" in r.json()["detail"] and state["started"] == []

@@ -11,6 +11,7 @@ import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 import Topbar from "@/components/layout/Topbar";
 import ScoreRing from "@/components/winners/ScoreRing";
 import ProductImage from "@/components/products/ProductImage";
+import { CriteriaRadar, ProductVisual } from "@/components/visual/Visuals";
 import ProfitCalculator from "@/components/products/ProfitCalculator";
 import QuoteForm from "@/components/products/QuoteForm";
 import { Empty, Section } from "@/components/research/Section";
@@ -194,10 +195,8 @@ function EvidenceInner() {
       {/* 1 Overview */}
       <Section id="overview" n={1} title="Product overview">
         <div className="grid md:grid-cols-[180px_1fr] lg:grid-cols-[200px_1fr_250px] gap-5">
-          <div className="h-48 sm:h-60 md:h-auto md:aspect-square bg-zinc-800 rounded-lg overflow-hidden">
-            <ProductImage src={p.image_url} alt={p.title} className="w-full h-full object-cover"
-              fallback={<div className="w-full h-full flex items-center justify-center text-zinc-500"><Package size={28} /></div>} />
-          </div>
+          <ProductVisual src={p.image_url} alt={p.title} category={p.category} iconSize={48}
+                         className="h-48 sm:h-60 md:h-auto md:aspect-square rounded-lg" />
           <div className="space-y-3 min-w-0">
             <div>
               <h2 className="text-white text-xl font-semibold leading-snug">{p.title}</h2>
@@ -211,7 +210,7 @@ function EvidenceInner() {
             {ready && <p className="text-sm text-zinc-300">{ready.ai.description} <span className="text-zinc-500">Solves: {ready.ai.primary_problem}</span></p>}
             {score?.strengths?.length ? (
               <ul className="space-y-1.5">
-                {score.strengths.slice(0, 5).map((r) => (
+                {score.strengths.slice(0, 3).map((r) => (
                   <li key={r} className="flex gap-2 text-sm text-zinc-300"><CheckCircle2 size={15} className="text-emerald-400 mt-0.5 shrink-0" /> {r}</li>
                 ))}
               </ul>
@@ -244,9 +243,7 @@ function EvidenceInner() {
                     <TrendBadge trend={score.trend} />
                   </div>
                 </div>
-                <p className="text-[11px] text-zinc-500 leading-relaxed">
-                  Opportunity score from the evidence we hold — decision support, not a guarantee of sales.
-                </p>
+                <CriteriaRadar breakdown={score.breakdown} size={200} compact />
               </>
             ) : <Empty>Not scored in this market yet.</Empty>}
             {!ready && <div className="print:hidden"><ReportCTA {...reportProps} /></div>}

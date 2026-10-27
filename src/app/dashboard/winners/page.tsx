@@ -1,14 +1,15 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import { CalendarDays, Download, Info, Lock, Trophy } from "lucide-react";
+import { CalendarDays, Download, Info, LayoutGrid, List, Lock, Trophy } from "lucide-react";
 import Topbar from "@/components/layout/Topbar";
 import MarketPicker from "@/components/winners/MarketPicker";
 import WinnerCard, { LockedWinnerCard } from "@/components/winners/WinnerCard";
 import CompareTray from "@/components/research/CompareTray";
+import { PickTile } from "@/components/visual/Visuals";
 import { winnersApi } from "@/lib/api";
 import { useMarket } from "@/lib/useMarket";
 
@@ -18,6 +19,10 @@ function WinnersInner() {
   const date = params.get("date") ?? undefined;
   const { market, setMarket, meta } = useMarket();
   const [exportError, setExportError] = useState<string | null>(null);
+  // Grid (pictures) or list (details) — remembered per browser.
+  const [view, setView] = useState<"grid" | "list">("grid");
+  useEffect(() => { try { const v = localStorage.getItem("ps.view"); if (v === "list" || v === "grid") setView(v); } catch {} }, []);
+  const pickView = (v: "grid" | "list") => { setView(v); try { localStorage.setItem("ps.view", v); } catch {} };
 
   const { data, error, isLoading } = useSWR(
     market ? ["winners", market, date] : null,
@@ -71,6 +76,14 @@ function WinnersInner() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-0.5" role="group" aria-label="View">
+              {([["grid", LayoutGrid, "Pictures"], ["list", List, "Details"]] as const).map(([v, Icon, label]) => (
+                <button key={v} onClick={() => pickView(v)} aria-pressed={view === v} title={label}
+                        className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 max-md:min-h-[40px] text-xs ${view === v ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-white"}`}>
+                  <Icon size={14} /> <span className="hidden sm:inline">{label}</span>
+                </button>
+              ))}
+            </div>
             {dates && dates.dates.length > 1 && (
               <label className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-lg px-2.5 py-1.5 max-md:py-0 text-xs text-zinc-400">
                 <CalendarDays size={13} />
@@ -159,7 +172,14 @@ function WinnersInner() {
                 not yet proven. Scores rise as the same product shows up across more stores and platforms.
               </div>
             )}
-            {winners.map((w) =>
+            {view === "grid" ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {winners.map((w) =>
+                  w.locked ? <div key={w.rank} className="col-span-full"><LockedWinnerCard pick={w} /></div>
+                    : <PickTile key={w.rank} pick={w} market={market} />
+                )}
+              </div>
+            ) : winners.map((w) =>
               w.locked ? <LockedWinnerCard key={w.rank} pick={w} /> : <WinnerCard key={w.rank} pick={w} market={market} />
             )}
           </div>

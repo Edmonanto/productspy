@@ -26,7 +26,7 @@ async def watchlist(user_id: str) -> list[tuple[str, WatchedProduct, Any]]:
     """Saved products with their best recent Daily Winners score (any market)."""
     rows = await db.fetch(
         """
-        select w.id as watch_id, w.added_at, p.id, p.title, p.image_url,
+        select w.id as watch_id, w.added_at, p.id, p.title, p.image_url, p.category,
                p.price_usd, p.cost_usd,
                (select max(ws.total) from winner_scores ws
                  where ws.product_id = p.id
@@ -52,6 +52,7 @@ async def watchlist(user_id: str) -> list[tuple[str, WatchedProduct, Any]]:
                 cost_usd=float(r["cost_usd"]) if r["cost_usd"] is not None else None,
                 score=r["score"],
                 market=r["market"],
+                category=r["category"],
             ),
             r["added_at"],
         )

@@ -98,6 +98,11 @@ async def create_report(product_id: str, background: BackgroundTasks, market: st
         if not (refresh and newer):
             return {"market": code, "report": _report_out(cached), "cached": True}
 
+    from ..winners.llm import llm_available
+    if not llm_available():
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="AI research isn't switched on yet: the server has no AI key. Please try again later.")
+
     limit = int(ent.get("reports_per_day", 0))
     if await research.reports_today(user.id) >= limit:
         raise _locked("report_quota", f"Your {ent['plan']} plan includes {limit} AI research report(s) a day.")

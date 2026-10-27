@@ -423,8 +423,12 @@ async def latest_report(product_id: str, market: str) -> Optional[dict]:
 
 async def reports_today(user_id: str) -> int:
     return int(await db.fetchval(
-        "select count(*) from report_requests where user_id = $1 "
-        "and created_at > date_trunc('day', now() at time zone 'utc')", user_id) or 0)
+        """
+        select count(*) from report_requests q
+          left join product_reports r on r.id = q.report_id
+         where q.user_id = $1 and q.created_at > date_trunc('day', now() at time zone 'utc')
+           and coalesce(r.status, 'pending') <> 'failed'      -- failed reports don't use the quota
+        """, user_id) or 0)
 
 
 async def start(product_id: str, market: str, user_id: str) -> str:
