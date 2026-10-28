@@ -16,6 +16,7 @@ from . import store
 from .collectors import Collector, active_collectors
 from .enrich import fetch_selling_price, fetch_supplier_cost
 from .angles import angles_step
+from .trends import trends_step
 from .extract import cluster_keys, guess_products_detailed
 from .filters import is_catalog_template, non_product_advertiser, non_product_reason
 from .markets import get_market
@@ -113,7 +114,8 @@ def _opt_bool(v):
     return None if v is None else bool(v)
 
 
-def _signals(prod, ads, day: date, now: datetime, last, history: list | None = None) -> "object":
+def _signals(prod, ads, day: date, now: datetime, last, history: list | None = None,
+             search: dict | None = None) -> "object":
     attrs = _attrs(prod["attributes"])
     ai_seen = "physical" in attrs          # attributes written by the AI pass
     return aggregate(
@@ -131,6 +133,9 @@ def _signals(prod, ads, day: date, now: datetime, last, history: list | None = N
                  and not non_product_reason(prod["title"], prod.get("category")),
         last_picked_days_ago=(day - last).days if last else None,
         paid_ads_history=list(history or []),
+        search_status=(search or {}).get("status"), search_growth=(search or {}).get("growth"),
+        search_level=(search or {}).get("level"), search_term=(search or {}).get("term"),
+        search_geo=(search or {}).get("geo"),
     )
 
 
@@ -185,7 +190,8 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
     return verified
 
 
-async def score_step(market_code: str, day: date, stats: dict) -> None:
+async def score_step(market_code: str, day: date, stats: dict, errors: list | None = None) -> None:
+    errors = errors if errors is not None else []
     now = datetime.now(timezone.utc)
     products = await store.market_products_with_ads(market_code)
     picked = await store.last_picks(market_code, day)
@@ -202,6 +208,18 @@ async def score_step(market_code: str, day: date, stats: dict) -> None:
     results: dict = {}
     for pid, (prod, ads) in products.items():
         results[pid] = (score(_signals(prod, ads, day, now, picked.get(pid), history.get(pid))), ads)
+
+    # Google search interest for the strongest candidates, then rescore them with it.
+    try:
+        ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
+                        key=lambda pid: results[pid][0].total, reverse=True)
+        searches = await trends_step(market_code, ranked, products, day, stats)
+        for pid, data in searches.items():
+            prod, ads = products[pid]
+            results[pid] = (score(_signals(prod, ads, day, now, picked.get(pid), history.get(pid), data)), ads)
+    except Exception as exc:
+        log.warning("[%s] google trends skipped: %s", market_code, exc)
+        errors.append({"step": "google_trends", "error": str(exc)[:500]})
 
     verified: set[str] | None = None
     try:
@@ -269,7 +287,7 @@ async def run_market(market_code: str, day: date | None = None,
         chosen_collectors = collectors if collectors is not None else active_collectors()
         await collect_step(market_code, chosen_collectors, stats, errors)
         collected = sum(v for k, v in stats.items() if k.startswith("collected_"))
-        if chosen_collectors and collected == 0:
+        if chosen_collectors and collected == 0 and not errors:
             # Every source came back empty without raising — almost always the
             # sites being unreachable (no VPN from mainland China, a blocked
             # IP) rather than a genuinely quiet day. Say so instead of "ok".
@@ -285,7 +303,7 @@ async def run_market(market_code: str, day: date | None = None,
         except Exception as exc:
             log.exception("[%s] enrichment failed", market_code)
             errors.append({"step": "enrich", "error": str(exc)[:500]})
-        await score_step(market_code, day, stats)
+        await score_step(market_code, day, stats, errors)
         if errors:
             status = "partial"
     except Exception as exc:

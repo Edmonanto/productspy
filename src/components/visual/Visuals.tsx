@@ -3,7 +3,7 @@
 /** Visual building blocks: product picture (or a category illustration), radar, trend icon, metric chips. */
 import Link from "next/link";
 import {
-  Baby, Car, Lightbulb, Dumbbell, Gem, HeartPulse, Home, Laptop, Minus, Package, PawPrint, Shirt, Sparkles, Tent,
+  Baby, Car, Flame, Lightbulb, Dumbbell, Gem, HeartPulse, Home, Laptop, Minus, Package, PawPrint, Shirt, Sparkles, Tent,
   TrendingDown, TrendingUp, UtensilsCrossed, Wrench, Puzzle, Snowflake, Zap, HelpCircle, LucideIcon,
 } from "lucide-react";
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
@@ -48,7 +48,7 @@ export function ProductVisual({ src, alt, category, className, iconSize = 28 }: 
 }
 
 const TREND_ICON: Record<string, LucideIcon> = {
-  emerging: Zap, growing: TrendingUp, stable: Minus, declining: TrendingDown, seasonal: Snowflake, unknown: HelpCircle,
+  emerging: Zap, spike: Flame, growing: TrendingUp, stable: Minus, declining: TrendingDown, seasonal: Snowflake, unknown: HelpCircle,
 };
 
 /** Trend as an icon (label in the tooltip / for screen readers). */

@@ -281,7 +281,7 @@ def _score_out(latest: Any) -> dict[str, Any]:
             "advertisers", "creatives", "new_creatives_7d", "new_creatives_14d", "new_creatives_30d",
             "max_days_running", "median_days_running", "meta_ads", "tiktok_ads", "videos", "creators",
             "total_views", "engagement_rate", "intent_ratio", "views_per_hour", "first_seen_days",
-            "paid_ads_history")},
+            "paid_ads_history", "search_status", "search_growth", "search_level", "search_term", "search_geo")},
     }
 
 
@@ -325,6 +325,7 @@ async def product_evidence(product_id: str, market: str | None = None,
                            ("wow", "problem", "demo3s", "upsell", "brandable", "ip_risk", "fragile_heavy", "seasonal")},
             "angles": attrs.get("angles") or [],
         },
+        "search_trend": (attrs.get("trends") or {}).get(code),
         "score": None if latest is None else _score_out(latest),
         "criteria_labels": CRITERIA_LABEL,
         "assumptions": economics.DEFAULTS,

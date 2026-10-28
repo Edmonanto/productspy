@@ -256,7 +256,7 @@ export function RisksSection({
           <h4 className="text-xs font-semibold text-zinc-300 mb-2">Not measured yet</h4>
           <Bullets items={[
             ...(missing ?? []).map((m) => `${m.replace("_", " ")} — no data, left out of the score`),
-            "Search-trend volume (no source connected)",
+            "Absolute search volume (Google Trends gives a relative index only)",
             "Real sales or conversion rates (not visible from public ads)",
           ]} />
         </div>

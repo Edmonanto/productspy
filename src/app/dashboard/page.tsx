@@ -17,7 +17,7 @@ import { useMarket } from "@/lib/useMarket";
 import { cn, TREND } from "@/lib/utils";
 
 const TREND_COLOR: Record<string, string> = {
-  emerging: "#38bdf8", growing: "#34d399", stable: "#a1a1aa", declining: "#f87171", seasonal: "#fbbf24", unknown: "#52525b",
+  emerging: "#38bdf8", spike: "#fb923c", growing: "#34d399", stable: "#a1a1aa", declining: "#f87171", seasonal: "#fbbf24", unknown: "#52525b",
 };
 
 function Kpi({ icon: Icon, value, label, tone }: { icon: typeof Trophy; value: React.ReactNode; label: string; tone: string }) {

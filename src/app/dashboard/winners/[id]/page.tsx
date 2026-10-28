@@ -288,7 +288,7 @@ function EvidenceInner() {
       <Section id="demand" n={3} title="Demand & trend analysis">
         {score ? (
           <>
-            <TrendPanel trend={score.trend ?? "unknown"} why={score.trend_why ?? null} signals={score.signals ?? {}} history={data.history ?? []} />
+            <TrendPanel trend={score.trend ?? "unknown"} why={score.trend_why ?? null} signals={score.signals ?? {}} history={data.history ?? []} search={data.search_trend ?? null} />
             {ready && <p className="text-sm text-zinc-300 border-t border-zinc-800 pt-3"><span className="text-violet-300 text-xs mr-1">AI summary</span>{ready.ai.demand_summary}</p>}
           </>
         ) : <Empty>No demand data yet.</Empty>}
@@ -347,7 +347,7 @@ function EvidenceInner() {
 
       {/* 8 Creative */}
       <Section id="creative" n={8} title="Advertising & creative opportunities">
-        <CreativeSection report={ready} criteria={criteria} suggested={(p.attributes?.angles as AdAngle[] | undefined) ?? []} />
+        <CreativeSection report={ready} criteria={criteria} suggested={p.angles ?? (p.attributes?.angles as AdAngle[] | undefined) ?? []} />
       </Section>
 
       {/* 9 Supplier */}

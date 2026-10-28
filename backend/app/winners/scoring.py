@@ -124,6 +124,12 @@ class Signals:
     views_per_hour: Optional[float] = None
     # time series: active paid ads on earlier scans (oldest first), from winner_scores
     paid_ads_history: list = field(default_factory=list)
+    # Google Trends (trends.py): status rising|stable|falling|spike|low|no_data
+    search_status: Optional[str] = None
+    search_growth: Optional[float] = None
+    search_level: Optional[float] = None
+    search_term: Optional[str] = None
+    search_geo: Optional[str] = None
     # product
     first_seen_days: Optional[int] = None
     sell_price_usd: Optional[float] = None
@@ -235,11 +241,14 @@ def aggregate(ads: Iterable[AdRecord], now: Optional[datetime] = None, **product
 
 # ── trend status ─────────────────────────────────────────────────────────────
 def trend_status(s: Signals) -> tuple[str, str]:
-    """(status, explanation). Status: emerging | growing | stable | declining | seasonal | unknown."""
+    """(status, explanation). Status: emerging | growing | stable | declining | seasonal | spike | unknown."""
     paid_now = s.meta_ads + s.tiktok_ads
     hist = [h for h in s.paid_ads_history if isinstance(h, (int, float))]
     if s.seasonal:
         return "seasonal", "AI flags it as seasonal — demand depends on the time of year"
+    q = f"Google searches for “{s.search_term}”" if s.search_term else "Google searches"
+    if s.search_status == "spike":
+        return "spike", f"{q} jumped far above their usual level in the last few weeks — may be a short viral burst"
     if len(hist) >= 3:
         window = hist[-7:]                 # earlier scans only (today is paid_now)
         earlier = sum(window) / len(window)
@@ -247,6 +256,8 @@ def trend_status(s: Signals) -> tuple[str, str]:
             return "declining", f"Active ads fell from ~{earlier:.0f} to {paid_now} over recent scans"
         if earlier >= 1 and paid_now >= earlier * 1.4 and paid_now - earlier >= 2:
             return "growing", f"Active ads rose from ~{earlier:.0f} to {paid_now} over recent scans"
+    if s.search_status == "rising":
+        return "growing", f"{q} up {round((s.search_growth or 1) * 100 - 100)}% over the last 4 weeks vs the 8 before"
     total = s.creatives or paid_now
     if s.first_seen_days is not None and s.first_seen_days <= 21 and (s.new_creatives_14d or s.recent_videos_14d):
         return "emerging", f"First seen {s.first_seen_days} days ago, new ads/videos still appearing"
@@ -258,6 +269,10 @@ def trend_status(s: Signals) -> tuple[str, str]:
         if s.new_creatives_30d == 0:
             return "stable", f"Ads running up to {s.max_days_running} days, no new ads in 30 days (mature)"
         return "stable", f"Ads running up to {s.max_days_running} days and still being refreshed"
+    if s.search_status == "falling":
+        return "declining", f"{q} down {round(100 - (s.search_growth or 1) * 100)}% over the last 4 weeks vs the 8 before"
+    if s.search_status == "stable" and (s.search_level or 0) >= 10:
+        return "stable", f"{q} steady over the last 3 months"
     return "unknown", "Not enough dated evidence to tell the direction yet"
 
 
@@ -347,6 +362,20 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
             c.ev(f"A video from the last 7 days is gaining ~{int(s.views_per_hour):,} views/hour")
     else:
         c.add(None, 2)
+    if s.search_status:
+        where = f" in {s.search_geo}" if s.search_geo else ""
+        if s.search_status == "no_data":
+            c.add(None, 4)
+        else:
+            pts = {"rising": 4.0, "spike": 2.5, "falling": 0.5, "low": 0.5}.get(
+                s.search_status, 3.0 if (s.search_level or 0) >= 25 else 2.0)
+            c.add(pts, 4)
+            c.ev({"rising": f"Google searches rising{where}: {round((s.search_growth or 1) * 100 - 100)}% up in the last 4 weeks",
+                  "spike": f"Google searches spiked recently{where} — check it lasts before scaling",
+                  "falling": f"Google searches falling{where} ({round(100 - (s.search_growth or 1) * 100)}% down vs the 8 weeks before)",
+                  "low": f"Very little Google search interest{where} for “{s.search_term}”",
+                  }.get(s.search_status, f"Google searches steady{where} (index {s.search_level:.0f}/100)")
+                 + " — Google Trends index, not sales", "observed")
     if trend == "declining":
         c.parts.append((0.0, 2))
         c.ev(trend_why, "calculated")
@@ -483,7 +512,9 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
     else:
         c.add(None, 1.5)
     if trend != "unknown":
-        c.add(0.0 if trend == "declining" else 1.5, 1.5)
+        c.add(0.0 if trend == "declining" else 0.75 if trend == "spike" else 1.5, 1.5)
+        if trend == "spike":
+            c.ev("Search interest is a recent spike — may fade quickly", "observed")
         if trend == "declining":
             c.ev("Advertising for it is declining", "calculated")
     else:

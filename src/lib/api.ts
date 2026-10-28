@@ -243,6 +243,7 @@ export interface ProductEvidence {
     price_usd: number | null; cost_usd: number | null; cost_estimated: boolean;
     margin_pct: number | null; product_url: string | null; first_seen_at: string | null;
     attributes: Record<string, unknown>;
+    angles?: AdAngle[];
   };
   score: {
     scored_on: string; total: number; breakdown: Breakdown; reasons: string[];
@@ -253,6 +254,11 @@ export interface ProductEvidence {
     signals: Record<string, number | number[] | null>;
   } | null;
   criteria_labels?: Record<string, string>;
+  /** Google Trends for this market (relative 0-100 weekly index, not volume). */
+  search_trend?: {
+    term: string; geo: string; at: string; status: string; growth: number | null; level: number | null;
+    series: { date: string; value: number }[];
+  } | null;
   assumptions?: Record<string, number>;
   history: { date: string; total: number; paid_ads?: number; videos?: number }[];
   suppliers: { platform: string; supplier_name: string; supplier_url: string; unit_cost_usd: number | null }[];

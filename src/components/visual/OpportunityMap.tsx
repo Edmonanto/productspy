@@ -8,7 +8,7 @@ import { WinnerPick } from "@/lib/api";
 import { TREND } from "@/lib/utils";
 
 const COLOR: Record<string, string> = {
-  emerging: "#38bdf8", growing: "#34d399", stable: "#a1a1aa", declining: "#f87171", seasonal: "#fbbf24", unknown: "#71717a",
+  emerging: "#38bdf8", spike: "#fb923c", growing: "#34d399", stable: "#a1a1aa", declining: "#f87171", seasonal: "#fbbf24", unknown: "#71717a",
 };
 
 interface Pt { x: number; y: number; z: number; id: string; title: string; trend: string }

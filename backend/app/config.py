@@ -178,6 +178,8 @@ APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
 APIFY_META_ACTOR = os.environ.get("APIFY_META_ACTOR", "curious_coder~facebook-ads-library-scraper")
 APIFY_TIKTOK_ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "clockworks~tiktok-scraper")
 APIFY_TIKTOK_ADS_ACTOR = os.environ.get("APIFY_TIKTOK_ADS_ACTOR", "")
+# Google Trends search interest (app/winners/trends.py). Empty = off.
+APIFY_TRENDS_ACTOR = os.environ.get("APIFY_TRENDS_ACTOR", "apify~google-trends-scraper")
 
 TIKTOK_MIN_VIEWS = int(os.environ.get("TIKTOK_MIN_VIEWS", "100000"))
 TIKTOK_CC_PERIOD = os.environ.get("TIKTOK_CC_PERIOD", "7")  # 7 | 30 | 180 days

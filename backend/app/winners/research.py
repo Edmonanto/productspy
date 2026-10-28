@@ -270,16 +270,27 @@ def build_evidence(product: dict, score: Optional[dict], ads: list[dict], suppli
             "unit_economics": asdict(econ),
             "economics_assumptions": list(economics.ASSUMPTION_LABELS.values()),
         },
+        "google_trends": _trend_summary((product.get("attributes") or {}).get("trends", {}).get(market_code)),
         "ads": ad_items,
         "competitor_pages": comp_items,
         "suppliers": sup_items,
         "not_available": [
-            "search volume / search trends (no source connected)",
+            "absolute search volume (Google Trends gives a relative 0-100 index only)",
             "actual sales or order counts (not observable from public ads)",
             "conversion rates and ad spend of competitors",
         ],
         "_sources": sources,
     }
+
+
+def _trend_summary(t: Optional[dict]) -> Optional[dict]:
+    """Google Trends for the AI: status and the last 12 weekly points (relative 0-100 index, not volume)."""
+    if not t:
+        return None
+    return {"search_term": t.get("term"), "geo": t.get("geo"), "status": t.get("status"),
+            "growth_last4_vs_prev8": t.get("growth"), "level_last4_0_100": t.get("level"),
+            "weekly_index_last12": [p.get("value") for p in (t.get("series") or [])[-12:]],
+            "note": "Google Trends relative search index, not search volume or sales"}
 
 
 def evidence_hash(ev: dict) -> str:

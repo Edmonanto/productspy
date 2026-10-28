@@ -26,12 +26,33 @@ from .tiktok_organic import TikTokOrganicCollector
 
 APIFY_RUN = "https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items"
 
+LIMIT_HELP = ("Apify account limit reached ({detail}). Nothing can be scraped until it resets or the limit "
+              "is raised: console.apify.com → Settings → Usage & limits (or upgrade the plan).")
+
+
+class ApifyLimitError(RuntimeError):
+    """The Apify account is blocked (monthly hard limit, no credit). Every actor fails until fixed."""
+
+
+_blocked: str | None = None   # remembered for the rest of the run: no point calling again
+
+
+def _check_blocked(status: int, text: str) -> None:
+    global _blocked
+    low = text.lower()
+    if status in (402, 403) and ("limit" in low or "platform-feature-disabled" in low or "credit" in low):
+        detail = "monthly usage hard limit exceeded" if "hard limit" in low else "account disabled or out of credit"
+        _blocked = LIMIT_HELP.format(detail=detail)
+        raise ApifyLimitError(_blocked)
+
 
 async def run_actor(actor: str, payload: dict, timeout: int = 600) -> list[Any]:
     """Run an actor synchronously and return its dataset. Metered and capped
     (app/usage.py); the token goes in a header, never in a logged URL."""
     from app import usage
 
+    if _blocked:
+        raise ApifyLimitError(_blocked)
     if not await usage.allowed("apify"):
         return []
     endpoint = actor.split("~")[-1].split("/")[-1][:60]
@@ -49,9 +70,52 @@ async def run_actor(actor: str, payload: dict, timeout: int = 600) -> list[Any]:
     if resp.status_code >= 300:
         log.warning("[apify] %s -> %s %s", actor, resp.status_code, resp.text[:300])
         await usage.record("apify", endpoint, ok=False, error=f"{resp.status_code} {resp.text[:200]}")
+        _check_blocked(resp.status_code, resp.text)
         return []
     data = resp.json()
     items = data if isinstance(data, list) else []
+    await usage.record("apify", endpoint, ok=True, items=len(items))
+    return items
+
+
+async def run_actor_async(actor: str, payload: dict, max_wait: int = 900) -> list[Any]:
+    """Start a run, poll until it finishes (up to max_wait s), return its dataset.
+    For actors that can take longer than run-sync's ~5 minute limit. Metered like run_actor."""
+    import asyncio
+
+    from app import usage
+
+    if _blocked:
+        raise ApifyLimitError(_blocked)
+    if not await usage.allowed("apify"):
+        return []
+    endpoint = actor.split("~")[-1].split("/")[-1][:60]
+    headers = {"Authorization": f"Bearer {config.APIFY_TOKEN}"}
+    base = "https://api.apify.com/v2"
+    async with httpx.AsyncClient(timeout=90) as client:
+        r = await client.post(f"{base}/acts/{actor.replace('/', '~')}/runs", headers=headers,
+                              params={"waitForFinish": 60}, json=payload)
+        if r.status_code >= 300:
+            await usage.record("apify", endpoint, ok=False, error=f"{r.status_code} {r.text[:200]}")
+            log.warning("[apify] %s -> %s %s", actor, r.status_code, r.text[:300])
+            _check_blocked(r.status_code, r.text)
+            return []
+        run = r.json().get("data") or {}
+        waited = 60
+        while run.get("status") in ("READY", "RUNNING") and waited < max_wait:
+            r = await client.get(f"{base}/actor-runs/{run['id']}", headers=headers, params={"waitForFinish": 60})
+            run = r.json().get("data") or run
+            waited += 60
+        if run.get("status") != "SUCCEEDED":
+            await usage.record("apify", endpoint, ok=False, error=f"run {run.get('status')}")
+            log.warning("[apify] %s run ended %s", actor, run.get("status"))
+            if run.get("status") in ("READY", "RUNNING"):
+                await client.post(f"{base}/actor-runs/{run['id']}/abort", headers=headers)
+            return []
+        r = await client.get(f"{base}/datasets/{run['defaultDatasetId']}/items", headers=headers,
+                             params={"clean": "true", "format": "json"})
+        items = r.json() if r.status_code < 300 else []
+    items = items if isinstance(items, list) else []
     await usage.record("apify", endpoint, ok=True, items=len(items))
     return items
 

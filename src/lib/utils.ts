@@ -26,6 +26,7 @@ export const TREND: Record<string, { label: string; tone: string; hint: string }
   growing: { label: "Growing", tone: "text-emerald-300 bg-emerald-500/10 border-emerald-500/25", hint: "More ads or faster views than before" },
   stable: { label: "Stable", tone: "text-zinc-300 bg-zinc-800 border-zinc-700", hint: "Ads keep running, little change" },
   declining: { label: "Declining", tone: "text-red-300 bg-red-500/10 border-red-500/25", hint: "Fewer active ads than on earlier scans" },
+  spike: { label: "Viral spike", tone: "text-orange-300 bg-orange-500/10 border-orange-500/25", hint: "Searches jumped recently — may be short-lived" },
   seasonal: { label: "Seasonal", tone: "text-amber-300 bg-amber-500/10 border-amber-500/25", hint: "Depends on the time of year" },
   unknown: { label: "Trend unclear", tone: "text-zinc-400 bg-zinc-800 border-zinc-700", hint: "Not enough dated evidence yet" },
 };

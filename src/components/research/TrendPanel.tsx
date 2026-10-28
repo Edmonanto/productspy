@@ -1,4 +1,4 @@
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { cn, fmtNum, TREND } from "@/lib/utils";
 
 interface Props {
@@ -6,6 +6,58 @@ interface Props {
   why: string | null;
   signals: Record<string, number | number[] | null>;
   history: { date: string; total: number; paid_ads?: number; videos?: number }[];
+  search?: {
+    term: string; geo: string; at: string; status: string; growth: number | null; level: number | null;
+    series: { date: string; value: number }[];
+  } | null;
+}
+
+const SEARCH_LABEL: Record<string, { label: string; tone: string }> = {
+  rising: { label: "Searches rising", tone: "text-emerald-300 bg-emerald-500/10" },
+  stable: { label: "Searches steady", tone: "text-zinc-300 bg-zinc-800" },
+  falling: { label: "Searches falling", tone: "text-red-300 bg-red-500/10" },
+  spike: { label: "Viral spike", tone: "text-orange-300 bg-orange-500/10" },
+  low: { label: "Few searches", tone: "text-zinc-400 bg-zinc-800" },
+  no_data: { label: "Not enough search data", tone: "text-zinc-400 bg-zinc-800" },
+};
+
+/** 12 months of weekly Google Trends interest (relative index). */
+function SearchChart({ search }: { search: NonNullable<Props["search"]> }) {
+  const lab = SEARCH_LABEL[search.status] ?? SEARCH_LABEL.stable;
+  const data = search.series.map((p) => ({ ...p, label: p.date.slice(5) }));
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-zinc-300 font-medium">Google searches for “{search.term}” · {search.geo}</span>
+        <span className={cn("text-[11px] rounded px-1.5 py-0.5", lab.tone)}>{lab.label}</span>
+        {search.growth != null && search.status !== "no_data" && (
+          <span className="text-[11px] text-zinc-400">
+            last 4 weeks {search.growth >= 1 ? "+" : ""}{Math.round(search.growth * 100 - 100)}% vs the 8 before
+          </span>
+        )}
+      </div>
+      {data.length >= 4 && (
+        <div className="h-36">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ left: -24, right: 8, top: 4, bottom: 0 }}>
+              <defs>
+                <linearGradient id="gt" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.45} />
+                  <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid stroke="#27272a" vertical={false} />
+              <XAxis dataKey="label" tick={{ fill: "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} interval="preserveStartEnd" minTickGap={28} />
+              <YAxis domain={[0, 100]} tick={{ fill: "#a1a1aa", fontSize: 10 }} tickLine={false} axisLine={false} />
+              <Tooltip contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", fontSize: 12 }} formatter={(v: number) => [v, "Search index"]} />
+              <Area type="monotone" dataKey="value" stroke="#38bdf8" strokeWidth={2} fill="url(#gt)" isAnimationActive={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+      <p className="text-[11px] text-zinc-500">Google Trends weekly index (0–100, relative to the peak), past 12 months. Interest in searching — not sales or search volume.</p>
+    </div>
+  );
 }
 
 const n = (v: unknown) => (typeof v === "number" ? v : null);
@@ -20,7 +72,7 @@ export function TrendBadge({ trend, className }: { trend?: string | null; classN
 }
 
 /** Demand & trend: direction, the dated signals behind it, and the time series when we have one. */
-export default function TrendPanel({ trend, why, signals: rawSignals, history: rawHistory }: Props) {
+export default function TrendPanel({ trend, why, signals: rawSignals, history: rawHistory, search }: Props) {
   // Tolerate older API responses (no signals / history fields).
   const signals = rawSignals ?? {};
   const history = rawHistory ?? [];
@@ -52,6 +104,9 @@ export default function TrendPanel({ trend, why, signals: rawSignals, history: r
           ))}
         </dl>
       )}
+      {search && search.status ? <SearchChart search={search} /> : (
+        <p className="text-[11px] text-zinc-500">Google search interest is fetched for the strongest products each day.</p>
+      )}
       {series.length >= 2 ? (
         <div>
           <div className="text-xs text-zinc-500 mb-2">
@@ -73,8 +128,8 @@ export default function TrendPanel({ trend, why, signals: rawSignals, history: r
         </div>
       ) : (
         <p className="text-xs text-zinc-500">
-          The time series builds up as the daily scan re-checks this product. Search-trend data isn&apos;t connected,
-          so demand here comes from ads and videos only — interest, not confirmed sales.
+          The ad time series builds up as the daily scan re-checks this product. Ads, videos and searches show
+          interest — not confirmed sales.
         </p>
       )}
     </div>
