@@ -82,6 +82,11 @@ def _pick_html(r: Any, market: str) -> str:
     markup = f' · <span style="color:#047857">{float(price) / float(cost):.1f}× cost</span>' \
         if price and cost else ""
     reasons = "".join(f'<li style="margin:2px 0">{e(x)}</li>' for x in _reasons(r["reasons"]))
+    raw_attrs = r.get("attributes") if hasattr(r, "get") else None
+    attrs = raw_attrs if isinstance(raw_attrs, dict) else json.loads(raw_attrs or "{}")
+    angle = (attrs.get("angles") or [None])[0]
+    angle_html = (f'<div style="font-size:13px;color:#6d28d9;margin-top:6px">&#128161; <b>{e(angle["angle"])}</b> — '
+                  f'&ldquo;{e(angle["hook"])}&rdquo;</div>') if angle else ""
     link = f'{config.APP_URL}/dashboard/winners/{r["product_id"]}?market={market}'
     return (
         '<tr><td style="padding:14px 0;border-top:1px solid #e4e4e7">'
@@ -92,6 +97,7 @@ def _pick_html(r: Any, market: str) -> str:
         f'<a href="{link}" style="color:#18181b;text-decoration:none">{e(r["title"])}</a></div>'
         f'<div style="font-size:13px;color:#3f3f46">Sells {_money(price)}{markup}</div>'
         f'<ul style="font-size:13px;color:#52525b;margin:6px 0 0;padding-left:18px">{reasons}</ul>'
+        f'{angle_html}'
         f'<div style="margin-top:8px"><a href="{link}" style="font-size:13px;color:#6d28d9;font-weight:600">'
         'See the ads and evidence</a></div>'
         '</td></tr>'

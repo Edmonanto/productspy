@@ -134,6 +134,7 @@ Return a JSON object {{"items": [...]}} with one object per ad:
 
 Only ads that sell ONE specific physical product count. Use "product": null when the ad is:
 - an app, game, software, website, SaaS, AI tool or online service
+- a catalog / dynamic product ad whose text is a template placeholder in double curly braces
 - a course, coaching, ebook, webinar, event, membership, subscription box or info product
 - a local business or service (restaurant, salon, clinic, gym, cleaning, real estate, travel, car dealer)
 - finance, insurance, crypto, loans, jobs, recruiting, education, charity, politics, news, media, music

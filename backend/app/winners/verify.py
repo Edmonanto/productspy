@@ -79,6 +79,14 @@ def _line(i: int, ad: AdRecord) -> str:
 
 async def verify_product(name: str, ads: list[AdRecord], already_ok: set[str]) -> Verdict:
     """Check the not-yet-verified ads of one product."""
+    from .filters import is_catalog_template
+    templ = [a for a in ads if is_catalog_template(a.ad_text)]
+    if templ:
+        rest = [a for a in ads if not is_catalog_template(a.ad_text)]
+        inner = await verify_product(name, rest, already_ok) if rest else Verdict(checked=True)
+        inner.reject = templ + inner.reject
+        inner.checked = True
+        return inner
     todo = [a for a in ads if ad_key(a) not in already_ok]
     known = [a for a in ads if ad_key(a) in already_ok]
     if not todo:

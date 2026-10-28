@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import {
   ArrowRight, Bookmark, CheckCircle2, Clock, Columns3, ExternalLink, Layers, Store,
-  TrendingUp, MessageCircle, AlertTriangle, Lock, ImageOff,
+  TrendingUp, MessageCircle, AlertTriangle, Lock, ImageOff, Lightbulb,
 } from "lucide-react";
 import { WinnerPick, watchlistApi } from "@/lib/api";
 import { useCompare } from "@/lib/compare";
@@ -177,6 +177,17 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
               </li>
             ))}
           </ul>
+
+          {!!pick.angles?.length && (
+            <div className="flex flex-wrap gap-1.5" aria-label="Suggested ad angles">
+              {pick.angles.map((a) => (
+                <span key={a.angle} title={`Hook: “${a.hook}”${a.format ? ` · ${a.format}` : ""}`}
+                      className="inline-flex items-center gap-1 text-xs bg-violet-500/10 border border-violet-500/20 text-violet-200 rounded-full px-2 py-0.5">
+                  <Lightbulb size={11} aria-hidden /> {a.angle}
+                </span>
+              ))}
+            </div>
+          )}
 
           <div className="flex flex-wrap gap-1.5">
             {s.days_running != null && <Stat icon={Clock} label="days running" value={String(s.days_running)} />}

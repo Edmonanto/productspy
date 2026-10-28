@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import {
-  ArrowRight, Award, Bookmark, Clock, Percent, ScanSearch, Store, Trophy,
+  ArrowRight, Award, Bookmark, Clock, Lightbulb, Percent, ScanSearch, Store, Trophy,
 } from "lucide-react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import Topbar from "@/components/layout/Topbar";
@@ -69,6 +69,12 @@ function Hero({ pick, market }: { pick: WinnerPick; market: string }) {
             </div>
           </div>
         </div>
+        {pick.angles?.[0] && (
+          <div className="mt-3 flex items-start gap-1.5 text-sm text-violet-100 bg-violet-500/10 border border-violet-500/20 rounded-lg px-3 py-2">
+            <Lightbulb size={15} className="text-violet-300 shrink-0 mt-0.5" aria-hidden />
+            <span><b className="font-semibold">{pick.angles[0].angle}:</b> “{pick.angles[0].hook}”</span>
+          </div>
+        )}
         <div className="flex-1 min-h-[170px] -mx-2"><CriteriaRadar breakdown={pick.breakdown} size={190} compact /></div>
         <span className="self-end inline-flex items-center gap-1 text-xs text-violet-300 font-medium">Open research <ArrowRight size={12} /></span>
       </div>

@@ -151,6 +151,9 @@ export interface Criterion {
   evidence: EvidenceItem[];
 }
 
+/** A suggested ad angle (written daily for each pick). */
+export interface AdAngle { angle: string; hook: string; format?: string; audience?: string }
+
 export interface PickEconomics {
   complete: boolean;
   contribution_before_ads_usd: number | null;
@@ -178,6 +181,7 @@ export interface WinnerPick {
   missing?: string[];
   scored_on?: string | null;
   economics?: PickEconomics;
+  angles?: AdAngle[];
   product?: {
     id: string;
     title: string;

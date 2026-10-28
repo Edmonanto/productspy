@@ -15,8 +15,9 @@ from datetime import date, datetime, timezone
 from . import store
 from .collectors import Collector, active_collectors
 from .enrich import fetch_selling_price, fetch_supplier_cost
+from .angles import angles_step
 from .extract import cluster_keys, guess_products_detailed
-from .filters import non_product_advertiser, non_product_reason
+from .filters import is_catalog_template, non_product_advertiser, non_product_reason
 from .markets import get_market
 from .scoring import aggregate, pick_winners, score
 from .llm import llm_available
@@ -54,7 +55,8 @@ async def extract_step(market_code: str, stats: dict) -> None:
         stats["linked_ads"] = 0
         return
     # App / media brands (Canva, short-drama apps...) never sell a product: skip the AI.
-    blocked = [str(r["id"]) for r in rows if non_product_advertiser(r.get("advertiser_name"))]
+    blocked = [str(r["id"]) for r in rows
+               if non_product_advertiser(r.get("advertiser_name")) or is_catalog_template(r.get("ad_text"))]
     if blocked:
         await store.mark_not_product(blocked)
         rows = [r for r in rows if str(r["id"]) not in set(blocked)]
@@ -187,6 +189,15 @@ async def score_step(market_code: str, day: date, stats: dict) -> None:
     now = datetime.now(timezone.utc)
     products = await store.market_products_with_ads(market_code)
     picked = await store.last_picks(market_code, day)
+    # Catalog-template ads never back a single product (see filters.is_catalog_template).
+    template_ads = {pid: [a for a in ads if is_catalog_template(a.ad_text)] for pid, (_, ads) in products.items()}
+    for pid, bad in template_ads.items():
+        if bad:
+            await store.reject_ads(market_code, pid, bad)
+            prod, ads = products[pid]
+            products[pid] = (prod, [a for a in ads if not is_catalog_template(a.ad_text)])
+    products = {pid: v for pid, v in products.items() if v[1]}
+    stats["template_ads_removed"] = sum(len(v) for v in template_ads.values())
     history = await store.paid_ads_history(market_code, list(products), day)
     results: dict = {}
     for pid, (prod, ads) in products.items():
@@ -235,6 +246,10 @@ async def score_step(market_code: str, day: date, stats: dict) -> None:
 
     chosen = pick_winners(scored)
     await store.save_winners(market_code, day, chosen, score_ids)
+    try:  # suggested marketing angles for the day's picks (never fails the run)
+        await angles_step(market_code, [pid for pid, *_ in chosen], products, day, stats)
+    except Exception:
+        log.exception("[%s] angles failed", market_code)
     stats["scored"] = len(scored)
     stats["winners"] = sum(1 for *_, tier in chosen if tier == "winner")
     stats["rising"] = sum(1 for *_, tier in chosen if tier == "rising")

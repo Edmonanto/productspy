@@ -22,7 +22,7 @@ import ValidationPanel from "@/components/research/ValidationPanel";
 import {
   CompetitorSection, CreativeSection, MarketSection, RisksSection, SupplierSection,
 } from "@/components/research/ReportSections";
-import { AdEvidence, researchApi, watchlistApi, winnersApi } from "@/lib/api";
+import { AdAngle, AdEvidence, researchApi, watchlistApi, winnersApi } from "@/lib/api";
 import { useCompare } from "@/lib/compare";
 import { cn, fmtNum, fmtPct, formatPrice, recallMarket, scoreBand, SOURCE_LABEL, timeAgo } from "@/lib/utils";
 import { computeEconomics, DEFAULT_ASSUMPTIONS } from "@/lib/profit";
@@ -347,7 +347,7 @@ function EvidenceInner() {
 
       {/* 8 Creative */}
       <Section id="creative" n={8} title="Advertising & creative opportunities">
-        <CreativeSection report={ready} criteria={criteria} />
+        <CreativeSection report={ready} criteria={criteria} suggested={(p.attributes?.angles as AdAngle[] | undefined) ?? []} />
       </Section>
 
       {/* 9 Supplier */}

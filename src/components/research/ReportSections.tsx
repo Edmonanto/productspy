@@ -1,6 +1,7 @@
 /** Sections 5, 7, 8, 9, 10 of the product report. Each shows what the data supports and says what's missing. */
 import { AlertTriangle, ExternalLink, Package } from "lucide-react";
-import { AdEvidence, Criterion, ResearchReport } from "@/lib/api";
+import { AdAngle, AdEvidence, Criterion, ResearchReport } from "@/lib/api";
+import { AngleList } from "@/components/visual/Visuals";
 import { cn, CriterionKey, formatPrice, SOURCE_LABEL } from "@/lib/utils";
 import CriteriaBreakdown from "./CriteriaBreakdown";
 import { Bullets, Empty, KindTag } from "./Section";
@@ -127,15 +128,23 @@ export function MarketSection({ report, criteria, market }: { report: Report | u
   );
 }
 
-export function CreativeSection({ report, criteria }: { report: Report | undefined; criteria: Criteria }) {
+export function CreativeSection({ report, criteria, suggested }: {
+  report: Report | undefined; criteria: Criteria; suggested?: AdAngle[];
+}) {
   const ai = report?.ai;
   return (
     <div className="space-y-4">
+      {!!suggested?.length && (
+        <div>
+          <h4 className="text-xs font-semibold text-zinc-300 mb-2">Suggested angles to test</h4>
+          <AngleList angles={suggested} />
+        </div>
+      )}
       <CriteriaBreakdown criteria={criteria} only={["creative", "differentiation"]} comments={ai?.criteria_comments} />
       {ai ? (
         <>
           <div>
-            <h4 className="text-xs font-semibold text-zinc-300 mb-2">Ad angles</h4>
+            <h4 className="text-xs font-semibold text-zinc-300 mb-2">More angles from the AI report</h4>
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-2">
               {ai.creative_angles.map((a) => (
                 <div key={a.angle} className="bg-zinc-800/40 rounded-lg p-3">
@@ -180,7 +189,7 @@ export function CreativeSection({ report, criteria }: { report: Report | undefin
           <p className="text-[11px] text-zinc-500">AI suggestions grounded in the product&apos;s observed features — test them, don&apos;t assume them.</p>
         </>
       ) : (
-        <Empty>Run the AI report for ad angles, hooks, personas, a UGC script and offer ideas.</Empty>
+        <Empty>Run the AI report for more angles, personas, a UGC script and offer ideas.</Empty>
       )}
     </div>
   );

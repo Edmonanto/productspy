@@ -94,6 +94,26 @@ async def clean(markets: list[str]) -> dict:
         select count(*) from r
         """, markets, r"\m" + pattern + r"\M")
     log.info("clean: %s ads from app/media advertisers set aside", freed)
+    # 1b. Catalog-template ads ("{{product.name}} | {{product.brand}}") show a whole store,
+    #     not one product — and their identical text merged unrelated stores together.
+    templ = await db.fetchval(
+        """
+        with r as (update ad_creatives set product_id = null, not_product = true
+                    where market = any($1::text[]) and ad_text ~ '\{\{\s*[A-Za-z_.-]+\s*\}\}' returning 1)
+        select count(*) from r
+        """, markets)
+    log.info("clean: %s catalog-template ads set aside", templ)
+    # 1c. Products left with no ads at all are empty shells.
+    for row in await db.fetch(
+            """
+            select p.id, p.title from products p
+             where p.source = 'winners'
+               and not exists (select 1 from ad_creatives a where a.product_id = p.id)
+            """):
+        outcome = await _remove(row["id"])
+        removed += 1
+        names.append(row["title"])
+        log.info("no ads left: %s — %s", row["title"], outcome)
     # 2. Names that can't be a physical product (apps, dramas, courses...) — no AI needed.
     items = []
     for it in await _candidates(markets):

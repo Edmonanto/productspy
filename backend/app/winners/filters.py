@@ -84,3 +84,15 @@ def non_product_reason(title: str | None, category: str | None = None) -> str | 
 
 def non_product_advertiser(name: str | None) -> bool:
     return bool(name and _ADV_RX.search(name))
+
+
+# Facebook/Instagram catalog ads ("Advantage+ catalog", dynamic product ads) show
+# a store's whole catalogue. The scraper sees the unfilled template —
+# "{{product.name}} | {{product.brand}}" — so the text names no product, and
+# identical template text would otherwise merge unrelated stores into one
+# "product". They are never treated as a single-product ad.
+_TEMPLATE_RX = re.compile(r"\{\{\s*[\w.\-]+\s*\}\}|\{\{\s*product\.|\[\[\s*product\.", re.I)
+
+
+def is_catalog_template(text: str | None) -> bool:
+    return bool(text and _TEMPLATE_RX.search(text))

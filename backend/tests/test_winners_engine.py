@@ -567,3 +567,24 @@ async def test_shown_picks_skip_non_products_and_imageless(monkeypatch):
     monkeypatch.setattr(dbm, "fetch", fetch)
     out = await store.picks("US", date.today())
     assert [(r["rank"], r["title"]) for r in out] == [(1, "LED Projector")]
+
+
+async def test_catalog_template_ads_never_back_a_product(monkeypatch):
+    from app.winners import verify
+    from app.winners.filters import is_catalog_template
+    assert is_catalog_template("{{product.name}} | {{product.brand}}")
+    assert is_catalog_template("{{product.name}} | Your future fave outfit is waiting")
+    assert not is_catalog_template("Fix your posture in 2 weeks")
+    ads = [AdRecord(platform="meta", external_id=str(i), market="US", advertiser_name=n, ad_text=t)
+           for i, (n, t) in enumerate([("PRINCESS POLLY", "{{product.name}} | {{product.brand}}"),
+                                       ("The Farmer's Dog", "{{product.name}} | {{product.brand}}"),
+                                       ("BackFix", "Posture corrector that works")])]
+
+    async def fake_llm(system, prompt, max_tokens=8000):
+        assert "{{product" not in prompt            # templates never reach the AI
+        return {"is_product": True, "matches": [0], "best": 0, "name": None}
+    monkeypatch.setattr(verify, "llm_available", lambda: True)
+    monkeypatch.setattr(verify, "llm_json", fake_llm)
+    v = await verify.verify_product("Posture Corrector", ads, set())
+    assert [a.external_id for a in v.keep] == ["2"]
+    assert sorted(a.external_id for a in v.reject) == ["0", "1"]

@@ -3,7 +3,7 @@
 /** Visual building blocks: product picture (or a category illustration), radar, trend icon, metric chips. */
 import Link from "next/link";
 import {
-  Baby, Car, Dumbbell, Gem, HeartPulse, Home, Laptop, Minus, Package, PawPrint, Shirt, Sparkles, Tent,
+  Baby, Car, Lightbulb, Dumbbell, Gem, HeartPulse, Home, Laptop, Minus, Package, PawPrint, Shirt, Sparkles, Tent,
   TrendingDown, TrendingUp, UtensilsCrossed, Wrench, Puzzle, Snowflake, Zap, HelpCircle, LucideIcon,
 } from "lucide-react";
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
@@ -125,7 +125,36 @@ export function PickTile({ pick, market, big = false }: { pick: WinnerPick; mark
       <div className="px-3 py-2.5">
         <div className="text-sm text-zinc-100 font-medium line-clamp-1 group-hover:text-white">{p.title}</div>
         <div className="text-xs text-zinc-500 tabular-nums">{p.price_usd != null ? `$${p.price_usd.toFixed(2)}` : "—"}</div>
+        {pick.angles?.[0] && (
+          <div className="mt-1.5 flex items-start gap-1 text-[11px] text-violet-200/90" title={`Hook: “${pick.angles[0].hook}”`}>
+            <Lightbulb size={12} className="shrink-0 mt-px text-violet-300" aria-hidden />
+            <span className="line-clamp-1">{pick.angles[0].angle}</span>
+          </div>
+        )}
       </div>
     </Link>
+  );
+}
+
+/** Suggested ad angles: name, 3-second hook, format. */
+export function AngleList({ angles, compact = false }: { angles?: { angle: string; hook: string; format?: string; audience?: string }[]; compact?: boolean }) {
+  if (!angles?.length) return null;
+  return (
+    <div className={cn("grid gap-2", compact ? "grid-cols-1" : "md:grid-cols-3")}>
+      {angles.map((a) => (
+        <div key={a.angle} className="bg-violet-500/5 border border-violet-500/20 rounded-lg p-3">
+          <div className="flex items-center gap-1.5 text-sm text-white font-medium">
+            <Lightbulb size={14} className="text-violet-300 shrink-0" aria-hidden /> {a.angle}
+          </div>
+          <div className="text-xs text-zinc-300 mt-1">“{a.hook}”</div>
+          {(a.format || a.audience) && (
+            <div className="flex flex-wrap gap-1 mt-2">
+              {a.format && <span className="text-[10px] bg-zinc-800 text-zinc-300 rounded px-1.5 py-0.5">{a.format}</span>}
+              {a.audience && <span className="text-[10px] bg-zinc-800 text-zinc-400 rounded px-1.5 py-0.5">{a.audience}</span>}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
