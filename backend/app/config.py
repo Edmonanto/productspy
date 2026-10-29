@@ -122,7 +122,7 @@ STRIPE_PRICE_IDS: dict[str, str] = {
 
 # Monthly list prices (USD) — must match the billing page and the Stripe/PayPal
 # prices created by `python -m app.billing.setup`.
-PLAN_PRICES_USD: dict[str, int] = {"starter": 29, "pro": 79, "agency": 199}
+PLAN_PRICES_USD: dict[str, float] = {"starter": 19.99, "pro": 69.99, "agency": 199}
 
 # PayPal can't apply coupons: referred customers subscribe to these plans,
 # whose first month is billed at the partner discount (setup.py creates them).

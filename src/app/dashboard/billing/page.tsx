@@ -23,21 +23,22 @@ const PLANS = [
   {
     id: "starter",
     name: "Starter",
-    price: 29,
+    price: 19.99,
     period: "/mo",
-    features: ["All 5–10 Daily Winners", "1 market", "Ad & video evidence", "7-day winners archive", "Unlimited watchlist"],
+    features: ["All 5–10 Daily Winners", "1 market", "Ad & video evidence", "3–5 ad angles per product", "5 AI research reports a day", "7-day winners archive", "Unlimited watchlist"],
     cta: "Upgrade to Starter",
     highlight: false,
   },
   {
     id: "pro",
     name: "Pro",
-    price: 79,
+    price: 69.99,
     period: "/mo",
     features: [
       "All Daily Winners",
       "3 markets",
       "Ad & video evidence + supplier links",
+      "Google Trends + AI research (20 a day)",
       "30-day archive + CSV export",
       "Priority support",
     ],
@@ -52,6 +53,7 @@ const PLANS = [
     features: [
       "Everything in Pro",
       "Every market",
+      "100 AI research reports a day",
       "90-day winners archive",
       "Dedicated support",
     ],

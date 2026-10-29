@@ -21,11 +21,11 @@ def test_env_writer_updates_in_place(tmp_path, monkeypatch):
 def test_paypal_partner_plan_bills_month_one_at_minus_25():
     regular = setup._plan_body("PROD-1", "starter", partner=False)
     partner = setup._plan_body("PROD-1", "starter", partner=True)
-    assert regular["billing_cycles"][0]["pricing_scheme"]["fixed_price"]["value"] == "29.00"
+    assert regular["billing_cycles"][0]["pricing_scheme"]["fixed_price"]["value"] == "19.99"
     first, rest = partner["billing_cycles"]
     assert first["tenure_type"] == "TRIAL" and first["total_cycles"] == 1
-    assert first["pricing_scheme"]["fixed_price"]["value"] == "21.75"
-    assert rest["sequence"] == 2 and rest["pricing_scheme"]["fixed_price"]["value"] == "29.00"
+    assert first["pricing_scheme"]["fixed_price"]["value"] == "14.99"
+    assert rest["sequence"] == 2 and rest["pricing_scheme"]["fixed_price"]["value"] == "19.99"
     assert "partner" in partner["name"] and partner["name"] != regular["name"]
 
 
@@ -83,7 +83,7 @@ def test_stripe_setup_reuses_existing_objects(monkeypatch):
     monkeypatch.setattr(config, "STRIPE_SECRET_KEY", "sk_test_x")
     monkeypatch.setattr(config, "STRIPE_WEBHOOK_SECRET", "")
     out = setup.setup_stripe()
-    assert out["STRIPE_PRICE_STARTER"] == "price_productspy_starter_monthly_2900"
+    assert out["STRIPE_PRICE_STARTER"] == "price_productspy_starter_monthly_1999"
     assert out["STRIPE_WEBHOOK_SECRET"] == "whsec_abc"
     assert created.count("price") == 3 and "portal" in created
     created.clear()

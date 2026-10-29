@@ -186,6 +186,14 @@ async def setup_paypal() -> dict[str, str]:
                     print(f"  Plan: reusing {hit['id']} — {body['name']}")
                 out[f"PAYPAL_{'PARTNER_' if partner else ''}PLAN_{plan.upper()}"] = hit["id"]
 
+        # Retire plans at old prices so nobody can subscribe to them any more
+        # (existing subscribers on them keep their price).
+        keep = {v for k, v in out.items() if "PLAN" in k}
+        for p in plans:
+            if p.get("status") == "ACTIVE" and p["id"] not in keep and str(p.get("name", "")).startswith("ProductSpy"):
+                await _paypal(client, "POST", f"/v1/billing/plans/{p['id']}/deactivate")
+                print(f"  Plan: deactivated old {p['id']} — {p.get('name')}")
+
         url = webhook_url("paypal")
         hooks = (await _paypal(client, "GET", "/v1/notifications/webhooks")).get("webhooks", [])
         hook = next((h for h in hooks if h.get("url") == url), None)
