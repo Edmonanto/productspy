@@ -216,6 +216,53 @@ async def save_preferences(body: PreferencesIn, user: CurrentUser = Depends(curr
     return {"markets": codes, "max_markets": ent["markets"]}
 
 
+_preview_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+PREVIEW_TTL_S = 600
+PREVIEW_SIZE = 6
+
+
+def preview_payload(code: str, pick_date: date | None, rows: list[Any]) -> dict[str, Any]:
+    """Public teaser: #1 is shown in full (the free pick of the day); the rest
+    only show picture, score and trend — names, prices, ads and links stay behind signup."""
+    out = []
+    for r in rows[:PREVIEW_SIZE]:
+        sig = _json(r["signals"]) or {}
+        attrs = _json(r["attributes"]) or {}
+        item: dict[str, Any] = {
+            "rank": r["rank"], "total": r["total"], "tier": r["tier"],
+            "trend": sig.get("trend") or "unknown", "category": r["category"],
+            "image_url": r["image_url"], "revealed": r["rank"] == 1,
+        }
+        if item["revealed"]:
+            price = _f(r["price_usd"])
+            angle = (attrs.get("angles") or [None])[0]
+            item.update({
+                "title": r["title"], "price_usd": price,
+                "breakdown": _json(r["breakdown"]) or {},
+                "stores": sig.get("advertisers"), "days_running": sig.get("max_days_running"),
+                "angle": {"angle": angle.get("angle"), "hook": angle.get("hook")} if isinstance(angle, dict) else None,
+            })
+        out.append(item)
+    return {"market": code, "date": pick_date.isoformat() if pick_date else None,
+            "total": len(rows), "picks": out, "markets": _live()}
+
+
+@router.get("/preview")
+async def public_preview(market: str | None = Query(None)) -> dict[str, Any]:
+    """No login: today's picks as a teaser for the landing page. Cached 10 min per market."""
+    import time
+    code = (market or _live()[0]).upper()
+    _check_live(code)
+    hit = _preview_cache.get(code)
+    if hit and time.monotonic() - hit[0] < PREVIEW_TTL_S:
+        return hit[1]
+    pick_date = await store.latest_pick_date(code, _today())
+    rows = await store.picks(code, pick_date) if pick_date else []
+    data = preview_payload(code, pick_date, rows)
+    _preview_cache[code] = (time.monotonic(), data)
+    return data
+
+
 @router.get("")
 async def get_winners(
     market: str | None = Query(None),
