@@ -193,7 +193,8 @@ APIFY_TIKTOK_ADS_ACTOR = os.environ.get("APIFY_TIKTOK_ADS_ACTOR", "")
 # Apify spend control: items fetched per market per scan, and how often a
 # market may be scraped (a re-run the same day reuses what's already stored).
 APIFY_META_MAX = int(os.environ.get("APIFY_META_MAX", "150"))
-APIFY_TIKTOK_MAX = int(os.environ.get("APIFY_TIKTOK_MAX", "120"))
+APIFY_TIKTOK_MAX = int(os.environ.get("APIFY_TIKTOK_MAX", "40"))
+APIFY_TRENDS_MAX = int(os.environ.get("APIFY_TRENDS_MAX", "10"))  # Google Trends lookups per market per day (7-day cache)
 APIFY_MIN_HOURS_BETWEEN = int(os.environ.get("APIFY_MIN_HOURS_BETWEEN", "20"))
 # Google Trends search interest (app/winners/trends.py). Empty = off.
 APIFY_TRENDS_ACTOR = os.environ.get("APIFY_TRENDS_ACTOR", "apify~google-trends-scraper")

@@ -34,7 +34,7 @@ from .markets import get_market
 log = logging.getLogger("winners.trends")
 
 TRENDS_TTL_DAYS = 7
-TRENDS_CANDIDATES = 25
+TRENDS_CANDIDATES = config.APIFY_TRENDS_MAX
 GEO = {"UK": "GB", "EU": ""}
 LANG_NAME = {"fr": "French", "de": "German", "ar": "Arabic"}
 
