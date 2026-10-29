@@ -216,6 +216,25 @@ async def save_preferences(body: PreferencesIn, user: CurrentUser = Depends(curr
     return {"markets": codes, "max_markets": ent["markets"]}
 
 
+_picks_cache: dict[tuple[str, date], tuple[float, date | None, list[Any]]] = {}
+PICKS_TTL_S = 300
+
+
+async def _cached_picks(code: str, on_or_before: date) -> tuple[date | None, list[Any]]:
+    """Latest pick day + its rows. Picks change once a day, so 5 minutes in memory is safe
+    and saves two database round trips on almost every page view."""
+    import time
+    hit = _picks_cache.get((code, on_or_before))
+    if hit and time.monotonic() - hit[0] < PICKS_TTL_S:
+        return hit[1], hit[2]
+    pick_date = await store.latest_pick_date(code, on_or_before)
+    rows = list(await store.picks(code, pick_date)) if pick_date else []
+    if len(_picks_cache) > 200:
+        _picks_cache.clear()
+    _picks_cache[(code, on_or_before)] = (time.monotonic(), pick_date, rows)
+    return pick_date, rows
+
+
 _preview_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 PREVIEW_TTL_S = 600
 PREVIEW_SIZE = 6
@@ -256,8 +275,7 @@ async def public_preview(market: str | None = Query(None)) -> dict[str, Any]:
     hit = _preview_cache.get(code)
     if hit and time.monotonic() - hit[0] < PREVIEW_TTL_S:
         return hit[1]
-    pick_date = await store.latest_pick_date(code, _today())
-    rows = await store.picks(code, pick_date) if pick_date else []
+    pick_date, rows = await _cached_picks(code, _today())
     data = preview_payload(code, pick_date, rows)
     _preview_cache[code] = (time.monotonic(), data)
     return data
@@ -274,11 +292,10 @@ async def get_winners(
     if day is not None and day < today - timedelta(days=int(ent["history_days"])):
         raise _locked("history_locked",
                       f"Your {ent['plan']} plan includes {ent['history_days']} days of history.")
-    pick_date = await store.latest_pick_date(code, day or today)
+    pick_date, rows = await _cached_picks(code, day or today)
     if not pick_date:
         return {"market": code, "date": None, "winners": [], "locked_count": 0, "plan": ent["plan"],
                 "message": "No picks yet for this market — the first daily scan hasn't finished."}
-    rows = await store.picks(code, pick_date)
     visible = int(ent["winners_per_day"])
     winners = [serialize_pick(r) for r in rows[:visible]]
     winners += [{"rank": r["rank"], "tier": r["tier"], "total": r["total"], "locked": True}

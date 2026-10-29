@@ -88,6 +88,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ignore */
     }
+    try {
+      Object.keys(localStorage).filter((k) => k.startsWith("ps.swr.")).forEach((k) => localStorage.removeItem(k));
+    } catch { /* storage blocked */ }
     setSession(null);
     setUser(null);
     window.location.assign("/login");

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from . import config, db, migrate
 from .routers import billing, partners, quotes, research, users, watchlist, winners
@@ -30,6 +31,7 @@ app = FastAPI(
     docs_url="/docs",
 )
 
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.CORS_ORIGINS,
