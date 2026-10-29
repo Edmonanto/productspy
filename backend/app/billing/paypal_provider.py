@@ -59,8 +59,9 @@ async def _request(method: str, path: str, **kwargs) -> dict[str, Any]:
     return response.json() if response.content else {}
 
 
-async def create_checkout(user_id: str, email: str, plan: str) -> str:
-    plan_id = config.PAYPAL_PLAN_IDS.get(plan)
+async def create_checkout(user_id: str, email: str, plan: str, partner_discount: bool = False) -> str:
+    # Referred customers get the partner plan (first month at the partner discount).
+    plan_id = (partner_discount and config.PAYPAL_PARTNER_PLAN_IDS.get(plan)) or config.PAYPAL_PLAN_IDS.get(plan)
     if not plan_id:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,

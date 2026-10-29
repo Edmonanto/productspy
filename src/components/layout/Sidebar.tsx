@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import useSWR from "swr";
 import {
-  Bookmark, Columns3, LayoutDashboard, Trophy, Receipt,
+  Bookmark, Columns3, Handshake, LayoutDashboard, ShieldCheck, Trophy, Receipt,
   CreditCard, Settings, Zap, LogOut, X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
+import { partnersApi } from "@/lib/api";
 import { useEffect, useState } from "react";
 
 /** The Topbar's menu button dispatches this to open the mobile drawer. */
@@ -29,6 +31,12 @@ const BOTTOM_ITEMS = [
 function SidebarContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { signOut } = useAuth();
+  const { data: partner } = useSWR("partners-me", partnersApi.me, { revalidateOnFocus: false });
+  const items = [
+    ...NAV_ITEMS,
+    { href: "/dashboard/partner", icon: Handshake, label: partner?.partner ? "My partner earnings" : "Partner program" },
+    ...(partner?.is_admin ? [{ href: "/dashboard/partners", icon: ShieldCheck, label: "Partners (admin)" }] : []),
+  ];
 
   return (
     <aside className="flex flex-col w-60 h-full bg-zinc-900 border-r border-zinc-800 px-3 py-5">
@@ -48,7 +56,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
 
       {/* Main nav */}
       <nav className="flex-1 space-y-0.5">
-        {NAV_ITEMS.map(({ href, icon: Icon, label }) => (
+        {items.map(({ href, icon: Icon, label }) => (
           <Link
             key={href}
             href={href}
@@ -56,7 +64,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             className={cn(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
               // Nested pages (/dashboard/winners/[id]) keep their section lit.
-              (href === "/dashboard" ? pathname === href : pathname.startsWith(href))
+              (href === "/dashboard" ? pathname === href : pathname === href || pathname.startsWith(href + "/"))
                 ? "bg-violet-600/20 text-violet-400 border border-violet-600/30 shadow-sm"
                 : "text-zinc-400 hover:text-white hover:bg-zinc-800"
             )}

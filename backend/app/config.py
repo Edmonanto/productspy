@@ -120,6 +120,18 @@ STRIPE_PRICE_IDS: dict[str, str] = {
     "agency": os.environ.get("STRIPE_PRICE_AGENCY", ""),
 }
 
+# Monthly list prices (USD) — must match the billing page and the Stripe/PayPal
+# prices created by `python -m app.billing.setup`.
+PLAN_PRICES_USD: dict[str, int] = {"starter": 29, "pro": 79, "agency": 199}
+
+# PayPal can't apply coupons: referred customers subscribe to these plans,
+# whose first month is billed at the partner discount (setup.py creates them).
+PAYPAL_PARTNER_PLAN_IDS: dict[str, str] = {
+    "starter": os.environ.get("PAYPAL_PARTNER_PLAN_STARTER", ""),
+    "pro": os.environ.get("PAYPAL_PARTNER_PLAN_PRO", ""),
+    "agency": os.environ.get("PAYPAL_PARTNER_PLAN_AGENCY", ""),
+}
+
 PAYPAL_PLAN_IDS: dict[str, str] = {
     "starter": os.environ.get("PAYPAL_PLAN_STARTER", ""),
     "pro": os.environ.get("PAYPAL_PLAN_PRO", ""),
@@ -178,6 +190,11 @@ APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
 APIFY_META_ACTOR = os.environ.get("APIFY_META_ACTOR", "curious_coder~facebook-ads-library-scraper")
 APIFY_TIKTOK_ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "clockworks~tiktok-scraper")
 APIFY_TIKTOK_ADS_ACTOR = os.environ.get("APIFY_TIKTOK_ADS_ACTOR", "")
+# Apify spend control: items fetched per market per scan, and how often a
+# market may be scraped (a re-run the same day reuses what's already stored).
+APIFY_META_MAX = int(os.environ.get("APIFY_META_MAX", "150"))
+APIFY_TIKTOK_MAX = int(os.environ.get("APIFY_TIKTOK_MAX", "120"))
+APIFY_MIN_HOURS_BETWEEN = int(os.environ.get("APIFY_MIN_HOURS_BETWEEN", "20"))
 # Google Trends search interest (app/winners/trends.py). Empty = off.
 APIFY_TRENDS_ACTOR = os.environ.get("APIFY_TRENDS_ACTOR", "apify~google-trends-scraper")
 

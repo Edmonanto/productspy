@@ -40,6 +40,17 @@ async def finish_run(run_id: int, status: str, stats: dict, errors: list) -> Non
     )
 
 
+async def hours_since_collected(market: str) -> float | None:
+    """Hours since a run for this market last collected anything (None = never)."""
+    v = await db.fetchval(
+        """
+        select extract(epoch from now() - max(started_at)) / 3600 from winner_runs
+         where market = $1 and exists (select 1 from jsonb_each_text(coalesce(stats, '{}'::jsonb)) kv
+                                        where kv.key like 'collected_%' and kv.value::numeric > 0)
+        """, market)
+    return float(v) if v is not None else None
+
+
 async def latest_runs() -> list[asyncpg.Record]:
     return await db.fetch(
         "select distinct on (market) market, started_at, finished_at, status, stats, errors "

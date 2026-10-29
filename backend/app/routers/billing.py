@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from .. import config, repository, trial
+from .. import config, partners, repository, trial
 from ..auth import CurrentUser, current_user
 from ..billing import paypal_provider, stripe_provider
 from ..schemas import BillingStatus, Trial
@@ -73,14 +73,19 @@ async def create_checkout(
         trial_ends_at = None
         if row and trial.trial_active(row.get("status"), row.get("provider"), row.get("trial_ends_at")):
             trial_ends_at = row.get("trial_ends_at")
-        extra = {"trial_ends_at": trial_ends_at} if trial_ends_at else {}
+        extra: dict = {"trial_ends_at": trial_ends_at} if trial_ends_at else {}
+        discount = await partners.checkout_discount(user.id)
+        if discount:
+            extra["discount_pct"] = discount
         url = await stripe_provider.create_checkout(
             user.id, user.email, plan,
             customer_id=row["provider_customer_id"] if row else None,
             **extra,
         )
     else:
-        url = await paypal_provider.create_checkout(user.id, user.email, plan)
+        discount = await partners.checkout_discount(user.id)
+        url = await paypal_provider.create_checkout(user.id, user.email, plan,
+                                                    partner_discount=bool(discount) and int(discount) == 25)
 
     return {"checkout_url": url, "provider": provider}
 
@@ -187,6 +192,7 @@ async def stripe_webhook(request: Request) -> dict[str, str]:
         parsed = stripe_provider.parse_event(event)
         if parsed:
             await _apply("stripe", parsed)
+        await partners.handle_stripe_event(event)       # partner commissions / refunds
     except Exception as exc:
         # Record the failure, then 500 so Stripe retries.
         await repository.complete_billing_event("stripe", event_id, str(exc))
@@ -213,6 +219,7 @@ async def paypal_webhook(request: Request) -> dict[str, str]:
         parsed = paypal_provider.parse_event(body)
         if parsed:
             await _apply("paypal", parsed)
+        await partners.handle_paypal_event(body)        # partner commissions / refunds
     except Exception as exc:
         await repository.complete_billing_event("paypal", event_id, str(exc))
         log.exception("paypal webhook %s failed", event_id)

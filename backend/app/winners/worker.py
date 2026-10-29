@@ -17,6 +17,11 @@
                                                  # (apps, courses, store-wide sales...),
                                                  # then rescans so today's picks are clean
 
+Cost control: paid (Apify) sources are scraped at most once per market every
+APIFY_MIN_HOURS_BETWEEN hours (default 20) — re-runs reuse the stored ads.
+--clean / --rebuild / --recheck never scrape unless --collect is added;
+--force-collect scrapes regardless.
+
 Exits non-zero when no market produced picks, so a silent no-op shows up red
 in Render's cron history (same rule as app.ingest.worker).
 """
@@ -54,7 +59,7 @@ select (select count(*) from gone) as products, (select count(*) from freed) as 
 
 
 async def run(markets: list[str], recheck: bool = False, rebuild: bool = False,
-              clean: bool = False) -> list[dict]:
+              clean: bool = False, collect: str = "auto") -> list[dict]:
     await db.connect()
     results = []
     try:
@@ -78,7 +83,7 @@ async def run(markets: list[str], recheck: bool = False, rebuild: bool = False,
                 "select count(*) from r", markets)
             log.info("recheck: %s set-aside ads will be looked at again", n)
         for m in markets:
-            res = await run_market(m)
+            res = await run_market(m, collect=collect)
             log.info("%s -> %s %s", m, res["status"], json.dumps(res["stats"]))
             results.append(res)
     finally:
@@ -100,6 +105,10 @@ def main() -> int:
                     help="remove products named by guesswork (before an AI key) and re-name their ads")
     ap.add_argument("--clean", action="store_true",
                     help="remove products that aren't physical products, then rescan")
+    ap.add_argument("--force-collect", action="store_true",
+                    help="scrape even if this market was scraped in the last APIFY_MIN_HOURS_BETWEEN hours (costs Apify credit)")
+    ap.add_argument("--collect", action="store_true",
+                    help="with --clean/--rebuild/--recheck: also scrape new ads (costs Apify credit)")
     args = ap.parse_args()
 
     if args.collectors:
@@ -113,7 +122,11 @@ def main() -> int:
         log.error("unknown market(s) %s; choose from %s", unknown, ", ".join(MARKETS))
         return 2
 
-    results = asyncio.run(run(markets, recheck=args.recheck, rebuild=args.rebuild, clean=args.clean))
+    # Maintenance commands re-process stored ads and don't scrape unless asked.
+    maintenance = args.clean or args.rebuild or args.recheck
+    collect = "always" if args.force_collect else ("never" if maintenance and not args.collect else "auto")
+    results = asyncio.run(run(markets, recheck=args.recheck, rebuild=args.rebuild, clean=args.clean,
+                              collect=collect))
     if not args.market and not args.no_email:
         # The scheduled run covers every market: email today's picks.
         from .digest import _run as send_daily_email

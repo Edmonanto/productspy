@@ -149,3 +149,51 @@ async def test_apify_hard_limit_is_reported_clearly(monkeypatch):
     with pytest.raises(apify.ApifyLimitError):            # later calls fail fast, no request
         await apify.run_actor_async("apify~google-trends-scraper", {})
     monkeypatch.setattr(apify, "_blocked", None)
+
+
+async def test_meta_budget_is_split_across_urls(monkeypatch):
+    from app import config
+    from app.winners.collectors import apify
+    from app.winners.markets import get_market
+    sent = {}
+
+    async def fake_run(actor, payload, timeout=600):
+        sent.update(payload)
+        return []
+    monkeypatch.setattr(apify, "run_actor", fake_run)
+    monkeypatch.setattr(config, "APIFY_META_MAX", 150)
+    await apify.ApifyMetaCollector().collect(get_market("US"))
+    assert len(sent["urls"]) * sent["count"] <= 160          # ~150 ads per market, not 300 per url
+
+
+async def test_paid_sources_skipped_when_scraped_recently(monkeypatch):
+    from app.winners import pipeline, store
+
+    class Paid:
+        name, paid = "apify_meta", True
+        calls = 0
+
+        async def collect(self, market):
+            Paid.calls += 1
+            return []
+
+    async def recent(m):
+        return 3.0
+
+    async def noop(*a, **k):
+        return 1 if a and a[0] == "US" else None
+
+    monkeypatch.setattr(store, "hours_since_collected", recent)
+    monkeypatch.setattr(store, "start_run", noop)
+    monkeypatch.setattr(store, "finish_run", noop)
+
+    async def skip(*a, **k):
+        return None
+    for fn in ("extract_step", "enrich_step", "score_step"):
+        monkeypatch.setattr(pipeline, fn, skip)
+    res = await pipeline.run_market("US", collectors=[Paid()])
+    assert Paid.calls == 0 and "already scraped" in res["stats"]["collect_skipped"]
+    res = await pipeline.run_market("US", collectors=[Paid()], collect="always")
+    assert Paid.calls == 1
+    res = await pipeline.run_market("US", collectors=[Paid()], collect="never")
+    assert Paid.calls == 1 and "no scraping" in res["stats"]["collect_skipped"]

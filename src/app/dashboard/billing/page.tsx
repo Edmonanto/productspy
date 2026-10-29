@@ -3,7 +3,7 @@
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
 import Topbar from "@/components/layout/Topbar";
-import { usersApi, billingApi, winnersApi, Me } from "@/lib/api";
+import { usersApi, billingApi, winnersApi, partnersApi, Me } from "@/lib/api";
 import {
   CreditCard, Zap, Check, AlertTriangle,
   ExternalLink, X, Shield, RefreshCw
@@ -61,6 +61,18 @@ const PLANS = [
 ];
 
 type Provider = "stripe" | "paypal";
+
+/** "25% off your first month, from <coach>" — applied automatically at card checkout. */
+function PartnerDiscount() {
+  const { data } = useSWR("partners-me", partnersApi.me);
+  const r = data?.referred_by;
+  if (!r || r.discount_used || !r.discount_pct) return null;
+  return (
+    <div className="mx-4 md:mx-6 mt-4 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-3 text-sm text-violet-100">
+      🎁 <b>{r.discount_pct}% off your first paid month</b> from {r.partner} — applied automatically when you pay by card.
+    </div>
+  );
+}
 
 export default function BillingPage() {
   const { data: me, isLoading } = useSWR<Me>("me", usersApi.me);
@@ -135,6 +147,7 @@ export default function BillingPage() {
   return (
     <div className="flex flex-col min-h-full">
       <Topbar title="Billing" />
+      <PartnerDiscount />
 
       <div className="p-4 sm:p-6 max-w-5xl mx-auto w-full space-y-8">
 

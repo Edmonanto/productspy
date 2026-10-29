@@ -152,10 +152,14 @@ class ApifyMetaCollector(Collector):
     def enabled(self) -> bool:
         return _apify_on()
 
-    async def collect(self, market: Market, limit: int = 300) -> list[AdRecord]:
+    async def collect(self, market: Market, limit: int | None = None) -> list[AdRecord]:
         actor = config.APIFY_META_ACTOR
-        urls = [{"url": library_url(c, t)} for c in market.meta_countries[:2] for t in market.search_terms]
-        items = await run_actor(actor, {"urls": urls, "count": limit, "scrapeAdDetails": False})
+        limit = limit or config.APIFY_META_MAX
+        # "count" applies to EACH url: split the budget across them so a market
+        # costs ~limit ads, not limit × (countries × search phrases).
+        urls = [{"url": library_url(c, t)} for c in market.meta_countries[:1] for t in market.search_terms]
+        per_url = max(10, limit // max(1, len(urls)))
+        items = await run_actor(actor, {"urls": urls, "count": per_url, "scrapeAdDetails": False})
         out: dict[str, AdRecord] = {}
         for node in iter_ad_nodes(items):
             rec = parse_web_ad(node, market.code)
@@ -170,12 +174,13 @@ class ApifyTikTokCollector(Collector):
     def enabled(self) -> bool:
         return _apify_on()
 
-    async def collect(self, market: Market, limit: int = 300) -> list[AdRecord]:
+    async def collect(self, market: Market, limit: int | None = None) -> list[AdRecord]:
         actor = config.APIFY_TIKTOK_ACTOR
-        tags = TikTokOrganicCollector().tags_for(market)
+        limit = limit or config.APIFY_TIKTOK_MAX
+        tags = TikTokOrganicCollector().tags_for(market)[:6]
         items = await run_actor(actor, {
             "hashtags": tags,
-            "resultsPerPage": max(20, limit // max(1, len(tags))),
+            "resultsPerPage": max(10, limit // max(1, len(tags))),
             "proxyCountryCode": market.tiktok_regions[0],
             "shouldDownloadVideos": False,
             "shouldDownloadCovers": False,

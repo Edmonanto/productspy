@@ -12,6 +12,8 @@ import json
 import logging
 from datetime import date, datetime, timezone
 
+from app import config
+
 from . import store
 from .collectors import Collector, active_collectors
 from .enrich import fetch_selling_price, fetch_supplier_cost
@@ -276,7 +278,10 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
 
 
 async def run_market(market_code: str, day: date | None = None,
-                     collectors: list[Collector] | None = None) -> dict:
+                     collectors: list[Collector] | None = None, collect: str = "auto") -> dict:
+    """collect: "auto" = scrape unless this market was scraped in the last
+    APIFY_MIN_HOURS_BETWEEN hours (paid sources cost money per item); "always";
+    "never" = re-process the ads already stored (no scraping, no cost)."""
     market_code = get_market(market_code).code
     day = day or datetime.now(timezone.utc).date()
     stats: dict = {}
@@ -285,6 +290,14 @@ async def run_market(market_code: str, day: date | None = None,
     status = "ok"
     try:
         chosen_collectors = collectors if collectors is not None else active_collectors()
+        if collect == "never":
+            chosen_collectors = []
+            stats["collect_skipped"] = "re-processing stored ads (no scraping)"
+        elif collect == "auto" and any(getattr(c, "paid", False) for c in chosen_collectors):
+            since = await store.hours_since_collected(market_code)
+            if since is not None and since < config.APIFY_MIN_HOURS_BETWEEN:
+                chosen_collectors = [c for c in chosen_collectors if not getattr(c, "paid", False)]
+                stats["collect_skipped"] = f"paid sources already scraped {since:.0f}h ago"
         await collect_step(market_code, chosen_collectors, stats, errors)
         collected = sum(v for k, v in stats.items() if k.startswith("collected_"))
         if chosen_collectors and collected == 0 and not errors:

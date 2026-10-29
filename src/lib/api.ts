@@ -452,3 +452,52 @@ export const quotesApi = {
     reply?: string;
   }) => api.post<Quote>(`/quotes/${id}/reply`, body),
 };
+
+// ---- Partner / coach referral program (/partners) ----
+
+export interface PartnerStats {
+  signups: number; customers: number; active: number;
+  on_hold: number; payable: number; paid: number; revenue: number;
+}
+
+export interface PartnerMe {
+  is_admin: boolean;
+  referred_by: { partner: string; discount_pct: number; discount_used: boolean } | null;
+  partner: {
+    name: string; code: string; link: string; status: "active" | "paused";
+    commission_pct: number; commission_months: number; discount_pct: number;
+    payout_method: "paypal" | "wise" | "bank" | "other" | null; payout_details: string;
+    clicks: number; hold_days: number; stats: PartnerStats;
+    monthly: { month: string; earned: number; payments: number }[];
+    recent: { id: string; amount: number; commission: number; currency: string;
+              status: "on_hold" | "payable" | "paid" | "void"; created_at: string; paid_at: string | null }[];
+  } | null;
+}
+
+export interface AdminPartner {
+  id: string; name: string; email: string; code: string; link: string; status: "active" | "paused";
+  commission_pct: number; commission_months: number; discount_pct: number; clicks: number;
+  payout_method: string | null; payout_details: string; linked: boolean; stats: PartnerStats;
+}
+
+export interface Payout {
+  affiliate_id: string; name: string; email: string; payout_method: string | null; payout_details: string;
+  currency: string; total: number; payments: number; oldest: string;
+}
+
+export const partnersApi = {
+  offer: (code: string) =>
+    api.get<{ valid: boolean; code?: string; partner?: string; discount_pct?: number }>(`/partners/offer?code=${encodeURIComponent(code)}`),
+  click: (code: string) => api.post<{ ok: boolean }>("/partners/click", { code }),
+  attribute: (code: string) => api.post<{ ok: boolean; reason: string }>("/partners/attribute", { code }),
+  me: () => api.get<PartnerMe>("/partners/me"),
+  setPayout: (method: string, details: string) => api.put<{ message: string }>("/partners/me/payout", { method, details }),
+  adminList: () => api.get<{ partners: AdminPartner[]; hold_days: number }>("/partners/admin"),
+  adminCreate: (body: { name: string; email: string; code: string; commission_pct?: number; commission_months?: number; discount_pct?: number }) =>
+    api.post<{ id: string; code: string; link: string }>("/partners/admin", body),
+  adminUpdate: (id: string, body: Partial<Pick<AdminPartner, "status" | "commission_pct" | "commission_months" | "discount_pct">>) =>
+    request<{ message: string }>(`/partners/admin/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  payouts: () => api.get<{ payouts: Payout[] }>("/partners/admin/payouts"),
+  markPaid: (affiliate_id: string, payout_ref: string) =>
+    api.post<{ marked_paid: number }>("/partners/admin/payouts", { affiliate_id, payout_ref }),
+};

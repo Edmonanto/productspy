@@ -42,6 +42,7 @@ async def create_checkout(
     plan: str,
     customer_id: str | None,
     trial_ends_at: datetime | None = None,
+    discount_pct: Any = None,
 ) -> str:
     stripe = _client()
     price_id = config.STRIPE_PRICE_IDS.get(plan)
@@ -68,6 +69,14 @@ async def create_checkout(
         ends = trial_ends_at if trial_ends_at.tzinfo else trial_ends_at.replace(tzinfo=timezone.utc)
         if ends - datetime.now(timezone.utc) > timedelta(hours=48):
             params["subscription_data"]["trial_end"] = int(ends.timestamp())
+
+    # Partner referral: their discount on the first paid month (coupon, duration once).
+    if discount_pct:
+        from ..partners import ensure_coupon
+        try:
+            params["discounts"] = [{"coupon": ensure_coupon(stripe, discount_pct)}]
+        except Exception:
+            log.exception("partner coupon unavailable — checkout continues at full price")
 
     # Reuse the existing customer so a returning subscriber doesn't end up
     # with duplicate Stripe customers.
