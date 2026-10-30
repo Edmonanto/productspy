@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import { AuthProvider } from "@/context/AuthContext";
 import RefCapture from "@/components/partners/RefCapture";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="dark">
       <body className={`${inter.className} bg-zinc-950 text-white antialiased`}>
         <AuthProvider>{children}<Suspense fallback={null}><RefCapture /></Suspense></AuthProvider>
+        <Analytics />
       </body>
     </html>
   );
