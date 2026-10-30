@@ -55,6 +55,10 @@ MIGRATE_ON_START = os.environ.get("MIGRATE_ON_START", "true").lower() == "true"
 ADMIN_EMAILS = {
     e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()
 }
+# Who gets "something failed" emails (app/alerts.py). Empty = ADMIN_EMAILS.
+ALERT_EMAILS = {
+    e.strip().lower() for e in os.environ.get("ALERT_EMAILS", "").split(",") if e.strip()
+}
 
 # ── Plans ───────────────────────────────────────────────────────────────────
 # Mirrors the PLANS array in src/app/dashboard/billing/page.tsx.

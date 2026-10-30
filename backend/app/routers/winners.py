@@ -323,6 +323,15 @@ async def winner_dates(market: str | None = None, user: CurrentUser = Depends(cu
                       for r in rows]}
 
 
+@router.get("/watchdog", include_in_schema=False)
+async def watchdog() -> dict[str, Any]:
+    """Called by Supabase pg_cron each morning: emails the owner (once a day) if
+    the nightly scan didn't run. Public on purpose — it reveals nothing and can
+    send at most one email a day, to the owner only."""
+    from app import alerts
+    return await alerts.watchdog()
+
+
 @router.get("/status")
 async def run_status(user: CurrentUser = Depends(current_user)) -> dict[str, Any]:
     rows = await store.latest_runs()

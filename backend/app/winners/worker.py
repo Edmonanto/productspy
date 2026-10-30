@@ -125,12 +125,28 @@ def main() -> int:
     # Maintenance commands re-process stored ads and don't scrape unless asked.
     maintenance = args.clean or args.rebuild or args.recheck
     collect = "always" if args.force_collect else ("never" if maintenance and not args.collect else "auto")
-    results = asyncio.run(run(markets, recheck=args.recheck, rebuild=args.rebuild, clean=args.clean,
-                              collect=collect))
+    scheduled = not args.market and not maintenance     # the nightly cron run
+    from app import alerts
+    try:
+        results = asyncio.run(run(markets, recheck=args.recheck, rebuild=args.rebuild, clean=args.clean,
+                                  collect=collect))
+    except BaseException as exc:
+        if scheduled and not isinstance(exc, KeyboardInterrupt):
+            asyncio.run(alerts.crashed(exc))
+        raise
+    email_stats = None
     if not args.market and not args.no_email:
         # The scheduled run covers every market: email today's picks.
         from .digest import _run as send_daily_email
-        log.info("daily email: %s", asyncio.run(send_daily_email(None)))
+        try:
+            email_stats = asyncio.run(send_daily_email(None))
+        except Exception as exc:
+            log.exception("daily email failed")
+            email_stats = {"sent": 0, "failed": 1, "error": str(exc)[:200]}
+        log.info("daily email: %s", email_stats)
+    if scheduled:
+        problems = asyncio.run(alerts.after_scan(results, email_stats))
+        log.info("alerts: %s", problems or "none")
     produced = sum(r["stats"].get("winners", 0) + r["stats"].get("rising", 0) for r in results)
     return 0 if produced else 1
 
