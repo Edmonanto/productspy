@@ -451,3 +451,23 @@ async def export_csv(market: str | None = None, day: date | None = Query(None, a
         iter([buf.getvalue()]), media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="winners-{code}-{pick_date or "none"}.csv"'},
     )
+
+
+@router.get("/products/{product_id}/shopify.csv")
+async def shopify_csv(product_id: str, user: CurrentUser = Depends(current_user)) -> StreamingResponse:
+    """The product as a Shopify import file (Products → Import), as a draft."""
+    from ..winners import shopify_export
+    try:
+        uuid.UUID(product_id)
+    except ValueError:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
+    p = await store.product(product_id)
+    if p is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
+    copy = await shopify_export.product_copy(p)
+    data = shopify_export.build_csv(p, copy)
+    name = shopify_export.handle(copy.get("title") or p["title"])
+    return StreamingResponse(
+        iter([data]), media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="shopify-{name}.csv"'},
+    )

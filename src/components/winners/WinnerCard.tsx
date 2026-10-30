@@ -10,6 +10,7 @@ import { WinnerPick, watchlistApi } from "@/lib/api";
 import { useCompare } from "@/lib/compare";
 import { cn, fmtNum, fmtPct, formatPrice, scoreBand, SOURCE_LABEL } from "@/lib/utils";
 import ScoreRing from "./ScoreRing";
+import ShopifyButton from "./ShopifyButton";
 import PillarBars from "./PillarBars";
 import ProductImage from "@/components/products/ProductImage";
 import { SearchSpark, TrendBadge } from "@/components/research/TrendPanel";
@@ -241,6 +242,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
             <ExternalLink size={12} /> Supplier
           </a>
         )}
+        <ShopifyButton productId={p.id} />
         <button onClick={() => compare.toggle(p.id)} aria-pressed={compare.has(p.id)}
                 className={cn("flex items-center gap-1 px-2.5 py-2 md:py-1.5 max-md:min-h-[44px] rounded-md hover:bg-zinc-800",
                   compare.has(p.id) ? "text-violet-300" : "text-zinc-400 hover:text-white")}>

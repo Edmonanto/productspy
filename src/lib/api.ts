@@ -315,6 +315,21 @@ export const winnersApi = {
     a.click();
     URL.revokeObjectURL(url);
   },
+  /** One product as a Shopify import file (Products → Import), added as a draft. */
+  shopifyCsv: async (productId: string) => {
+    const token = await getToken();
+    const res = await fetch(`${BASE_URL}/winners/products/${productId}/shopify.csv`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error("Couldn't prepare the Shopify file.");
+    const name = /filename="([^"]+)"/.exec(res.headers.get("content-disposition") ?? "")?.[1] ?? "shopify-product.csv";
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };
 
 // ---- Research: AI report, validation workflow, comparison (/research) ----

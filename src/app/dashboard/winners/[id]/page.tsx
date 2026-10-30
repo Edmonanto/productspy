@@ -23,6 +23,7 @@ import {
   CompetitorSection, CreativeSection, MarketSection, RisksSection, SupplierSection,
 } from "@/components/research/ReportSections";
 import { AdAngle, AdEvidence, researchApi, watchlistApi, winnersApi } from "@/lib/api";
+import ShopifyButton from "@/components/winners/ShopifyButton";
 import { useCompare } from "@/lib/compare";
 import { cn, fmtNum, fmtPct, formatPrice, recallMarket, scoreBand, SOURCE_LABEL, timeAgo } from "@/lib/utils";
 import { computeEconomics, DEFAULT_ASSUMPTIONS } from "@/lib/profit";
@@ -167,6 +168,7 @@ function EvidenceInner() {
           <ArrowLeft size={12} /> Back to winners
         </Link>
         <div className="flex items-center gap-1.5 flex-wrap">
+          <ShopifyButton productId={id} variant="page" />
           <button onClick={toggleSave} className={cn("flex items-center gap-1.5 text-xs rounded-lg px-3 py-2 min-h-[40px] border",
             saved ? "text-violet-300 border-violet-500/40 bg-violet-500/10" : "text-zinc-300 border-zinc-800 bg-zinc-900 hover:border-zinc-700")}>
             <Bookmark size={13} fill={saved ? "currentColor" : "none"} /> {saved ? "Saved" : "Save"}
