@@ -277,7 +277,8 @@ def test_band_labels():
 
 def test_pick_winners_threshold_and_filler():
     from app.winners.scoring import ScoreResult
-    mk = lambda t, x=None, c="medium": ScoreResult(total=t, breakdown={}, excluded=x, confidence=c)
+    mk = lambda t, x=None, c="medium", n=3: ScoreResult(total=t, breakdown={}, excluded=x, confidence=c,
+                                                        signals={"advertisers": n})
     scored = [("a", mk(91)), ("b", mk(75)), ("c", mk(72, "restricted")), ("d", mk(66)), ("e", mk(64)),
               ("f", mk(58)), ("g", mk(50))]
     picks = pick_winners(scored)
@@ -288,8 +289,42 @@ def test_pick_winners_threshold_and_filler():
     picks = pick_winners(thin)
     assert [(p[0], p[2]) for p in picks] == [("r", "rising"), ("x", "watch"), ("y", "watch")]
     assert pick_winners([("lo", mk(78, c="low"))])[0][2] == "rising"
+    # One store is not proof enough to be called a winner, however high it scores.
+    assert pick_winners([("solo", mk(88, n=1))])[0][2] == "rising"
     many = [(str(i), mk(70 + i)) for i in range(15)]
     assert len(pick_winners(many)) == 10
+
+
+# ── long-running single-store ads (a store's catalog item, not a trend) ─────
+def _ads_one_store(days, fresh=0, stores=1):
+    from app.winners.collectors.base import AdRecord
+    old = [AdRecord(platform="meta", external_id=f"o{i}", market="US", advertiser_name=f"Store {i % stores}",
+                    landing_url=f"https://store{i % stores}.com/products/ski", started_at=NOW - timedelta(days=days), ad_text="Ski guards")
+           for i in range(max(stores, 2))]
+    new = [AdRecord(platform="meta", external_id=f"n{i}", market="US", advertiser_name="Store 0",
+                    landing_url="https://store0.com/products/ski", started_at=NOW - timedelta(days=3), ad_text="Ski guards")
+           for i in range(fresh)]
+    return old + new
+
+
+def test_evergreen_single_store_is_penalised():
+    base = dict(now=NOW, sell_price_usd=39.99, cost_usd=8.0, wow=7, problem=7, demo3s=True)
+    evergreen = score(aggregate(_ads_one_store(400), **base))
+    fresh_multi = score(aggregate(_ads_one_store(40, fresh=3, stores=4), **base))
+    assert evergreen.signals["advertisers"] == 1
+    assert any(p["points"] == -12 and "catalog" in p["reason"] for p in evergreen.penalties)
+    assert evergreen.signals["weaknesses"][0].startswith("Only 1 store")
+    assert fresh_multi.penalties == [] and fresh_multi.total > evergreen.total + 15
+
+
+def test_old_single_store_with_new_ads_smaller_penalty():
+    res = score(aggregate(_ads_one_store(400, fresh=2), now=NOW, sell_price_usd=39.99, cost_usd=8.0))
+    assert [p["points"] for p in res.penalties] == [-6]
+
+
+def test_recent_single_store_not_penalised():
+    res = score(aggregate(_ads_one_store(60), now=NOW, sell_price_usd=39.99, cost_usd=8.0))
+    assert res.penalties == []
 
 
 def test_unlisted_currency_is_dropped_not_guessed():

@@ -86,6 +86,13 @@ MIN_PICKS = 5
 REPICK_COOLDOWN_DAYS = 30
 KNOWN_FLOOR = 50          # points of criteria that must be known before full scale-up
 SINGLE_SOURCE_CAP = 85    # max score for a product seen on one platform only
+# A single store whose ads have run for half a year with nothing new is a
+# store's long-running catalog item, not a product that is winning now.
+EVERGREEN_DAYS = 180
+EVERGREEN_PENALTY = 12
+OLD_SINGLE_STORE_DAYS = 365
+OLD_SINGLE_STORE_PENALTY = 6
+WINNER_MIN_STORES = 2     # "winner" needs proof from 2+ stores (or 3+ creators); else "rising" at best
 
 BANDS = [(85, "Exceptional research candidate"), (70, "Strong candidate worth validating"),
          (55, "Promising — needs further investigation"), (40, "Weak or uncertain opportunity"),
@@ -339,9 +346,15 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
     else:
         c.add(None, 6)
     if s.max_days_running is not None:
-        c.add(_tier(s.max_days_running, [(30, 5), (14, 4), (7, 2.5), (4, 1)]), 5)
-        if s.max_days_running >= 7:
-            c.ev(f"An ad still running after {s.max_days_running} days — advertisers keep paying for it")
+        d = s.max_days_running
+        # Long-running proves it sells; past ~4 months it says "established", not "trending now".
+        c.add(2.0 if d > 365 else 3.5 if d > 120 else _tier(d, [(30, 5), (14, 4), (7, 2.5), (4, 1)]), 5)
+        if d > 365:
+            c.ev(f"Ads running for {d} days — an established product, not a new trend")
+        elif d > 120:
+            c.ev(f"An ad running for {d} days — proven, but no longer new")
+        elif d >= 7:
+            c.ev(f"An ad still running after {d} days — advertisers keep paying for it")
     else:
         c.add(None, 5)
     if paid_now:
@@ -542,6 +555,20 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
         raw = SINGLE_SOURCE_CAP
     total = int(round(max(0, min(100, raw))))
 
+    # ---------- penalties: patterns the criteria above can't see on their own
+    penalties = []
+    single = s.advertisers <= 1 and (s.meta_ads + s.tiktok_ads) > 0
+    if single and s.max_days_running is not None:
+        if s.max_days_running >= EVERGREEN_DAYS and s.new_creatives_30d == 0:
+            penalties.append({"points": -EVERGREEN_PENALTY, "reason":
+                              f"Only 1 store, ads running {s.max_days_running} days with no new ads in 30 days "
+                              "— looks like a store's long-running catalog ad, not a product winning now"})
+        elif s.max_days_running >= OLD_SINGLE_STORE_DAYS:
+            penalties.append({"points": -OLD_SINGLE_STORE_PENALTY, "reason":
+                              f"Only 1 store, advertising it for {s.max_days_running} days — "
+                              "one brand's established product, not yet copied by others"})
+    total = max(0, total + sum(p["points"] for p in penalties))
+
     confidence = ("high" if n_src >= 2 and known_max >= 75
                   else "medium" if n_src >= 2 or known_max >= 70 else "low")
 
@@ -562,6 +589,7 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
     missing = [k for k, v in breakdown.items() if v is None]
     if capped:
         weaknesses.append("Seen on one platform only — score capped until confirmed elsewhere")
+    weaknesses = [p["reason"] for p in penalties] + weaknesses
 
     sig = asdict(s)
     sig.update({
@@ -571,7 +599,7 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
         "economics": asdict(econ),
     })
     return ScoreResult(
-        total=total, breakdown=breakdown, penalties=[], reasons=strengths[:7],
+        total=total, breakdown=breakdown, penalties=penalties, reasons=strengths[:7],
         confidence=confidence, excluded=excluded, signals=sig,
     )
 
@@ -584,7 +612,9 @@ def pick_winners(scored: list[tuple[str, ScoreResult]], max_picks: int = MAX_PIC
                       key=lambda x: (x[1].total, x[1].confidence == "high"), reverse=True)
 
     def is_winner(r: ScoreResult) -> bool:
-        return r.total >= WINNER_THRESHOLD and r.confidence != "low"
+        sig = r.signals or {}
+        proven = (sig.get("advertisers") or 0) >= WINNER_MIN_STORES or (sig.get("creators") or 0) >= 3
+        return r.total >= WINNER_THRESHOLD and r.confidence != "low" and proven
 
     winners = [(pid, r, "winner") for pid, r in eligible if is_winner(r)][:max_picks]
     if len(winners) < min_picks:
