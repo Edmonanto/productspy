@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import { AuthProvider } from "@/context/AuthContext";
 import RefCapture from "@/components/partners/RefCapture";
-import { Analytics } from "@vercel/analytics/react";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
