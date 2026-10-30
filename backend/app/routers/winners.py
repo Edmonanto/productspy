@@ -95,6 +95,15 @@ def _f(value: Any) -> float | None:
     return float(value) if value is not None else None
 
 
+def _search_summary(t: Any) -> dict[str, Any] | None:
+    """Google Trends for a list card: status + the last 26 weekly points (0-100 index)."""
+    if not isinstance(t, dict) or not t.get("status"):
+        return None
+    pts = [p.get("value") for p in (t.get("series") or []) if isinstance(p, dict)]
+    return {"status": t["status"], "growth": t.get("growth"), "term": t.get("term"),
+            "geo": t.get("geo"), "series": [v for v in pts if isinstance(v, (int, float))][-26:]}
+
+
 def serialize_pick(r: Any) -> dict[str, Any]:
     sig = _json(r["signals"]) or {}
     attrs = _json(r["attributes"]) or {}
@@ -115,6 +124,7 @@ def serialize_pick(r: Any) -> dict[str, Any]:
                       "break_even_roas": econ.break_even_roas},
         "breakdown": _json(r["breakdown"]) or {},
         "angles": attrs.get("angles") or [],
+        "search_trend": _search_summary((attrs.get("trends") or {}).get(r.get("market"))),
         "reasons": _json(r["reasons"]) or [],
         "penalties": _json(r["penalties"]) or [],
         "confidence": r["confidence"],

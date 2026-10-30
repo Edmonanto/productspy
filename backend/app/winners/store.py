@@ -374,7 +374,7 @@ async def latest_pick_date(market: str, on_or_before: date) -> date | None:
 async def picks(market: str, day: date) -> list[dict]:
     rows = await db.fetch(
         """
-        select dw.rank, dw.tier, dw.total, dw.product_id, dw.pick_date,
+        select dw.rank, dw.tier, dw.total, dw.product_id, dw.pick_date, dw.market,
                ws.breakdown, ws.reasons, ws.penalties, ws.confidence, ws.signals,
                p.title, p.image_url, p.category, p.price_usd, p.cost_usd,
                p.cost_estimated, p.product_url, p.attributes,

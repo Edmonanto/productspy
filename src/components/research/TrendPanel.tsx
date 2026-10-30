@@ -12,7 +12,7 @@ interface Props {
   } | null;
 }
 
-const SEARCH_LABEL: Record<string, { label: string; tone: string }> = {
+export const SEARCH_LABEL: Record<string, { label: string; tone: string }> = {
   rising: { label: "Searches rising", tone: "text-emerald-300 bg-emerald-500/10" },
   stable: { label: "Searches steady", tone: "text-zinc-300 bg-zinc-800" },
   falling: { label: "Searches falling", tone: "text-red-300 bg-red-500/10" },
@@ -20,6 +20,38 @@ const SEARCH_LABEL: Record<string, { label: string; tone: string }> = {
   low: { label: "Few searches", tone: "text-zinc-400 bg-zinc-800" },
   no_data: { label: "Not enough search data", tone: "text-zinc-400 bg-zinc-800" },
 };
+
+/** Compact Google Trends line for list cards: last ~6 months, weekly, relative 0-100. */
+export function SearchSpark({ search, className }: {
+  search?: { status: string; growth: number | null; term: string | null; geo: string | null; series: number[] } | null;
+  className?: string;
+}) {
+  if (!search) return null;
+  const lab = SEARCH_LABEL[search.status] ?? SEARCH_LABEL.stable;
+  const pts = search.series;
+  const W = 96, H = 26;
+  const line = pts.length > 1
+    ? pts.map((v, i) => `${(i / (pts.length - 1)) * W},${H - 2 - (Math.max(0, Math.min(100, v)) / 100) * (H - 4)}`).join(" ")
+    : null;
+  const color = search.status === "rising" ? "#34D399" : search.status === "falling" ? "#F87171"
+    : search.status === "spike" ? "#FB923C" : "#A78BFA";
+  const pct = search.growth != null && search.status !== "no_data" ? Math.round(search.growth * 100 - 100) : null;
+  return (
+    <span title={`Google searches for "${search.term ?? ""}" (${search.geo ?? ""}), weekly, last 6 months — relative interest, not sales`}
+          className={cn("inline-flex items-center gap-2 rounded-md bg-zinc-800/70 border border-zinc-700/60 px-2 py-1", className)}>
+      <span className="text-[10px] font-semibold text-zinc-400">Google</span>
+      {line && (
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden>
+          <polyline points={`0,${H} ${line} ${W},${H}`} fill={color} fillOpacity={0.15} stroke="none" />
+          <polyline points={line} fill="none" stroke={color} strokeWidth={1.8} strokeLinejoin="round" strokeLinecap="round" />
+        </svg>
+      )}
+      <span className={cn("text-[11px] font-medium rounded px-1", lab.tone)}>
+        {lab.label}{pct != null && search.status !== "low" ? ` ${pct >= 0 ? "+" : ""}${pct}%` : ""}
+      </span>
+    </span>
+  );
+}
 
 /** 12 months of weekly Google Trends interest (relative index). */
 function SearchChart({ search }: { search: NonNullable<Props["search"]> }) {
@@ -105,7 +137,7 @@ export default function TrendPanel({ trend, why, signals: rawSignals, history: r
         </dl>
       )}
       {search && search.status ? <SearchChart search={search} /> : (
-        <p className="text-[11px] text-zinc-500">Google search interest is fetched for the strongest products each day.</p>
+        <p className="text-[11px] text-zinc-500">Google search interest is checked for every daily pick — this product has not been checked yet.</p>
       )}
       {series.length >= 2 ? (
         <div>

@@ -157,11 +157,12 @@ async def save(product_id: str, market: str, data: dict) -> None:
         """, product_id, market, json.dumps(data))
 
 
-async def trends_step(market: str, ranked_ids: list[str], products: dict, today: date, stats: dict) -> dict[str, dict]:
+async def trends_step(market: str, ranked_ids: list[str], products: dict, today: date, stats: dict,
+                      limit: Optional[int] = None) -> dict[str, dict]:
     """Fetch/refresh search interest for the top candidates. Returns {pid: trends data} for all known."""
     known: dict[str, dict] = {}
     todo: list[tuple[str, Any]] = []
-    for pid in ranked_ids[:TRENDS_CANDIDATES]:
+    for pid in ranked_ids[:TRENDS_CANDIDATES if limit is None else limit]:
         prod = products[pid][0]
         c = cached_for(prod, market)
         if c and not needs_refresh(c, today):

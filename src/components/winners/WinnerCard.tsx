@@ -12,7 +12,7 @@ import { cn, fmtNum, fmtPct, formatPrice, scoreBand, SOURCE_LABEL } from "@/lib/
 import ScoreRing from "./ScoreRing";
 import PillarBars from "./PillarBars";
 import ProductImage from "@/components/products/ProductImage";
-import { TrendBadge } from "@/components/research/TrendPanel";
+import { SearchSpark, TrendBadge } from "@/components/research/TrendPanel";
 
 /** Competition label from the number of stores advertising it (scoring.py, criterion C). */
 function competition(stores: number | null | undefined): { label: string; tone: string } | null {
@@ -150,6 +150,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
               </span>
             ))}
             <TrendBadge trend={pick.trend} />
+            <SearchSpark search={pick.search_trend} />
             {pick.confidence && (
               <span className={cn(
                 "rounded px-1.5 py-0.5",

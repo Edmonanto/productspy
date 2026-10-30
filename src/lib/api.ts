@@ -182,6 +182,8 @@ export interface WinnerPick {
   scored_on?: string | null;
   economics?: PickEconomics;
   angles?: AdAngle[];
+  /** Google Trends in this market: status + last 26 weekly points (relative 0-100 index). */
+  search_trend?: { status: string; growth: number | null; term: string | null; geo: string | null; series: number[] } | null;
   product?: {
     id: string;
     title: string;

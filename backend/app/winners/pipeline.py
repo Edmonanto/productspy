@@ -266,6 +266,13 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
 
     chosen = pick_winners(scored)
     await store.save_winners(market_code, day, chosen, score_ids)
+    try:  # Google Trends for every pick, not only the top candidates (7-day cache)
+        pick_ids = [pid for pid, *_ in chosen if pid in products]
+        extra: dict = {}
+        await trends_step(market_code, pick_ids, products, day, extra, limit=len(pick_ids))
+        stats["trends_fetched_picks"] = extra.get("trends_fetched", 0)
+    except Exception as exc:
+        log.warning("[%s] google trends for picks skipped: %s", market_code, exc)
     try:  # suggested marketing angles for the day's picks (never fails the run)
         await angles_step(market_code, [pid for pid, *_ in chosen], products, day, stats)
     except Exception:
