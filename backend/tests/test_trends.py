@@ -197,3 +197,76 @@ async def test_paid_sources_skipped_when_scraped_recently(monkeypatch):
     assert Paid.calls == 1
     res = await pipeline.run_market("US", collectors=[Paid()], collect="never")
     assert Paid.calls == 1 and "no scraping" in res["stats"]["collect_skipped"]
+
+
+# ── API-based actor (signalbench) + fallback + partial results ──────────────
+def test_series_from_signalbench_item():
+    item = {"searchTerm": "ski guards", "interestOverTime": [
+        {"date": "Dec 28 – Jan 3, 2026", "value": 40, "isPartial": False},
+        {"date": "Jan 4 – 10, 2026", "value": 55, "isPartial": False},
+        {"date": "Jan 11 – 17, 2026", "value": 61, "isPartial": True}]}
+    assert trends.series_from_item(item) == [{"date": "2025-12-28", "value": 40},
+                                             {"date": "2026-01-04", "value": 55}]
+
+
+def test_parse_week_labels():
+    assert str(trends._parse_label("Jun 15 – 21, 2025")) == "2025-06-15"
+    assert str(trends._parse_label("Dec 28, 2025 – Jan 3, 2026")) == "2025-12-28"
+    assert str(trends._parse_label("2026-03-01")) == "2026-03-01"
+    assert trends._parse_label("nonsense") is None
+
+
+def test_payload_per_actor():
+    fast = trends._payload("signalbench~google-trends-scraper", ["a"], "UK")
+    assert fast["geo"] == "GB" and fast["includeRelatedQueries"] is False and fast["timeRange"] == "today 12-m"
+    slow = trends._payload("apify~google-trends-scraper", ["a"], "US")
+    assert slow["maxRequestRetries"] == 1 and slow["pageLoadTimeoutSecs"] == 60
+
+
+async def test_fetch_falls_back_for_missing_terms(monkeypatch):
+    from app import config
+    monkeypatch.setattr(config, "APIFY_TRENDS_ACTOR", "signalbench~google-trends-scraper")
+    monkeypatch.setattr(config, "APIFY_TRENDS_FALLBACK", "apify~google-trends-scraper")
+    pts = [{"date": f"2026-0{1 + i // 4}-0{1 + i % 4}", "value": 10 + i} for i in range(12)]
+    calls = []
+
+    async def run(actor, payload, max_wait=900, keep_partial=False):
+        calls.append((actor, payload["searchTerms"], keep_partial))
+        if actor.startswith("signalbench"):
+            return [{"searchTerm": "a", "interestOverTime": pts}, {"searchTerm": "b", "interestOverTime": []}]
+        return [{"searchTerm": "b", "interestOverTime_timelineData": [{"time": 1767225600, "value": [7]}]}]
+    monkeypatch.setattr(trends, "run_actor_async", run)
+    got = await trends.fetch(["a", "b"], "US")
+    assert set(got) == {"a", "b"} and len(got["a"]) == 12
+    assert calls == [("signalbench~google-trends-scraper", ["a", "b"], True),
+                     ("apify~google-trends-scraper", ["b"], True)]
+
+
+async def test_apify_keeps_partial_results_of_a_stopped_run(monkeypatch):
+    import httpx
+    from app import config
+    from app.winners.collectors import apify
+
+    class R:
+        def __init__(self, code, data): self.status_code, self._d, self.text = code, data, ""
+        def json(self): return self._d
+    posts = []
+
+    class Client:
+        def __init__(self, *a, **k): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, url, **k):
+            posts.append(url)
+            return R(201, {"data": {"id": "run9", "status": "RUNNING", "defaultDatasetId": "ds9"}})
+        async def get(self, url, **k):
+            if url.endswith("/actor-runs/run9"):
+                return R(200, {"data": {"id": "run9", "status": "RUNNING", "defaultDatasetId": "ds9"}})
+            return R(200, [{"searchTerm": "done-before-stop"}])
+
+    monkeypatch.setattr(httpx, "AsyncClient", Client)
+    monkeypatch.setattr(config, "APIFY_TOKEN", "tok")
+    monkeypatch.setattr(apify, "_blocked", None)
+    assert await apify.run_actor_async("x~y", {}, max_wait=60) == []
+    assert await apify.run_actor_async("x~y", {}, max_wait=60, keep_partial=True) == [{"searchTerm": "done-before-stop"}]
+    assert any(u.endswith("/actor-runs/run9/abort") for u in posts)

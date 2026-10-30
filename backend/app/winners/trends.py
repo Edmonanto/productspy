@@ -48,20 +48,56 @@ def geo_for(market: str) -> str:
 
 
 # ── analysis ────────────────────────────────────────────────────────────────
+_MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], 1)}
+
+
+def _parse_label(label: str) -> Optional[date]:
+    """Start date of a Google Trends week label: "Jun 15 – 21, 2025",
+    "Dec 28, 2025 – Jan 3, 2026", "2025-06-15" or "Jun 15, 2025"."""
+    import re
+    s = str(label or "").strip()
+    try:
+        return date.fromisoformat(s[:10])
+    except ValueError:
+        pass
+    first = re.split(r"\s*[–—-]\s*", s, maxsplit=1)[0]
+    years = re.findall(r"\b(\d{4})\b", s)
+    m = re.match(r"([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2})(?:,\s*(\d{4}))?", first)
+    if not m or not years:
+        return None
+    month = _MONTHS.get(m.group(1).lower())
+    year = int(m.group(3) or years[-1])
+    if not m.group(3) and month:            # "Dec 28 – Jan 3, 2026": the start is in the year before
+        end_m = re.search(r"[–—-]\s*([A-Za-z]{3})", s)
+        if end_m and _MONTHS.get(end_m.group(1).lower(), 13) < month:
+            year -= 1
+    try:
+        return date(year, month, int(m.group(2))) if month else None
+    except ValueError:
+        return None
+
+
 def series_from_item(item: dict) -> list[dict]:
-    """[{date, value}] from one Apify dataset item; drops the partial (current) week."""
+    """[{date, value}] from one dataset item of either Google Trends actor;
+    drops the partial (current) week."""
     pts = []
-    for p in item.get("interestOverTime_timelineData") or []:
-        if p.get("isPartial"):
+    rows = item.get("interestOverTime_timelineData") or item.get("interestOverTime") or []
+    for p in rows if isinstance(rows, list) else []:
+        if not isinstance(p, dict) or p.get("isPartial"):
             continue
         val = p.get("value")
         v = val[0] if isinstance(val, list) and val else val
-        try:
-            ts = int(p.get("time"))
-        except (TypeError, ValueError):
-            continue
-        if isinstance(v, (int, float)):
-            pts.append({"date": date.fromtimestamp(ts).isoformat(), "value": int(v)})
+        d = None
+        if p.get("time") is not None:
+            try:
+                d = date.fromtimestamp(int(p["time"]))
+            except (TypeError, ValueError, OSError):
+                d = None
+        if d is None:
+            d = _parse_label(p.get("formattedTime") or p.get("date") or "")
+        if d is not None and isinstance(v, (int, float)):
+            pts.append({"date": d.isoformat(), "value": int(v)})
     return pts
 
 
@@ -133,17 +169,43 @@ async def search_terms(names: list[str], market: str) -> list[str]:
 
 
 # ── fetch + store ───────────────────────────────────────────────────────────
-async def fetch(terms: list[str], market: str) -> dict[str, list[dict]]:
-    items = await run_actor_async(config.APIFY_TRENDS_ACTOR, {
-        "searchTerms": terms, "isMultiple": False, "timeRange": "", "geo": geo_for(market),
-        "skipDebugScreen": True, "maxItems": len(terms),
-    })
+def _payload(actor: str, terms: list[str], market: str) -> dict:
+    if actor.startswith("apify~") or actor.startswith("apify/"):
+        # Browser-based: fail fast instead of retrying a term 7 times.
+        return {"searchTerms": terms, "isMultiple": False, "timeRange": "", "geo": geo_for(market),
+                "skipDebugScreen": True, "maxItems": len(terms),
+                "maxRequestRetries": 1, "pageLoadTimeoutSecs": 60}
+    return {"searchTerms": terms, "timeRange": "today 12-m", "geo": geo_for(market),
+            "includeInterestOverTime": True, "includeRelatedQueries": False}
+
+
+def _collect(items: list) -> dict[str, list[dict]]:
     out: dict[str, list[dict]] = {}
     for it in items:
         if isinstance(it, dict):
-            term = str(it.get("searchTerm") or it.get("inputUrlOrTerm") or "").strip().lower()
-            if term:
-                out[term] = series_from_item(it)
+            term = str(it.get("searchTerm") or it.get("inputUrlOrTerm") or it.get("keyword") or "").strip().lower()
+            series = series_from_item(it)
+            if term and series:
+                out[term] = series
+    return out
+
+
+async def fetch(terms: list[str], market: str) -> dict[str, list[dict]]:
+    """Search interest per term. Tries the main actor, then the fallback for
+    whatever it couldn't get. Whatever a slow run finished is kept."""
+    out: dict[str, list[dict]] = {}
+    for actor in [a for a in (config.APIFY_TRENDS_ACTOR, config.APIFY_TRENDS_FALLBACK) if a]:
+        todo = [t for t in terms if t not in out]
+        if not todo:
+            break
+        try:
+            items = await run_actor_async(actor, _payload(actor, todo, market), max_wait=600, keep_partial=True)
+        except Exception as exc:   # the limit error re-raises in the caller's next Apify call anyway
+            log.warning("[%s] google trends via %s failed: %s", market, actor, exc)
+            continue
+        got = _collect(items)
+        log.info("[%s] google trends via %s: %d of %d terms", market, actor, len(got), len(todo))
+        out.update(got)
     return out
 
 

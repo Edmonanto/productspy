@@ -201,7 +201,12 @@ APIFY_TIKTOK_MAX = int(os.environ.get("APIFY_TIKTOK_MAX", "40"))
 APIFY_TRENDS_MAX = int(os.environ.get("APIFY_TRENDS_MAX", "10"))  # Google Trends lookups per market per day (7-day cache)
 APIFY_MIN_HOURS_BETWEEN = int(os.environ.get("APIFY_MIN_HOURS_BETWEEN", "20"))
 # Google Trends search interest (app/winners/trends.py). Empty = off.
-APIFY_TRENDS_ACTOR = os.environ.get("APIFY_TRENDS_ACTOR", "apify~google-trends-scraper")
+# Default: an API-based actor (no browser) — ~$0.005 per term and seconds per
+# term. apify~google-trends-scraper loads Google's page in a browser and, since
+# Google removed the related-queries widgets, retries every term until it times
+# out (~$0.30 per term); it is only the fallback now.
+APIFY_TRENDS_ACTOR = os.environ.get("APIFY_TRENDS_ACTOR", "signalbench~google-trends-scraper")
+APIFY_TRENDS_FALLBACK = os.environ.get("APIFY_TRENDS_FALLBACK", "apify~google-trends-scraper")
 
 TIKTOK_MIN_VIEWS = int(os.environ.get("TIKTOK_MIN_VIEWS", "100000"))
 TIKTOK_CC_PERIOD = os.environ.get("TIKTOK_CC_PERIOD", "7")  # 7 | 30 | 180 days

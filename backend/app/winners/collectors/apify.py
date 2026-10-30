@@ -78,7 +78,7 @@ async def run_actor(actor: str, payload: dict, timeout: int = 600) -> list[Any]:
     return items
 
 
-async def run_actor_async(actor: str, payload: dict, max_wait: int = 900) -> list[Any]:
+async def run_actor_async(actor: str, payload: dict, max_wait: int = 900, keep_partial: bool = False) -> list[Any]:
     """Start a run, poll until it finishes (up to max_wait s), return its dataset.
     For actors that can take longer than run-sync's ~5 minute limit. Metered like run_actor."""
     import asyncio
@@ -111,7 +111,15 @@ async def run_actor_async(actor: str, payload: dict, max_wait: int = 900) -> lis
             log.warning("[apify] %s run ended %s", actor, run.get("status"))
             if run.get("status") in ("READY", "RUNNING"):
                 await client.post(f"{base}/actor-runs/{run['id']}/abort", headers=headers)
-            return []
+            if not (keep_partial and run.get("defaultDatasetId")):
+                return []
+            # Paid for already: keep whatever the run finished before it was stopped.
+            r = await client.get(f"{base}/datasets/{run['defaultDatasetId']}/items", headers=headers,
+                                 params={"clean": "true", "format": "json"})
+            items = r.json() if r.status_code < 300 else []
+            items = items if isinstance(items, list) else []
+            log.info("[apify] %s kept %d items from the stopped run", actor, len(items))
+            return items
         r = await client.get(f"{base}/datasets/{run['defaultDatasetId']}/items", headers=headers,
                              params={"clean": "true", "format": "json"})
         items = r.json() if r.status_code < 300 else []
