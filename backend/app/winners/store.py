@@ -382,7 +382,8 @@ async def picks(market: str, day: date) -> list[dict]:
                  order by s.unit_cost_usd limit 1) as supplier_url,
                (select a.ad_url from ad_creatives a
                  where a.product_id = p.id and a.market = dw.market
-                 order by (a.platform = 'meta') desc, a.variant_count desc, a.last_seen_at desc
+                 order by coalesce(a.platform || ':' || a.external_id = p.attributes ->> 'photo_ad', false) desc,
+                          (a.platform = 'meta') desc, a.variant_count desc, a.last_seen_at desc
                  limit 1) as ad_url,
                (select a.landing_url from ad_creatives a
                  where a.product_id = p.id and a.market = dw.market and a.landing_url like 'http%'
@@ -441,12 +442,17 @@ async def score_history(product_id: str, market: str) -> list[asyncpg.Record]:
 async def product_ads(product_id: str, market: str) -> list[asyncpg.Record]:
     return await db.fetch(
         """
+        with v as (select attributes -> 'verified_ads' as verified, attributes ->> 'photo_ad' as photo_ad
+                     from products where id = $1)
         select platform, advertiser_name, ad_text, landing_url, landing_domain,
                thumbnail_url, ad_url, started_at, variant_count, reach, views,
                likes, comments, shares, ctr
-          from ad_creatives
+          from ad_creatives a, v
          where product_id = $1 and market = $2
-         order by coalesce(views, 0) + coalesce(likes, 0) * 10 + variant_count * 1000 desc
+           and (coalesce(jsonb_array_length(v.verified), 0) = 0
+                or v.verified ? (a.platform || ':' || a.external_id))
+         order by coalesce(a.platform || ':' || a.external_id = v.photo_ad, false) desc,
+                  coalesce(views, 0) + coalesce(likes, 0) * 10 + variant_count * 1000 desc
         """,
         product_id, market,
     )

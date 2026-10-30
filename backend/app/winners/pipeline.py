@@ -14,7 +14,7 @@ from datetime import date, datetime, timezone
 
 from app import config
 
-from . import store
+from . import photos, store
 from .collectors import Collector, active_collectors
 from .enrich import fetch_selling_price, fetch_supplier_cost
 from .angles import angles_step
@@ -22,9 +22,11 @@ from .trends import trends_step
 from .extract import cluster_keys, guess_products_detailed
 from .filters import is_catalog_template, non_product_advertiser, non_product_reason
 from .markets import get_market
-from .scoring import aggregate, pick_winners, score
+from .scoring import MAX_PICKS, aggregate, pick_winners, score
 from .llm import llm_available
 from .verify import CANDIDATES, ad_key, verify_product
+
+PHOTO_CANDIDATES = MAX_PICKS + 5   # photos checked per run, best-ranked first
 
 log = logging.getLogger("winners")
 
@@ -238,20 +240,30 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
             if pid not in verified and not res.excluded:
                 res.excluded = "ads not checked yet"
 
-    # Every pick needs a picture: use the product's own, else the best ad thumbnail.
+    # Every pick needs a photo that really shows the product, stored by us so it
+    # never expires (photos.py). Checked for the leading candidates only; a
+    # product with no photo of itself is not picked.
+    ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
+                    key=lambda pid: results[pid][0].total, reverse=True)
+    photo_ok: set[str] = set()
     no_image = 0
-    for pid, (res, ads) in results.items():
+    for pid in ranked:
+        if len(photo_ok) >= PHOTO_CANDIDATES:
+            break
+        res, ads = results[pid]
         prod = products[pid][0]
-        if prod["image_url"]:
-            continue
-        thumb = next((a.thumbnail_url for a in sorted(ads, key=lambda a: a.platform != "meta")
-                      if a.thumbnail_url and a.thumbnail_url.startswith("http")), None)
-        if thumb:
-            await store.set_image(pid, thumb)
-        elif not res.excluded:
-            res.excluded = "no product image"
+        try:
+            ok = await photos.ensure_photo(pid, prod["title"], prod["image_url"], ads)
+        except Exception:   # our side failed (DB, Pillow...): don't empty the day over it
+            log.exception("[%s] photo check failed for %s", market_code, pid)
+            ok = bool(prod["image_url"])
+        if ok:
+            photo_ok.add(pid)
+        else:
+            res.excluded = "no photo that shows this product"
             no_image += 1
     stats["no_image"] = no_image
+    stats["photos_ok"] = len(photo_ok)
 
     scored, score_ids = [], {}
     for pid, (res, ads) in results.items():
@@ -264,7 +276,7 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
         if sig.get("tiktok_ads"):
             await store.record_ad_signal(pid, "tiktok", sig["tiktok_ads"])
 
-    chosen = pick_winners(scored)
+    chosen = pick_winners([(pid, r) for pid, r in scored if pid in photo_ok])
     await store.save_winners(market_code, day, chosen, score_ids)
     try:  # Google Trends for every pick, not only the top candidates (7-day cache)
         pick_ids = [pid for pid, *_ in chosen if pid in products]

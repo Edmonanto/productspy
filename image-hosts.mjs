@@ -5,6 +5,8 @@
  * come from any store's own domain).
  */
 export const IMAGE_HOSTS = [
+  // Product photos stored by our own API (backend app/winners/photos.py).
+  "productspy-api.onrender.com",
   // AliExpress supplier listings.
   "**.aliexpress.com",
   "**.alicdn.com",

@@ -58,7 +58,28 @@ class LLMResult:
 RETRY_STATUS = {408, 409, 429, 500, 502, 503, 504}
 
 
-async def _openai_call(system: str, prompt: str, max_tokens: int, model: str) -> LLMResult:
+def _b64(data: bytes) -> str:
+    import base64
+    return base64.b64encode(data).decode("ascii")
+
+
+def _openai_content(prompt: str, images: list | None) -> Any:
+    """Plain text, or text + pictures ([(bytes, mime)]) as data URLs."""
+    if not images:
+        return prompt
+    return [{"type": "text", "text": prompt}] + [
+        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{_b64(data)}"}} for data, mime in images]
+
+
+def _anthropic_content(prompt: str, images: list | None) -> Any:
+    if not images:
+        return prompt
+    return [{"type": "image", "source": {"type": "base64", "media_type": mime, "data": _b64(data)}}
+            for data, mime in images] + [{"type": "text", "text": prompt}]
+
+
+async def _openai_call(system: str, prompt: str, max_tokens: int, model: str,
+                       images: list | None = None) -> LLMResult:
     """OpenAI-compatible chat completion in JSON mode, with retries + backoff.
 
     JSON mode (response_format json_object) is asked for; a provider/reseller
@@ -70,7 +91,7 @@ async def _openai_call(system: str, prompt: str, max_tokens: int, model: str) ->
 
     body: dict[str, Any] = {
         "model": model, "max_tokens": max_tokens, "temperature": 0,
-        "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
+        "messages": [{"role": "system", "content": system}, {"role": "user", "content": _openai_content(prompt, images)}],
         "response_format": {"type": "json_object"},
     }
     last_err = None
@@ -108,7 +129,7 @@ async def _openai_call(system: str, prompt: str, max_tokens: int, model: str) ->
     return LLMResult(model=model, error=last_err or "failed after retries")
 
 
-async def _anthropic_call(system: str, prompt: str, max_tokens: int) -> LLMResult:
+async def _anthropic_call(system: str, prompt: str, max_tokens: int, images: list | None = None) -> LLMResult:
     try:
         from anthropic import AsyncAnthropic
     except ImportError:
@@ -118,7 +139,7 @@ async def _anthropic_call(system: str, prompt: str, max_tokens: int) -> LLMResul
         message = await client.messages.create(
             model=config.WINNERS_MODEL, max_tokens=max_tokens,
             output_config={"effort": "low"}, system=system,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": _anthropic_content(prompt, images)}],
         )
     except Exception as exc:
         return LLMResult(model=config.WINNERS_MODEL, error=str(exc)[:300])
@@ -137,7 +158,7 @@ async def _anthropic_call(system: str, prompt: str, max_tokens: int) -> LLMResul
 
 
 async def llm_call(system: str, prompt: str, max_tokens: int = 8000, purpose: str = "extract",
-                   model: str | None = None) -> LLMResult:
+                   model: str | None = None, images: list | None = None) -> LLMResult:
     """One metered, capped LLM call returning parsed JSON in .data (None on failure)."""
     from app import usage
 
@@ -147,9 +168,9 @@ async def llm_call(system: str, prompt: str, max_tokens: int = 8000, purpose: st
     if not await usage.allowed("llm"):
         return LLMResult(error="daily AI call cap reached")
     if which == "openai":
-        res = await _openai_call(system, prompt, min(max_tokens, 16000), model or config.OPENAI_MODEL)
+        res = await _openai_call(system, prompt, min(max_tokens, 16000), model or config.OPENAI_MODEL, images)
     else:
-        res = await _anthropic_call(system, prompt, max_tokens)
+        res = await _anthropic_call(system, prompt, max_tokens, images)
     await usage.record("llm", purpose, ok=res.error is None, tokens_in=res.tokens_in,
                        tokens_out=res.tokens_out, error=res.error)
     if res.error:
