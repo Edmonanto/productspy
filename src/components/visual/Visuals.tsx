@@ -8,6 +8,8 @@ import {
 } from "lucide-react";
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
 import ProductImage from "@/components/products/ProductImage";
+import { SearchSpark } from "@/components/research/TrendPanel";
+import ShopifyButton from "@/components/winners/ShopifyButton";
 import { Breakdown, WinnerPick } from "@/lib/api";
 import { cn, CriterionKey, PILLAR_MAX, TREND } from "@/lib/utils";
 
@@ -108,8 +110,8 @@ export function PickTile({ pick, market, big = false }: { pick: WinnerPick; mark
   const p = pick.product!;
   const margin = pick.economics?.complete ? pick.economics.contribution_margin_pct : null;
   return (
-    <Link href={`/dashboard/winners/${p.id}?market=${market}`}
-          className="group block bg-zinc-900 border border-zinc-800 hover:border-violet-500/50 rounded-xl overflow-hidden transition-colors">
+    <div className="bg-zinc-900 border border-zinc-800 hover:border-violet-500/50 rounded-xl overflow-hidden transition-colors flex flex-col">
+    <Link href={`/dashboard/winners/${p.id}?market=${market}`} className="group block flex-1">
       <div className="relative">
         <ProductVisual src={p.image_url} alt={p.title} category={p.category} iconSize={big ? 48 : 32}
                        className={cn("w-full", big ? "aspect-[4/3]" : "aspect-square")} />
@@ -125,6 +127,7 @@ export function PickTile({ pick, market, big = false }: { pick: WinnerPick; mark
       <div className="px-3 py-2.5">
         <div className="text-sm text-zinc-100 font-medium line-clamp-1 group-hover:text-white">{p.title}</div>
         <div className="text-xs text-zinc-500 tabular-nums">{p.price_usd != null ? `$${p.price_usd.toFixed(2)}` : "—"}</div>
+        <SearchSpark search={pick.search_trend} className="mt-1.5 max-w-full" />
         {pick.angles?.[0] && (
           <div className="mt-1.5 flex items-start gap-1 text-[11px] text-violet-200/90" title={`Hook: “${pick.angles[0].hook}”`}>
             <Lightbulb size={12} className="shrink-0 mt-px text-violet-300" aria-hidden />
@@ -133,6 +136,8 @@ export function PickTile({ pick, market, big = false }: { pick: WinnerPick; mark
         )}
       </div>
     </Link>
+    <ShopifyButton productId={p.id} variant="tile" />
+    </div>
   );
 }
 

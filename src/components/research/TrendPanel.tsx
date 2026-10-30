@@ -26,7 +26,14 @@ export function SearchSpark({ search, className }: {
   search?: { status: string; growth: number | null; term: string | null; geo: string | null; series: number[] } | null;
   className?: string;
 }) {
-  if (!search) return null;
+  if (!search) {
+    return (
+      <span title="Google Trends is checked for every pick in the nightly scan"
+            className={cn("inline-flex items-center gap-1.5 rounded-md bg-zinc-800/70 border border-zinc-700/60 px-2 py-1 text-[11px] text-zinc-500", className)}>
+        <span className="font-semibold text-zinc-400">Google</span> trend checked tonight
+      </span>
+    );
+  }
   const lab = SEARCH_LABEL[search.status] ?? SEARCH_LABEL.stable;
   const pts = search.series;
   const W = 96, H = 26;
@@ -38,7 +45,7 @@ export function SearchSpark({ search, className }: {
   const pct = search.growth != null && search.status !== "no_data" ? Math.round(search.growth * 100 - 100) : null;
   return (
     <span title={`Google searches for "${search.term ?? ""}" (${search.geo ?? ""}), weekly, last 6 months — relative interest, not sales`}
-          className={cn("inline-flex items-center gap-2 rounded-md bg-zinc-800/70 border border-zinc-700/60 px-2 py-1", className)}>
+          className={cn("inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md bg-zinc-800/70 border border-zinc-700/60 px-2 py-1", className)}>
       <span className="text-[10px] font-semibold text-zinc-400">Google</span>
       {line && (
         <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} aria-hidden>

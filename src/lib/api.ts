@@ -329,6 +329,7 @@ export const winnersApi = {
     a.download = name;
     a.click();
     URL.revokeObjectURL(url);
+    return name;
   },
 };
 
