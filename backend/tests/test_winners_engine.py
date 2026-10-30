@@ -588,3 +588,37 @@ async def test_catalog_template_ads_never_back_a_product(monkeypatch):
     v = await verify.verify_product("Posture Corrector", ads, set())
     assert [a.external_id for a in v.keep] == ["2"]
     assert sorted(a.external_id for a in v.reject) == ["0", "1"]
+
+
+# ── prices published in cents ───────────────────────────────────────────────
+from app.winners.enrich import _num, sane_price  # noqa: E402
+
+
+def test_sane_price_reads_cents():
+    assert sane_price(6400) == 64.0          # $64.00 published as 6400
+    assert sane_price(9600) == 96.0
+    assert sane_price(29.99) == 29.99        # normal prices untouched
+    assert sane_price(999) == 999
+    assert sane_price(1499.5) is None        # implausible and not cents: dropped
+    assert sane_price(0) is None and sane_price(None) is None
+
+
+def test_shopify_integer_prices_are_cents():
+    info = parse_shopify_json({"product": {"title": "Ski Guards", "variants": [{"price": 6400}, {"price": 7200}]}})
+    assert info["price"] == 64.0
+
+
+def test_jsonld_cents_price():
+    html = ('<script type="application/ld+json">{"@type":"Product","name":"Glider",'
+            '"offers":{"price":"9600","priceCurrency":"GBP"}}</script>')
+    info = parse_product_html(html)
+    assert sane_price(info["price"]) == 96.0
+
+
+def test_number_formats():
+    assert _num("64,00") == 64.0
+    assert _num("1,299.00") == 1299.0
+    assert _num("1.299,00") == 1299.0
+    assert _num("1,299") == 1299.0
+    assert _num("39.99") == 39.99
+    assert _num("abc") is None

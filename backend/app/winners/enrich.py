@@ -39,10 +39,40 @@ def to_usd(amount: Optional[float], currency: Optional[str]) -> Optional[float]:
     return round(amount * rate, 2) if rate else None
 
 
+def sane_price(price: Optional[float]) -> Optional[float]:
+    """Catch prices published in cents (6400 for 64.00).
+
+    Some stores and themes print the minor unit — Shopify's .js endpoint, and
+    JSON-LD written straight from {{ variant.price }} without dividing by 100.
+    Read as-is, a $64 item becomes $6,400 and looks hugely profitable. A
+    whole number of 1,000+ is read as cents when that gives a normal retail
+    price; anything else that high is dropped rather than trusted.
+    """
+    if price is None or price <= 0:
+        return None
+    if price < MAX_PRICE:
+        return price
+    if float(price).is_integer() and 3 <= price / 100 <= 500:
+        return round(price / 100, 2)
+    return None
+
+
+MAX_PRICE = 1000   # in the store's currency; dropshipping products sell far below this
+
+
+def _variant_price(v) -> Optional[float]:
+    raw = v.get("price")
+    if raw in (None, ""):
+        return None
+    if isinstance(raw, int) and not isinstance(raw, bool):
+        return raw / 100            # integer prices in Shopify JSON are cents (.js style)
+    return _num(raw)
+
+
 def parse_shopify_json(data: dict) -> Optional[dict]:
     p = data.get("product") or {}
     variants = p.get("variants") or []
-    prices = [float(v["price"]) for v in variants if v.get("price") not in (None, "")]
+    prices = [x for x in (_variant_price(v) for v in variants) if x]
     if not prices:
         return None
     img = (p.get("image") or {}).get("src") or ((p.get("images") or [{}])[0].get("src"))
@@ -57,9 +87,17 @@ _OG_TITLE = re.compile(r'<meta[^>]+property=["\']og:title["\'][^>]+content=["\']
 
 
 def _num(s) -> Optional[float]:
+    """64.00, 64,00, 1,299.00 and 1.299,00 all read correctly."""
+    if isinstance(s, (int, float)) and not isinstance(s, bool):
+        return float(s)
+    t = str(s or "").strip().replace(" ", "").replace("\u00a0", "")
+    if "," in t and "." in t:   # the last separator is the decimal one
+        t = t.replace(",", "") if t.rfind(".") > t.rfind(",") else t.replace(".", "").replace(",", ".")
+    elif "," in t:              # 1,299 = thousands; 64,00 = decimals
+        t = t.replace(",", "") if len(t.rpartition(",")[2]) == 3 else t.replace(",", ".")
     try:
-        return float(str(s).replace(",", "."))
-    except (TypeError, ValueError):
+        return float(t)
+    except ValueError:
         return None
 
 
@@ -113,12 +151,16 @@ async def fetch_selling_price(url: Optional[str], market_currency: str = "USD") 
                 if r.status_code == 200 and r.headers.get("content-type", "").startswith("application/json"):
                     info = parse_shopify_json(r.json())
                     if info:
+                        info["price"] = sane_price(info["price"])
                         # Shopify .json is in the store's currency; assume market currency
                         info["price_usd"] = to_usd(info["price"], market_currency)
-                        return info
+                        if info["price_usd"] is not None:
+                            return info
             r = await c.get(url)
             if r.status_code == 200:
                 info = parse_product_html(r.text)
+                if info:
+                    info["price"] = sane_price(info.get("price"))
                 if info and info.get("price"):
                     info["price_usd"] = to_usd(info["price"], info.get("currency") or market_currency)
                     return info
