@@ -144,12 +144,17 @@ def _signals(prod, ads, day: date, now: datetime, last, history: list | None = N
 
 
 async def verify_step(market_code: str, products: dict, results: dict, stats: dict,
-                      day: date, now: datetime, picked: dict) -> set[str]:
+                      day: date, now: datetime, picked: dict,
+                      history: dict | None = None, searches: dict | None = None) -> set[str]:
     """Make sure the ads behind the leading products really advertise them.
 
     Returns the ids of products whose ads have all been checked (this run or
     an earlier one). Products that aren't physical products are excluded.
+    history / searches are the paid-ads time series and Google Trends data the
+    product was scored with; a rescore after rejecting ads keeps them.
     """
+    history = history or {}
+    searches = searches or {}
     ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
                     key=lambda pid: results[pid][0].total, reverse=True)[:CANDIDATES]
     rejected = renamed = dropped = 0
@@ -185,7 +190,8 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
             results[pid] = (res, [])
             verified.discard(pid)
         elif verdict.reject:
-            sig = _signals(prod, verdict.keep, day, now, picked.get(pid))
+            sig = _signals(prod, verdict.keep, day, now, picked.get(pid),
+                           history.get(pid), searches.get(pid))
             results[pid] = (score(sig), verdict.keep)
     stats["ads_rejected"] = rejected
     stats["renamed"] = renamed
@@ -214,6 +220,7 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
         results[pid] = (score(_signals(prod, ads, day, now, picked.get(pid), history.get(pid))), ads)
 
     # Google search interest for the strongest candidates, then rescore them with it.
+    searches: dict = {}
     try:
         ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
                         key=lambda pid: results[pid][0].total, reverse=True)
@@ -227,7 +234,8 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
 
     verified: set[str] | None = None
     try:
-        verified = await verify_step(market_code, products, results, stats, day, now, picked)
+        verified = await verify_step(market_code, products, results, stats, day, now, picked,
+                                     history, searches)
     except Exception:   # a failed check must not cost the day's picks
         log.exception("[%s] verification failed", market_code)
 
