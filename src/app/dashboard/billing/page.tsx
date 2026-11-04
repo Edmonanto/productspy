@@ -9,6 +9,7 @@ import {
   ExternalLink, X, Shield, RefreshCw
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import SecureCheckout from "@/components/billing/SecureCheckout";
 
 const PLANS = [
   {
@@ -286,16 +287,13 @@ export default function BillingPage() {
                       : "bg-zinc-900 text-zinc-400 hover:text-white"
                   )}
                 >
-                  {p === "stripe" ? "💳 Card (Stripe)" : "🅿️ PayPal"}
+                  {p === "stripe" ? "💳 Card" : "🅿️ PayPal"}
                 </button>
               ))}
             </div>
-            <span className="text-zinc-500 text-xs flex items-center gap-1 whitespace-nowrap">
-              <Shield size={11} />
-              Secure & encrypted
-            </span>
           </div>
         )}
+        {(currentPlan === "free" || inTrial) && <SecureCheckout provider={provider} />}
 
         {/* Pricing grid */}
         <div>
