@@ -54,11 +54,16 @@ const TREND_ICON: Record<string, LucideIcon> = {
 };
 
 /** Trend as an icon (label in the tooltip / for screen readers). */
-export function TrendIcon({ trend, size = 14, withLabel = false, className }: { trend?: string | null; size?: number; withLabel?: boolean; className?: string }) {
-  const t = TREND[trend ?? "unknown"] ?? TREND.unknown;
+export function TrendIcon({ trend, size = 14, withLabel = false, className, labels }: {
+  trend?: string | null; size?: number; withLabel?: boolean; className?: string;
+  /** Translated trend labels (landing page in another language). */
+  labels?: Record<string, string>;
+}) {
+  const base = TREND[trend ?? "unknown"] ?? TREND.unknown;
+  const t = labels ? { ...base, label: labels[trend ?? "unknown"] ?? labels.unknown ?? base.label } : base;
   const Icon = TREND_ICON[trend ?? "unknown"] ?? HelpCircle;
   return (
-    <span title={`${t.label} — ${t.hint}`} className={cn("inline-flex items-center gap-1 border rounded-full px-1.5 py-0.5 text-[11px] font-medium", t.tone, className)}>
+    <span title={labels ? t.label : `${t.label} — ${t.hint}`} className={cn("inline-flex items-center gap-1 border rounded-full px-1.5 py-0.5 text-[11px] font-medium", t.tone, className)}>
       <Icon size={size} aria-hidden />
       {withLabel ? t.label : <span className="sr-only">{t.label}</span>}
     </span>
@@ -71,14 +76,18 @@ export const SHORT_LABEL: Record<CriterionKey, string> = {
 };
 
 /** 8-criteria radar, each axis as % of its maximum. Unknown criteria sit at 0 and are greyed. */
-export function CriteriaRadar({ breakdown, size = 220, compact = false }: { breakdown?: Breakdown; size?: number; compact?: boolean }) {
+export function CriteriaRadar({ breakdown, size = 220, compact = false, labels = SHORT_LABEL }: {
+  breakdown?: Breakdown; size?: number; compact?: boolean;
+  /** Axis labels (translated on the French landing page). */
+  labels?: Record<CriterionKey, string>;
+}) {
   const data = (Object.keys(PILLAR_MAX) as CriterionKey[]).map((k) => {
     const v = breakdown?.[k];
-    return { k: SHORT_LABEL[k] + (v == null ? " ?" : ""), v: v == null ? 0 : Math.round((v / PILLAR_MAX[k]) * 100) };
+    return { k: labels[k] + (v == null ? " ?" : ""), v: v == null ? 0 : Math.round((v / PILLAR_MAX[k]) * 100) };
   });
   return (
     <div style={{ height: size }} className="w-full" role="img"
-         aria-label={`Criteria: ${data.map((d) => `${d.k} ${d.v}%`).join(", ")}`}>
+         aria-label={`${labels === SHORT_LABEL ? "Criteria" : "Critères"}: ${data.map((d) => `${d.k} ${d.v}%`).join(", ")}`}>
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={data} outerRadius={compact ? "70%" : "72%"} margin={{ top: 4, right: 18, bottom: 4, left: 18 }}>
           <PolarGrid stroke="#3f3f46" />

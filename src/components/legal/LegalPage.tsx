@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { ArrowLeft, Zap } from "lucide-react";
 import { SITE } from "@/lib/site";
+import { LANDING_COPY, type Lang } from "@/content/landing-copy";
 
-export function SiteFooter() {
+export function SiteFooter({ lang = "en" }: { lang?: Lang }) {
+  const t = LANDING_COPY[lang];
   return (
     <footer className="border-t border-zinc-800 px-4 sm:px-8 py-8">
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-zinc-500 text-sm">
-        <Link href="/" className="flex items-center gap-2 py-2 -my-2">
+        <Link href={t.home} className="flex items-center gap-2 py-2 -my-2">
           <div className="w-6 h-6 rounded bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center">
             <Zap size={12} className="text-white" />
           </div>
@@ -14,9 +16,9 @@ export function SiteFooter() {
           <span>© 2026</span>
         </Link>
         <div className="flex gap-6">
-          <Link href="/privacy" className="inline-block py-3 -my-3 hover:text-zinc-300 transition-colors">Privacy</Link>
-          <Link href="/terms" className="inline-block py-3 -my-3 hover:text-zinc-300 transition-colors">Terms</Link>
-          <Link href="/contact" className="inline-block py-3 -my-3 hover:text-zinc-300 transition-colors">Contact</Link>
+          <Link href="/privacy" className="inline-block py-3 -my-3 hover:text-zinc-300 transition-colors">{t.footer.privacy}</Link>
+          <Link href="/terms" className="inline-block py-3 -my-3 hover:text-zinc-300 transition-colors">{t.footer.terms}</Link>
+          <Link href="/contact" className="inline-block py-3 -my-3 hover:text-zinc-300 transition-colors">{t.footer.contact}</Link>
         </div>
       </div>
     </footer>
