@@ -73,6 +73,9 @@ def scan_problems(results: list[dict], email_stats: dict | None = None, min_pick
             out += [f"{m}: problem in step '{e.get('step', '?')}' — {str(e.get('error', ''))[:300]}" for e in errs]
         if st != "failed" and picks < min_picks:
             out.append(f"{m}: only {picks} pick{'s' if picks != 1 else ''} today (expected at least {min_picks})")
+        if st != "failed" and picks and not int(stats.get("winners") or 0) and not int(stats.get("rising") or 0):
+            out.append(f"{m}: no product scored 55+ today (best {stats.get('top_score', '?')}) — "
+                       "the picks are weak signals only; usually missing Facebook/TikTok ad data")
     if email_stats:
         if email_stats.get("failed", 0) == -1:
             out.append("Daily winners email not sent: RESEND_API_KEY is missing on the cron service")
