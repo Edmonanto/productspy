@@ -1,4 +1,6 @@
 import { Area, AreaChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import Link from "next/link";
+import { Lock } from "lucide-react";
 import { cn, fmtNum, TREND } from "@/lib/utils";
 
 interface Props {
@@ -10,6 +12,8 @@ interface Props {
     term: string; geo: string; at: string; status: string; growth: number | null; level: number | null;
     series: { date: string; value: number }[];
   } | null;
+  /** Plan doesn't include Google Trends: show an upgrade teaser instead of the chart. */
+  searchLocked?: boolean;
 }
 
 export const SEARCH_LABEL: Record<string, { label: string; tone: string }> = {
@@ -22,10 +26,21 @@ export const SEARCH_LABEL: Record<string, { label: string; tone: string }> = {
 };
 
 /** Compact Google Trends line for list cards: last ~6 months, weekly, relative 0-100. */
-export function SearchSpark({ search, className }: {
+export function SearchSpark({ search, locked, className }: {
   search?: { status: string; growth: number | null; term: string | null; geo: string | null; series: number[] } | null;
+  locked?: boolean;
   className?: string;
 }) {
+  if (locked) {
+    return (
+      <span title="Google Trends for every pick is included in Pro"
+            className={cn("inline-flex items-center gap-1.5 rounded-md bg-zinc-800/70 border border-zinc-700/60 px-2 py-1 text-[11px] text-zinc-500", className)}>
+        <Lock size={10} className="text-violet-300" aria-hidden />
+        <span className="font-semibold text-zinc-400">Google</span> trend
+        <span className="text-[10px] font-bold text-violet-300 bg-violet-500/10 rounded px-1">PRO</span>
+      </span>
+    );
+  }
   if (!search) {
     return (
       <span title="Google Trends is checked for every pick in the nightly scan"
@@ -111,7 +126,7 @@ export function TrendBadge({ trend, className }: { trend?: string | null; classN
 }
 
 /** Demand & trend: direction, the dated signals behind it, and the time series when we have one. */
-export default function TrendPanel({ trend, why, signals: rawSignals, history: rawHistory, search }: Props) {
+export default function TrendPanel({ trend, why, signals: rawSignals, history: rawHistory, search, searchLocked }: Props) {
   // Tolerate older API responses (no signals / history fields).
   const signals = rawSignals ?? {};
   const history = rawHistory ?? [];
@@ -143,7 +158,17 @@ export default function TrendPanel({ trend, why, signals: rawSignals, history: r
           ))}
         </dl>
       )}
-      {search && search.status ? <SearchChart search={search} /> : (
+      {searchLocked ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-violet-500/20 bg-violet-600/5 px-3 py-3">
+          <p className="text-sm text-zinc-300 flex items-center gap-2">
+            <Lock size={14} className="text-violet-300 shrink-0" aria-hidden />
+            See whether Google searches for this product are rising or fading — before you spend on ads.
+          </p>
+          <Link href="/dashboard/billing" className="shrink-0 px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-500">
+            Unlock with Pro
+          </Link>
+        </div>
+      ) : search && search.status ? <SearchChart search={search} /> : (
         <p className="text-[11px] text-zinc-500">Google search interest is checked for every daily pick — this product has not been checked yet.</p>
       )}
       {series.length >= 2 ? (

@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from .. import config, partners, repository, trial
+from .. import config, funnel, partners, repository, trial
 from ..auth import CurrentUser, current_user
 from ..billing import paypal_provider, stripe_provider
 from ..schemas import BillingStatus, Trial
@@ -87,6 +87,7 @@ async def create_checkout(
         url = await paypal_provider.create_checkout(user.id, user.email, plan,
                                                     partner_discount=bool(discount) and int(discount) == 25)
 
+    await funnel.record("checkout_started", user_id=user.id, source=plan)
     return {"checkout_url": url, "provider": provider}
 
 
@@ -176,6 +177,10 @@ async def _apply(provider: str, parsed: dict[str, Any]) -> None:
         current_period_end=_period_end(parsed.get("current_period_end")),
         cancel_at_period_end=parsed.get("cancel_at_period_end", False),
     )
+    # Converted: a paid plan with a card on file. Paying during the free trial
+    # shows as "trialing" on Stripe (billing starts when the trial ends).
+    if parsed.get("plan") in config.PAID_PLANS and parsed["status"] in ("active", "trialing"):
+        await funnel.record("paid", user_id=user_id, source=parsed.get("plan"))
 
 
 @router.post("/webhook/stripe", include_in_schema=False)

@@ -21,7 +21,7 @@ REPOSITORY = BACKEND / "app" / "repository.py"
 REPO_SRC = REPOSITORY.read_text()
 # Every module that talks to the database with raw SQL. The Daily Winners
 # store is held to the same checks as the repository.
-SQL_MODULES = [REPOSITORY, BACKEND / "app" / "winners" / "store.py"]
+SQL_MODULES = [REPOSITORY, BACKEND / "app" / "winners" / "store.py", BACKEND / "app" / "funnel.py"]
 ALL_SQL_SRC = "\n".join(p.read_text() for p in SQL_MODULES)
 DB_METHODS = {"execute", "fetchval", "fetchrow", "fetch"}
 
@@ -217,5 +217,5 @@ def test_winners_store_queries_are_covered():
     """The winners store is scanned too — not silently skipped."""
     names = {name for name, _, _ in db_queries()}
     for fn in ("upsert_ad", "save_score", "picks", "save_followed_markets",
-               "ensure_subscription", "expire_trials", "trials_due_reminder"):
+               "ensure_subscription", "expire_trials", "trials_due_reminder", "record", "summary"):
         assert fn in names, f"{fn}() SQL is not being checked"

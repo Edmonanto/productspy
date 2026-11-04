@@ -52,7 +52,9 @@ export default function PrivacyPage() {
         <h2>Cookies and local storage</h2>
         <p>
           We use only what the service needs: a sign-in cookie to keep you logged in and your browser&apos;s local
-          storage to remember your selected market. No advertising or tracking cookies.
+          storage to remember your selected market. No advertising or tracking cookies. To see how well our pages
+          work, we count visits to the home page and clicks on its sign-up buttons without any cookie, identifier
+          or IP address — only the page language and which button was clicked.
         </p>
       </section>
       <section>

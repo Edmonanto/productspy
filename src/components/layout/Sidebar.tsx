@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import useSWR from "swr";
 import {
   Bookmark, Columns3, Handshake, LayoutDashboard, ShieldCheck, Trophy, Receipt,
-  CreditCard, Settings, Zap, LogOut, X
+  CreditCard, Settings, Zap, LogOut, X, Filter
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/context/AuthContext";
@@ -35,7 +35,10 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
   const items = [
     ...NAV_ITEMS,
     { href: "/dashboard/partner", icon: Handshake, label: partner?.partner ? "My partner earnings" : "Partner program" },
-    ...(partner?.is_admin ? [{ href: "/dashboard/partners", icon: ShieldCheck, label: "Partners (admin)" }] : []),
+    ...(partner?.is_admin ? [
+      { href: "/dashboard/partners", icon: ShieldCheck, label: "Partners (admin)" },
+      { href: "/dashboard/funnel", icon: Filter, label: "Funnel (admin)" },
+    ] : []),
   ];
 
   return (

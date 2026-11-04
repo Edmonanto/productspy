@@ -253,12 +253,13 @@ export default function BillingPage() {
 
           {/* What the plan includes */}
           {ent && (
-            <div className="mt-4 pt-4 border-t border-zinc-800 grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+            <div className="mt-4 pt-4 border-t border-zinc-800 grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
               {[
                 { label: "Markets", value: ent.markets >= 99 ? "All" : String(ent.markets) },
                 { label: "Winners / day", value: ent.winners_per_day >= 10 ? "All (5–10)" : `Top ${ent.winners_per_day}` },
                 { label: "Archive", value: ent.history_days ? `${ent.history_days} days` : "Today only" },
                 { label: "Ad evidence · CSV", value: `${ent.ad_evidence ? "Yes" : "No"} · ${ent.export_csv ? "Yes" : "No"}` },
+                { label: "Suppliers · Google Trends", value: `${ent.suppliers ? "Yes" : "No"} · ${ent.search_trends ? "Yes" : "No"}` },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <div className="text-zinc-500 flex items-center gap-1"><Zap size={10} className="text-violet-400" />{label}</div>

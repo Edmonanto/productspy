@@ -54,11 +54,16 @@ const TREND_ICON: Record<string, LucideIcon> = {
 };
 
 /** Trend as an icon (label in the tooltip / for screen readers). */
-export function TrendIcon({ trend, size = 14, withLabel = false, className }: { trend?: string | null; size?: number; withLabel?: boolean; className?: string }) {
-  const t = TREND[trend ?? "unknown"] ?? TREND.unknown;
+export function TrendIcon({ trend, size = 14, withLabel = false, className, labels }: {
+  trend?: string | null; size?: number; withLabel?: boolean; className?: string;
+  /** Translated trend labels (landing page in another language). */
+  labels?: Record<string, string>;
+}) {
+  const base = TREND[trend ?? "unknown"] ?? TREND.unknown;
+  const t = labels ? { ...base, label: labels[trend ?? "unknown"] ?? labels.unknown ?? base.label } : base;
   const Icon = TREND_ICON[trend ?? "unknown"] ?? HelpCircle;
   return (
-    <span title={`${t.label} — ${t.hint}`} className={cn("inline-flex items-center gap-1 border rounded-full px-1.5 py-0.5 text-[11px] font-medium", t.tone, className)}>
+    <span title={labels ? t.label : `${t.label} — ${t.hint}`} className={cn("inline-flex items-center gap-1 border rounded-full px-1.5 py-0.5 text-[11px] font-medium", t.tone, className)}>
       <Icon size={size} aria-hidden />
       {withLabel ? t.label : <span className="sr-only">{t.label}</span>}
     </span>
@@ -71,14 +76,18 @@ export const SHORT_LABEL: Record<CriterionKey, string> = {
 };
 
 /** 8-criteria radar, each axis as % of its maximum. Unknown criteria sit at 0 and are greyed. */
-export function CriteriaRadar({ breakdown, size = 220, compact = false }: { breakdown?: Breakdown; size?: number; compact?: boolean }) {
+export function CriteriaRadar({ breakdown, size = 220, compact = false, labels = SHORT_LABEL }: {
+  breakdown?: Breakdown; size?: number; compact?: boolean;
+  /** Axis labels (translated on the French landing page). */
+  labels?: Record<CriterionKey, string>;
+}) {
   const data = (Object.keys(PILLAR_MAX) as CriterionKey[]).map((k) => {
     const v = breakdown?.[k];
-    return { k: SHORT_LABEL[k] + (v == null ? " ?" : ""), v: v == null ? 0 : Math.round((v / PILLAR_MAX[k]) * 100) };
+    return { k: labels[k] + (v == null ? " ?" : ""), v: v == null ? 0 : Math.round((v / PILLAR_MAX[k]) * 100) };
   });
   return (
     <div style={{ height: size }} className="w-full" role="img"
-         aria-label={`Criteria: ${data.map((d) => `${d.k} ${d.v}%`).join(", ")}`}>
+         aria-label={`${labels === SHORT_LABEL ? "Criteria" : "Critères"}: ${data.map((d) => `${d.k} ${d.v}%`).join(", ")}`}>
       <ResponsiveContainer width="100%" height="100%">
         <RadarChart data={data} outerRadius={compact ? "70%" : "72%"} margin={{ top: 4, right: 18, bottom: 4, left: 18 }}>
           <PolarGrid stroke="#3f3f46" />
@@ -127,7 +136,7 @@ export function PickTile({ pick, market, big = false }: { pick: WinnerPick; mark
       <div className="px-3 py-2.5">
         <div className="text-sm text-zinc-100 font-medium line-clamp-1 group-hover:text-white">{p.title}</div>
         <div className="text-xs text-zinc-500 tabular-nums">{p.price_usd != null ? `$${p.price_usd.toFixed(2)}` : "—"}</div>
-        <SearchSpark search={pick.search_trend} className="mt-1.5 max-w-full" />
+        <SearchSpark search={pick.search_trend} locked={pick.search_trend_locked} className="mt-1.5 max-w-full" />
         {pick.angles?.[0] && (
           <div className="mt-1.5 flex items-start gap-1 text-[11px] text-violet-200/90" title={`Hook: “${pick.angles[0].hook}”`}>
             <Lightbulb size={12} className="shrink-0 mt-px text-violet-300" aria-hidden />
