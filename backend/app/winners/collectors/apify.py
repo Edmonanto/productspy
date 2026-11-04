@@ -13,6 +13,7 @@ When enabled, these replace the matching free collector for every market.
 from __future__ import annotations
 
 import os
+from datetime import date
 from typing import Any
 
 import httpx
@@ -163,11 +164,17 @@ class ApifyMetaCollector(Collector):
     async def collect(self, market: Market, limit: int | None = None) -> list[AdRecord]:
         actor = config.APIFY_META_ACTOR
         limit = limit or config.APIFY_META_MAX
-        # "count" applies to EACH url: split the budget across them so a market
-        # costs ~limit ads, not limit × (countries × search phrases).
-        urls = [{"url": library_url(c, t)} for c in market.meta_countries[:1] for t in market.search_terms]
-        per_url = max(10, limit // max(1, len(urls)))
-        items = await run_actor(actor, {"urls": urls, "count": per_url, "scrapeAdDetails": False})
+        # "count" is the TOTAL for the run (the actor stops once it has that many
+        # ads — "Scraped requested number of records"), not a per-URL limit:
+        # passing limit/len(urls) capped every market at ~25 ads a night.
+        # The actor works through the URLs in order, so rotate them daily and a
+        # different search phrase leads each night.
+        terms = list(market.search_terms)
+        if terms:
+            k = date.today().toordinal() % len(terms)
+            terms = terms[k:] + terms[:k]
+        urls = [{"url": library_url(c, t)} for c in market.meta_countries[:1] for t in terms]
+        items = await run_actor(actor, {"urls": urls, "count": limit, "scrapeAdDetails": False})
         out: dict[str, AdRecord] = {}
         for node in iter_ad_nodes(items):
             rec = parse_web_ad(node, market.code)
