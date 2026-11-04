@@ -41,10 +41,10 @@ async def _token() -> str:
     return response.json()["access_token"]
 
 
-async def _request(method: str, path: str, **kwargs) -> dict[str, Any]:
+async def _send(method: str, path: str, **kwargs) -> httpx.Response:
     token = await _token()
     async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.request(
+        return await client.request(
             method,
             f"{config.PAYPAL_API_BASE}{path}",
             headers={
@@ -53,10 +53,38 @@ async def _request(method: str, path: str, **kwargs) -> dict[str, Any]:
             },
             **kwargs,
         )
+
+
+async def _request(method: str, path: str, **kwargs) -> dict[str, Any]:
+    response = await _send(method, path, **kwargs)
     if response.status_code >= 400:
         log.error("paypal %s %s -> %s %s", method, path, response.status_code, response.text)
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail="PayPal request failed")
     return response.json() if response.content else {}
+
+
+# Plan names as app/billing/setup.py creates them: "ProductSpy Pro — $69.99/month",
+# partner plans add " (partner: 25% off month 1)".
+_TIER_NAME = {"starter": "Starter", "pro": "Pro", "agency": "Agency"}
+_replacement: dict[str, str] = {}   # inactive plan id -> active plan id found for it
+
+
+async def _active_plan_like(plan_id: str, plan: str, partner: bool) -> str | None:
+    """The ACTIVE ProductSpy plan for this tier, when the configured one has been
+    deactivated in PayPal (re-running setup, or by hand)."""
+    if plan_id in _replacement:
+        return _replacement[plan_id]
+    product_id = (await _request("GET", f"/v1/billing/plans/{plan_id}")).get("product_id")
+    if not product_id:
+        return None
+    listing = await _request("GET", f"/v1/billing/plans?product_id={product_id}&page_size=20")
+    prefix = f"ProductSpy {_TIER_NAME[plan]} — "
+    for p in listing.get("plans", []):
+        name = str(p.get("name", ""))
+        if p.get("status") == "ACTIVE" and name.startswith(prefix) and ("(partner" in name) == partner:
+            _replacement[plan_id] = p["id"]
+            return p["id"]
+    return None
 
 
 async def create_checkout(user_id: str, email: str, plan: str, partner_discount: bool = False) -> str:
@@ -82,7 +110,24 @@ async def create_checkout(user_id: str, email: str, plan: str, partner_discount:
     if email:
         body["subscriber"] = {"email_address": email}
 
-    data = await _request("POST", "/v1/billing/subscriptions", json=body)
+    response = await _send("POST", "/v1/billing/subscriptions", json=body)
+    if response.status_code == 422 and "PLAN_STATUS_INVALID" in response.text:
+        partner = plan_id != config.PAYPAL_PLAN_IDS.get(plan)
+        env = f"PAYPAL_{'PARTNER_' if partner else ''}PLAN_{plan.upper()}"
+        active = await _active_plan_like(plan_id, plan, partner)
+        log.error("paypal: %s=%s is not ACTIVE in PayPal; %s", env, plan_id,
+                  f"using active plan {active} — set {env}={active} on Render" if active
+                  else "no active ProductSpy plan found for this tier — run `python -m app.billing.setup paypal`")
+        if active:
+            body["plan_id"] = active
+            response = await _send("POST", "/v1/billing/subscriptions", json=body)
+    if response.status_code >= 400:
+        log.error("paypal POST /v1/billing/subscriptions -> %s %s", response.status_code, response.text)
+        raise HTTPException(
+            status.HTTP_502_BAD_GATEWAY,
+            detail="PayPal checkout isn't available right now. Please pay by card, or try PayPal again later.",
+        )
+    data = response.json() if response.content else {}
 
     for link in data.get("links", []):
         if link.get("rel") == "approve":
@@ -154,6 +199,21 @@ _STATUS = {
 }
 
 
+async def tier_for_plan(plan_id: str) -> str | None:
+    """Our tier for a PayPal plan id that isn't in the PAYPAL_*PLAN_* settings
+    (e.g. the active plan checkout fell back to): read it from the plan's name."""
+    if not plan_id:
+        return None
+    try:
+        name = str((await _request("GET", f"/v1/billing/plans/{plan_id}")).get("name", ""))
+    except HTTPException:
+        return None
+    for tier, label in _TIER_NAME.items():
+        if name.startswith(f"ProductSpy {label} — "):
+            return tier
+    return None
+
+
 def parse_event(event: dict[str, Any]) -> dict[str, Any] | None:
     event_type = event.get("event_type", "")
     mapped = _STATUS.get(event_type)
@@ -174,6 +234,7 @@ def parse_event(event: dict[str, Any]) -> dict[str, Any] | None:
                   event_type, plan_id)
 
     return {
+        "plan_id": plan_id,
         "user_id": resource.get("custom_id"),
         "plan": "free" if mapped == "canceled" else plan,
         "status": mapped,
