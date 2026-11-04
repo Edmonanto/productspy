@@ -88,10 +88,65 @@ async def create_checkout(
     try:
         session = stripe.checkout.Session.create(**params)
     except Exception as exc:
-        log.exception("stripe checkout failed for %s", user_id)
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        session = None
+        if _price_problem(exc):
+            fixed = _usable_price(stripe, price_id, plan)
+            if fixed:
+                params["line_items"] = [{"price": fixed, "quantity": 1}]
+                try:
+                    session = stripe.checkout.Session.create(**params)
+                except Exception:
+                    log.exception("stripe checkout failed again with price %s", fixed)
+        if session is None:
+            log.exception("stripe checkout failed for %s", user_id)
+            raise HTTPException(
+                status.HTTP_502_BAD_GATEWAY,
+                detail="Card checkout isn't available right now. Please pay with PayPal, or try again in a few minutes.",
+            )
 
     return session.url
+
+
+def _price_problem(exc: Exception) -> bool:
+    """Stripe refused the price itself: archived ("inactive") or unknown ("No such price")."""
+    text = str(exc).lower()
+    return "price" in text and ("inactive" in text or "no such price" in text)
+
+
+def _lookup_key(plan: str) -> str:
+    from decimal import Decimal
+    cents = int(Decimal(str(config.PLAN_PRICES_USD[plan])) * 100)
+    return f"productspy_{plan}_monthly_{cents}"   # as app/billing/setup.py creates them
+
+
+def _usable_price(stripe: Any, price_id: str, plan: str) -> str | None:
+    """An active price for this plan when the configured one can't be used:
+    first the active price with our lookup key (e.g. setup.py was re-run),
+    else re-activate the configured price (and its product) if it is one of
+    ours for this plan at the current amount."""
+    env = f"STRIPE_PRICE_{plan.upper()}"
+    try:
+        found = stripe.Price.list(lookup_keys=[_lookup_key(plan)], active=True, limit=1).data
+        if found and found[0].id != price_id:
+            log.error("stripe: %s=%s can't be used; using active price %s — set %s=%s on Render",
+                      env, price_id, found[0].id, env, found[0].id)
+            return found[0].id
+        price = stripe.Price.retrieve(price_id)
+        meta = price.get("metadata") or {}
+        cents = int(round(float(config.PLAN_PRICES_USD[plan]) * 100))
+        if meta.get("productspy_plan") != plan or price.get("unit_amount") != cents:
+            log.error("stripe: %s=%s is not this plan's price at $%s — run `python -m app.billing.setup stripe`",
+                      env, price_id, config.PLAN_PRICES_USD[plan])
+            return None
+        product = price.get("product")
+        if product:
+            stripe.Product.modify(product if isinstance(product, str) else product.get("id"), active=True)
+        stripe.Price.modify(price_id, active=True)
+        log.error("stripe: re-activated %s=%s (it had been archived)", env, price_id)
+        return price_id
+    except Exception:
+        log.exception("stripe: could not find a usable price for %s", plan)
+        return None
 
 
 async def create_portal(customer_id: str) -> str:
