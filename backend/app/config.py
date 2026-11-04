@@ -200,6 +200,8 @@ APIFY_META_MAX = int(os.environ.get("APIFY_META_MAX", "150"))
 APIFY_TIKTOK_MAX = int(os.environ.get("APIFY_TIKTOK_MAX", "40"))
 APIFY_TRENDS_MAX = int(os.environ.get("APIFY_TRENDS_MAX", "10"))  # Google Trends lookups per market per day (7-day cache)
 APIFY_MIN_HOURS_BETWEEN = int(os.environ.get("APIFY_MIN_HOURS_BETWEEN", "20"))
+# How far back the nightly scan looks for ads not yet turned into products.
+UNLINKED_WINDOW_DAYS = int(os.environ.get("UNLINKED_WINDOW_DAYS", "14"))
 # Google Trends search interest (app/winners/trends.py). Empty = off.
 # Default: an API-based actor (no browser) — ~$0.005 per term and seconds per
 # term. apify~google-trends-scraper loads Google's page in a browser and, since

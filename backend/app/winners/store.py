@@ -12,7 +12,7 @@ from typing import Any
 
 import asyncpg
 
-from app import db
+from app import config, db
 
 from .collectors.base import AdRecord
 from .extract import ProductGuess
@@ -110,8 +110,11 @@ def row_to_ad(r: asyncpg.Record) -> AdRecord:
     )
 
 
-async def unlinked_ads(market: str, limit: int = 600) -> list[asyncpg.Record]:
-    """Ads seen in the last 3 days that haven't been tied to a product yet."""
+async def unlinked_ads(market: str, limit: int = 600, days: int | None = None) -> list[asyncpg.Record]:
+    """Ads seen in the last UNLINKED_WINDOW_DAYS (default 14) that haven't been
+    tied to a product yet. Wide enough that ads collected during an outage of
+    the naming step (e.g. no AI key on the worker) are still named once it's
+    fixed; ads the AI already called "not a product" are excluded."""
     return await db.fetch(
         """
         select id, platform, external_id, market, advertiser_name, advertiser_id,
@@ -120,11 +123,11 @@ async def unlinked_ads(market: str, limit: int = 600) -> list[asyncpg.Record]:
                budget_level, intent_comments, sampled_comments, raw
           from ad_creatives
          where market = $1 and product_id is null and not_product = false
-           and last_seen_at > now() - interval '3 days'
+           and last_seen_at > now() - make_interval(days => $3)
          order by last_seen_at desc
          limit $2
         """,
-        market, limit,
+        market, limit, int(days if days is not None else config.UNLINKED_WINDOW_DAYS),
     )
 
 

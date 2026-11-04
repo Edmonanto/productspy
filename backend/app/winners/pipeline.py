@@ -92,6 +92,26 @@ async def extract_step(market_code: str, stats: dict) -> None:
     stats["products_touched"] = len(touched)
 
 
+def extract_health(stats: dict, errors: list, ai: bool) -> None:
+    """New ads that couldn't be turned into products are retried every night,
+    silently — so say it when that is every one of them. Without this, a
+    worker missing its AI key reports "ok" for days while products starve of
+    Facebook data and every score flattens out."""
+    stats["ai_extract"] = "on" if ai else "off"
+    unknown, linked = int(stats.get("unidentified_ads") or 0), int(stats.get("linked_ads") or 0)
+    if not unknown:
+        return
+    if not ai:
+        errors.append({"step": "extract", "error":
+            f"No AI key on the nightly worker, so {unknown} new ads could not be turned into products. "
+            "Set ANTHROPIC_API_KEY or OPENAI_API_KEY for the productspy-winners cron service "
+            "(env group 'ProductSpy Env')."})
+    elif linked == 0:
+        errors.append({"step": "extract", "error":
+            f"The AI named none of the {unknown} new ads (calls failed or were skipped by the daily cap) "
+            "— see api_usage and the worker logs."})
+
+
 async def enrich_step(market_code: str, stats: dict) -> None:
     market = get_market(market_code)
     done = 0
@@ -338,6 +358,7 @@ async def run_market(market_code: str, day: date | None = None,
                          "set PROXY_URL or USE_APIFY=true.",
             })
         await extract_step(market_code, stats)
+        extract_health(stats, errors, llm_available())
         try:
             await enrich_step(market_code, stats)
         except Exception as exc:
