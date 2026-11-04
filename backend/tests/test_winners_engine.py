@@ -501,6 +501,41 @@ async def test_verify_step_drops_product_whose_ads_dont_match(monkeypatch):
     assert results["p1"][0].excluded is None and ("p1", ["meta:g"]) in marked
 
 
+async def test_verify_step_rescore_keeps_trends_and_history(monkeypatch):
+    """Rejecting some ads rescores the product: that must not drop its Google
+    Trends data or its paid-ads time series."""
+    from datetime import date
+    from app.winners import pipeline, store, verify
+
+    keep = [AdRecord(platform="meta", external_id=str(i), market="US", ad_text="LED mirror",
+                     advertiser_name=f"store{i}", started_at=NOW - timedelta(days=20))
+            for i in range(4)]
+    junk = [AdRecord(platform="meta", external_id="x", market="US", ad_text="Huge sale",
+                     advertiser_name="other", started_at=NOW - timedelta(days=20))]
+    prod = {"title": "Led Mirror", "attributes": {"physical": True}, "price_usd": None,
+            "cost_usd": None, "cost_estimated": False}
+    products = {"p": (prod, keep + junk)}
+    day = date(2026, 10, 25)
+    history = {"p": [10, 10, 10]}                       # 10 ads before, 4 kept now -> declining
+    search = {"p": {"status": "rising", "growth": 1.6, "level": 40, "term": "led mirror", "geo": "US"}}
+    results = {"p": (pipeline.score(pipeline._signals(prod, keep + junk, day, NOW, None,
+                                                      history["p"], search["p"])), keep + junk)}
+
+    async def fake_verify(name, ads, ok):
+        return verify.Verdict(keep=list(keep), reject=list(junk), best=keep[0], checked=True)
+    async def noop(*a, **k): pass
+    monkeypatch.setattr(pipeline, "verify_product", fake_verify)
+    monkeypatch.setattr(store, "reject_ads", noop)
+    monkeypatch.setattr(store, "mark_verified", noop)
+
+    await pipeline.verify_step("US", products, results, {}, day, NOW, {},
+                               history=history, searches=search)
+    sig = results["p"][0].signals
+    assert sig["search_status"] == "rising" and sig["search_term"] == "led mirror"
+    assert sig["paid_ads_history"] == [10, 10, 10] and sig["trend"] == "declining"
+    assert [a.external_id for a in results["p"][1]] == ["0", "1", "2", "3"]
+
+
 async def test_verify_flags_a_non_product(monkeypatch):
     from app.winners import verify
     ads = [AdRecord(platform="meta", external_id="1", market="US", ad_text="Learn dropshipping in 30 days")]
