@@ -69,6 +69,18 @@ _TIER_NAME = {"starter": "Starter", "pro": "Pro", "agency": "Agency"}
 _replacement: dict[str, str] = {}   # inactive plan id -> active plan id found for it
 
 
+async def _reactivate(plan_id: str) -> bool:
+    """Switch our own configured plan back on (POST .../activate). The plan ids
+    on Render are the ones setup.py created at the current prices, so ACTIVE is
+    their intended state; PayPal answers 204 on success."""
+    response = await _send("POST", f"/v1/billing/plans/{plan_id}/activate")
+    if response.status_code >= 400:
+        log.error("paypal activate %s -> %s %s", plan_id, response.status_code, response.text[:300])
+        return False
+    _replacement.pop(plan_id, None)
+    return True
+
+
 async def _active_plan_like(plan_id: str, plan: str, partner: bool) -> str | None:
     """The ACTIVE ProductSpy plan for this tier, when the configured one has been
     deactivated in PayPal (re-running setup, or by hand)."""
@@ -118,6 +130,9 @@ async def create_checkout(user_id: str, email: str, plan: str, partner_discount:
         log.error("paypal: %s=%s is not ACTIVE in PayPal; %s", env, plan_id,
                   f"using active plan {active} — set {env}={active} on Render" if active
                   else "no active ProductSpy plan found for this tier — run `python -m app.billing.setup paypal`")
+        if not active and await _reactivate(plan_id):
+            active = plan_id
+            log.error("paypal: re-activated %s=%s in PayPal (it had been deactivated)", env, plan_id)
         if active:
             body["plan_id"] = active
             response = await _send("POST", "/v1/billing/subscriptions", json=body)
