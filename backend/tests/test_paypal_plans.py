@@ -18,7 +18,7 @@ def _plans(monkeypatch):
     pp._replacement.clear()
 
 
-def _fake(monkeypatch, plans, accept):
+def _fake(monkeypatch, plans, accept, activatable=()):
     sent = []
 
     async def send(method, path, **kw):
@@ -28,6 +28,12 @@ def _fake(monkeypatch, plans, accept):
             if pid in accept:
                 return _resp(201, {"links": [{"rel": "approve", "href": f"https://paypal/approve/{pid}"}]})
             return _resp(422, text='{"name":"UNPROCESSABLE_ENTITY","details":[{"issue":"PLAN_STATUS_INVALID"}]}')
+        if path.endswith("/activate"):
+            pid = path.split("/")[-2]
+            if pid in activatable:
+                accept.add(pid)
+                return _resp(204)
+            return _resp(422, text='{"name":"UNPROCESSABLE_ENTITY"}')
         if path.startswith("/v1/billing/plans/"):
             return _resp(200, {"id": path.rsplit("/", 1)[1], "product_id": "PROD-1"})
         if path.startswith("/v1/billing/plans?product_id=PROD-1"):
@@ -85,3 +91,9 @@ async def test_webhook_for_fallback_plan_keeps_the_paid_tier(monkeypatch):
     assert parsed["plan"] is None                       # not in settings...
     await billing._apply("paypal", parsed)
     assert saved["plan"] == "pro" and saved["status"] == "active"   # ...but stored as Pro, not Free
+
+
+async def test_no_active_plan_reactivates_the_configured_one(monkeypatch):
+    sent = _fake(monkeypatch, [PLANS[0]], accept=set(), activatable={"P-OLD-PRO"})
+    assert await pp.create_checkout("u1", "a@b.c", "pro") == "https://paypal/approve/P-OLD-PRO"
+    assert sent == ["P-OLD-PRO", "P-OLD-PRO"]
