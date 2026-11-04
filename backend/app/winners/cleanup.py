@@ -97,7 +97,7 @@ async def clean(markets: list[str]) -> dict:
     # 1b. Catalog-template ads ("{{product.name}} | {{product.brand}}") show a whole store,
     #     not one product — and their identical text merged unrelated stores together.
     templ = await db.fetchval(
-        """
+        r"""
         with r as (update ad_creatives set product_id = null, not_product = true
                     where market = any($1::text[]) and ad_text ~ '\{\{\s*[A-Za-z_.-]+\s*\}\}' returning 1)
         select count(*) from r
