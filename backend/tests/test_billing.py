@@ -281,3 +281,16 @@ def test_period_end_accepts_unix_and_iso():
     assert unix.tzinfo is not None and iso.tzinfo is not None
     assert billing_router._period_end(None) is None
     assert billing_router._period_end("not-a-date") is None
+
+
+def test_paypal_partner_plan_maps_to_its_tier(monkeypatch):
+    """A partner-referred subscriber pays on the partner plan: they get that tier, not Free."""
+    from app import config
+    monkeypatch.setitem(config.PAYPAL_PLAN_IDS, "pro", "P-REGULAR-PRO")
+    monkeypatch.setitem(config.PAYPAL_PARTNER_PLAN_IDS, "pro", "P-PARTNER-PRO")
+    for plan_id in ("P-REGULAR-PRO", "P-PARTNER-PRO"):
+        parsed = paypal_provider.parse_event({
+            "event_type": "BILLING.SUBSCRIPTION.ACTIVATED",
+            "resource": {"id": "I-1", "plan_id": plan_id, "custom_id": "u1"},
+        })
+        assert parsed["plan"] == "pro" and parsed["status"] == "active"

@@ -151,7 +151,9 @@ async def test_apify_hard_limit_is_reported_clearly(monkeypatch):
     monkeypatch.setattr(apify, "_blocked", None)
 
 
-async def test_meta_budget_is_split_across_urls(monkeypatch):
+async def test_meta_count_is_the_whole_budget(monkeypatch):
+    """The Ad Library actor's "count" is the total for the run: it must be the
+    market's whole budget, not budget / number of URLs (that gave ~25 ads)."""
     from app import config
     from app.winners.collectors import apify
     from app.winners.markets import get_market
@@ -163,7 +165,11 @@ async def test_meta_budget_is_split_across_urls(monkeypatch):
     monkeypatch.setattr(apify, "run_actor", fake_run)
     monkeypatch.setattr(config, "APIFY_META_MAX", 150)
     await apify.ApifyMetaCollector().collect(get_market("US"))
-    assert len(sent["urls"]) * sent["count"] <= 160          # ~150 ads per market, not 300 per url
+    assert sent["count"] == 150
+    assert len(sent["urls"]) == len(get_market("US").search_terms)
+    # every phrase is still searched, just in a daily-rotated order
+    phrases = {u["url"].split("&q=")[1].split("&")[0] for u in sent["urls"]}
+    assert len(phrases) == len(get_market("US").search_terms)
 
 
 async def test_paid_sources_skipped_when_scraped_recently(monkeypatch):

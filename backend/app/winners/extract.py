@@ -157,39 +157,57 @@ def _ad_line(i: int, ad: AdRecord) -> str:
                        "text": text, "url": url[:150]}, ensure_ascii=False)
 
 
-async def ai_guesses(ads: list[AdRecord], batch: int = 40) -> dict[int, Optional[ProductGuess]]:
-    out: dict[int, Optional[ProductGuess]] = {}
-    for start in range(0, len(ads), batch):
-        chunk = ads[start:start + batch]
-        lines = "\n".join(_ad_line(start + j, ad) for j, ad in enumerate(chunk))
-        result = _unwrap_list(await llm_json(SYSTEM, PROMPT.format(ads=lines)))
-        if not isinstance(result, list):
+def _guess_from_row(row: dict) -> Optional[ProductGuess]:
+    if not row.get("product"):
+        return None
+    key = slugify(row.get("key") or row["product"]) or slugify(row["product"])
+    if not key:
+        return None
+    cost = row.get("est_cost_usd")
+    return ProductGuess(
+        key=key,
+        name=str(row["product"]).strip().title(),
+        category=row.get("category"),
+        est_cost_usd=float(cost) if isinstance(cost, (int, float)) and cost > 0 else None,
+        attributes={
+            "wow": row.get("wow"), "problem": row.get("problem"), "demo3s": row.get("demo3s"),
+            "upsell": row.get("upsell"), "brandable": row.get("brandable"),
+            "ip_risk": row.get("ip_risk", "none"), "restricted": bool(row.get("restricted")),
+            "fragile_heavy": bool(row.get("fragile_heavy")), "seasonal": bool(row.get("seasonal")),
+            "physical": True,
+        },
+    )
+
+
+async def _ask(ads: list[AdRecord], idxs: list[int], out: dict[int, Optional[ProductGuess]]) -> None:
+    """One AI call for these ads; records an answer for every index it returns."""
+    lines = "\n".join(_ad_line(i, ads[i]) for i in idxs)
+    result = _unwrap_list(await llm_json(SYSTEM, PROMPT.format(ads=lines)))
+    if not isinstance(result, list):
+        return
+    wanted = set(idxs)
+    for row in result:
+        if not isinstance(row, dict):
             continue
-        for row in result:
-            if not isinstance(row, dict) or "i" not in row:
-                continue
-            idx = int(row["i"])
-            if not row.get("product"):
-                out[idx] = None
-                continue
-            key = slugify(row.get("key") or row["product"]) or slugify(row["product"])
-            if not key:
-                out[idx] = None
-                continue
-            cost = row.get("est_cost_usd")
-            out[idx] = ProductGuess(
-                key=key,
-                name=str(row["product"]).strip().title(),
-                category=row.get("category"),
-                est_cost_usd=float(cost) if isinstance(cost, (int, float)) and cost > 0 else None,
-                attributes={
-                    "wow": row.get("wow"), "problem": row.get("problem"), "demo3s": row.get("demo3s"),
-                    "upsell": row.get("upsell"), "brandable": row.get("brandable"),
-                    "ip_risk": row.get("ip_risk", "none"), "restricted": bool(row.get("restricted")),
-                    "fragile_heavy": bool(row.get("fragile_heavy")), "seasonal": bool(row.get("seasonal")),
-                    "physical": True,
-                },
-            )
+        try:
+            idx = int(row.get("i"))
+        except (TypeError, ValueError):
+            continue
+        if idx in wanted:
+            out[idx] = _guess_from_row(row)
+
+
+async def ai_guesses(ads: list[AdRecord], batch: int = 20, retry_batch: int = 8) -> dict[int, Optional[ProductGuess]]:
+    """AI answers per ad index. Batches are kept small so a reply is never cut
+    off; ads a reply skipped (or a failed/garbled reply lost) are asked again
+    once in smaller batches, instead of losing the whole batch until tomorrow."""
+    out: dict[int, Optional[ProductGuess]] = {}
+    idxs = list(range(len(ads)))
+    for start in range(0, len(idxs), batch):
+        await _ask(ads, idxs[start:start + batch], out)
+    missing = [i for i in idxs if i not in out]
+    for start in range(0, len(missing), retry_batch):
+        await _ask(ads, missing[start:start + retry_batch], out)
     return out
 
 

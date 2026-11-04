@@ -167,6 +167,14 @@ async def _apply(provider: str, parsed: dict[str, Any]) -> None:
         log.warning("%s event could not be matched to a user: %s", provider, parsed)
         return
 
+    if provider == "paypal" and not parsed.get("plan") and parsed["status"] != "canceled":
+        # A plan id we don't have configured (checkout fell back to the active
+        # plan): its name says the tier. Never put a paying customer on Free.
+        parsed["plan"] = await paypal_provider.tier_for_plan(parsed.get("plan_id") or "")
+        if not parsed["plan"]:
+            log.error("paypal event for unknown plan %s (user %s) — subscription not changed",
+                      parsed.get("plan_id"), user_id)
+            return
     await repository.upsert_subscription(
         user_id=user_id,
         plan=parsed.get("plan") or config.DEFAULT_PLAN,
