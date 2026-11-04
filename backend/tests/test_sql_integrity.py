@@ -217,5 +217,5 @@ def test_winners_store_queries_are_covered():
     """The winners store is scanned too — not silently skipped."""
     names = {name for name, _, _ in db_queries()}
     for fn in ("upsert_ad", "save_score", "picks", "save_followed_markets",
-               "ensure_subscription", "expire_trials", "trials_due_reminder", "record", "summary"):
+               "ensure_subscription", "expire_trials", "trials_due_reminder", "record", "summary", "top_picks"):
         assert fn in names, f"{fn}() SQL is not being checked"

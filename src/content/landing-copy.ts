@@ -179,7 +179,7 @@ const EN: LandingCopy = {
   },
   footer: { privacy: "Privacy", terms: "Terms", contact: "Contact" },
   trend: { emerging: "Emerging", growing: "Growing", stable: "Stable", declining: "Declining", spike: "Viral spike", seasonal: "Seasonal", unknown: "Trend unclear" },
-  radar: { demand: "Demand", profitability: "Profit", competition: "Competition", creative: "Creative", differentiation: "Offer", logistics: "Logistics", market_fit: "Market", risk: "Risk" },
+  radar: { demand: "Demand", profitability: "Profit", competition: "Compet.", creative: "Creative", differentiation: "Offer", logistics: "Logistics", market_fit: "Market", risk: "Risk" },
 };
 
 const FR: LandingCopy = {

@@ -412,6 +412,34 @@ async def picks(market: str, day: date) -> list[dict]:
     return out
 
 
+async def top_picks(market: str, since: date) -> list[dict]:
+    """Each day's public #1 (the free pick of the day) since `since`, newest first.
+
+    Uses the same rule as picks(): products without a picture or that aren't
+    physical products are skipped, so #1 here is the #1 visitors were shown."""
+    rows = await db.fetch(
+        """
+        select dw.pick_date, dw.rank, dw.tier, dw.total, dw.product_id,
+               ws.breakdown, ws.signals, ws.reasons,
+               p.title, p.image_url, p.category, p.price_usd, p.attributes
+          from daily_winners dw
+          join products p on p.id = dw.product_id
+          left join winner_scores ws on ws.id = dw.score_id
+         where dw.market = $1 and dw.pick_date >= $2
+         order by dw.pick_date desc, dw.rank
+        """,
+        market, since,
+    )
+    out: list[dict] = []
+    seen: set[date] = set()
+    for r in rows:
+        if r["pick_date"] in seen or not r["image_url"] or non_product_reason(r["title"], r["category"]):
+            continue
+        seen.add(r["pick_date"])
+        out.append(dict(r))
+    return out
+
+
 async def pick_dates(market: str, since: date) -> list[asyncpg.Record]:
     return await db.fetch(
         """
