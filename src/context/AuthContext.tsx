@@ -9,7 +9,7 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<{ error: string | null }>;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (locale?: string) => Promise<void>;
   signUp: (email: string, password: string, name: string, locale?: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<{ error: string | null }>;
@@ -51,10 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (locale?: string) => {
+    // The callback saves the language on new Google accounts (see auth/callback).
+    const q = locale && locale !== "en" ? `?lang=${encodeURIComponent(locale)}` : "";
     await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: `${window.location.origin}/auth/callback${q}` },
     });
   };
 

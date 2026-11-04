@@ -23,6 +23,17 @@ export async function GET(request: Request) {
     const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!exchangeError) {
+      // Google sign-ups carry no metadata of their own: save the language they
+      // signed up in (from /signup?lang=fr), once, and refresh the session so
+      // the API sees it in the token straight away.
+      const lang = searchParams.get("lang");
+      if (lang === "fr" || lang === "en") {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && !user.user_metadata?.locale) {
+          const { error: updateError } = await supabase.auth.updateUser({ data: { locale: lang } });
+          if (!updateError) await supabase.auth.refreshSession();
+        }
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
 

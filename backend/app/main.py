@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
 from . import config, db, migrate
-from .routers import billing, images, partners, quotes, research, users, watchlist, winners
+from .routers import billing, events, images, partners, quotes, research, users, watchlist, winners
 
 
 @asynccontextmanager
@@ -42,7 +42,7 @@ app.add_middleware(
 )
 
 for r in (users.router, winners.router, research.router, partners.router, watchlist.router, billing.router,
-          quotes.router, images.router):
+          quotes.router, images.router, events.router):
     app.include_router(r, prefix=config.API_PREFIX)
 
 

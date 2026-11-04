@@ -7,6 +7,7 @@ import { ReviewsSection, TrustedBySection } from "@/components/landing/SocialPro
 import { SiteFooter } from "@/components/legal/LegalPage";
 import LivePicks, { type Preview } from "@/components/landing/LivePicks";
 import MiniProfitCalc from "@/components/landing/MiniProfitCalc";
+import TrackLanding from "@/components/landing/TrackLanding";
 import { CriteriaRadar } from "@/components/visual/Visuals";
 import { LANDING_COPY, type Lang } from "@/content/landing-copy";
 import { SITE } from "@/lib/site";
@@ -90,9 +91,10 @@ export default function Landing({ lang, preview }: { lang: Lang; preview: Previe
 
   return (
     <div lang={lang} className="min-h-screen bg-zinc-950 text-white overflow-x-hidden">
+      <TrackLanding lang={lang} />
 
       {/* Navbar */}
-      <nav className="sticky top-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/60">
+      <nav data-track="nav" className="sticky top-0 z-50 bg-zinc-950/80 backdrop-blur-md border-b border-zinc-800/60">
         <div className="flex items-center justify-between px-4 sm:px-8 py-3.5 max-w-7xl mx-auto">
           <Link href={t.home} className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-violet-900/40">
@@ -127,7 +129,7 @@ export default function Landing({ lang, preview }: { lang: Lang; preview: Previe
       {/* Hero */}
       <section className="relative">
         <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-24 h-[480px] bg-[radial-gradient(ellipse_at_top,rgba(139,92,246,0.25),transparent_60%)]" />
-        <div className="relative max-w-4xl mx-auto px-4 sm:px-8 pt-14 sm:pt-20 pb-10 text-center space-y-6">
+        <div data-track="hero" className="relative max-w-4xl mx-auto px-4 sm:px-8 pt-14 sm:pt-20 pb-10 text-center space-y-6">
           <div className="inline-flex items-center gap-2 bg-violet-600/10 border border-violet-600/20 text-violet-300 text-xs font-semibold px-3 py-1.5 rounded-full">
             <Clock size={13} /> {t.hero.badge}
           </div>
@@ -152,7 +154,7 @@ export default function Landing({ lang, preview }: { lang: Lang; preview: Previe
         </div>
 
         {/* Live picks */}
-        <div id="live" className="relative max-w-6xl mx-auto px-4 sm:px-8 pb-16 scroll-mt-20">
+        <div id="live" data-track="live_picks" className="relative max-w-6xl mx-auto px-4 sm:px-8 pb-16 scroll-mt-20">
           <div className="rounded-3xl border border-zinc-800 bg-zinc-900/40 p-3 sm:p-5 shadow-2xl shadow-violet-950/40">
             <LivePicks initial={preview} lang={lang} />
           </div>
@@ -260,10 +262,10 @@ export default function Landing({ lang, preview }: { lang: Lang; preview: Previe
         </div>
       </section>
 
-      <ReviewsSection lang={lang} />
+      <div data-track="reviews"><ReviewsSection lang={lang} /></div>
 
       {/* Pricing */}
-      <section id="pricing" className="max-w-6xl mx-auto px-4 sm:px-8 py-14 scroll-mt-20">
+      <section id="pricing" data-track="pricing" className="max-w-6xl mx-auto px-4 sm:px-8 py-14 scroll-mt-20">
         <div className="text-center mb-10">
           <h2 className="text-2xl sm:text-4xl font-bold">{t.pricing.heading}</h2>
           <p className="text-zinc-500 text-sm mt-2">{t.pricing.sub}</p>
@@ -326,7 +328,7 @@ export default function Landing({ lang, preview }: { lang: Lang; preview: Previe
       </section>
 
       {/* Final CTA */}
-      <section className="max-w-5xl mx-auto px-4 sm:px-8 pb-16">
+      <section data-track="final" className="max-w-5xl mx-auto px-4 sm:px-8 pb-16">
         <div className="relative overflow-hidden bg-gradient-to-br from-violet-900/60 to-indigo-900/40 border border-violet-700/40 rounded-3xl p-8 sm:p-12 text-center space-y-5">
           <h2 className="text-2xl sm:text-4xl font-bold">{t.final.heading}</h2>
           <p className="text-zinc-300 text-sm sm:text-base">{t.final.sub}</p>

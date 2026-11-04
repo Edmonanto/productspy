@@ -515,6 +515,16 @@ export interface Payout {
   currency: string; total: number; payments: number; oldest: string;
 }
 
+export interface FunnelSummary {
+  days: number;
+  steps: { event: string; by_lang: Record<string, number>; total: number }[];
+  signup_click_sources: { lang: string; source: string; n: number }[];
+}
+
+export const funnelApi = {
+  summary: (days: number) => api.get<FunnelSummary>(`/events/funnel?days=${days}`),
+};
+
 export const partnersApi = {
   offer: (code: string) =>
     api.get<{ valid: boolean; code?: string; partner?: string; discount_pct?: number }>(`/partners/offer?code=${encodeURIComponent(code)}`),

@@ -49,7 +49,7 @@ export default function SignupForm({ lang = "en" }: { lang?: Lang }) {
 
   const handleGoogle = async () => {
     setGoogleLoading(true);
-    await signInWithGoogle();
+    await signInWithGoogle(lang);
     setGoogleLoading(false);
   };
 

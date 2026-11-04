@@ -122,13 +122,14 @@ async def subscription_row(user_id: str) -> asyncpg.Record | None:
 
 
 # ── Free trial ──────────────────────────────────────────────────────────────
-async def ensure_subscription(user_id: str, email: str) -> None:
+async def ensure_subscription(user_id: str, email: str) -> bool:
     """First visit: start the no-card trial. Later visits: keep email current.
 
     `on conflict do nothing`-style for the trial itself — an existing row,
-    paid or free, is never put back on a trial here.
+    paid or free, is never put back on a trial here. Returns True when the row
+    was just created (the account's first visit).
     """
-    await db.execute(
+    created = await db.fetchval(
         """
         insert into subscriptions (user_id, plan, status, provider,
             current_period_end, trial_started_at, trial_ends_at, trial_used,
@@ -136,12 +137,14 @@ async def ensure_subscription(user_id: str, email: str) -> None:
         values ($1, $2, 'trialing', 'none', $3, now(), $3, true, $4, now())
         on conflict (user_id) do update set
             email = coalesce(nullif(excluded.email, ''), subscriptions.email)
+        returning (xmax = 0)
         """,
         user_id,
         config.TRIAL_PLAN,
         trial.trial_end_from_now(),
         email,
     )
+    return bool(created)
 
 
 async def start_trial(user_id: str, email: str) -> bool:

@@ -391,6 +391,8 @@ async def product_evidence(product_id: str, market: str | None = None,
     p = await store.product(product_id)
     if p is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
+    from app import funnel
+    await funnel.record("winner_opened", user_id=user.id)
 
     history = await store.score_history(product_id, code)
     latest = history[0] if history else None

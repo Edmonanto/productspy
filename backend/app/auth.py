@@ -40,6 +40,8 @@ class CurrentUser:
     email: str
     name: str
     avatar_url: str | None
+    # Language chosen at signup (user_metadata.locale): "en", "fr" or None.
+    locale: str | None = None
 
 
 def _misconfigured(detail: str) -> HTTPException:
@@ -118,4 +120,5 @@ async def current_user(
         email=email,
         name=metadata.get("full_name") or metadata.get("name") or email.split("@")[0],
         avatar_url=metadata.get("avatar_url"),
+        locale=metadata.get("locale"),
     )
