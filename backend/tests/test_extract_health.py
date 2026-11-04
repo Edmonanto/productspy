@@ -33,3 +33,19 @@ def test_alert_when_nothing_reaches_55():
                         "usually missing Facebook/TikTok ad data"]
     ok = [{"market": "US", "status": "ok", "errors": [], "stats": {"winners": 3, "rising": 2, "watch": 1}}]
     assert alerts.scan_problems(ok, min_picks=5) == []
+
+
+async def test_unlinked_ads_looks_back_14_days_by_default(monkeypatch):
+    from app import db
+    from app.winners import store
+    seen = {}
+
+    async def fetch(sql, *args):
+        seen["sql"], seen["args"] = sql, args
+        return []
+
+    monkeypatch.setattr(db, "fetch", fetch)
+    await store.unlinked_ads("US")
+    assert seen["args"] == ("US", 600, 14) and "make_interval(days => $3)" in seen["sql"]
+    await store.unlinked_ads("US", days=3)
+    assert seen["args"][2] == 3
