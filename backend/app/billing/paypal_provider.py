@@ -162,10 +162,16 @@ def parse_event(event: dict[str, Any]) -> dict[str, Any] | None:
 
     resource = event.get("resource", {})
     plan_id = resource.get("plan_id", "")
+    # Partner-referred customers subscribe to the partner (first-month discount)
+    # plan of the same tier: it must map to that tier, not fall through to free.
     plan = next(
-        (name for name, pid in config.PAYPAL_PLAN_IDS.items() if pid and pid == plan_id),
+        (name for ids in (config.PAYPAL_PLAN_IDS, config.PAYPAL_PARTNER_PLAN_IDS)
+         for name, pid in ids.items() if pid and pid == plan_id),
         None,
     )
+    if plan is None and mapped != "canceled":
+        log.error("paypal %s for unknown plan_id %s — not in PAYPAL_PLAN_* or PAYPAL_PARTNER_PLAN_*",
+                  event_type, plan_id)
 
     return {
         "user_id": resource.get("custom_id"),
