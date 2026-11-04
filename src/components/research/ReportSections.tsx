@@ -1,5 +1,6 @@
 /** Sections 5, 7, 8, 9, 10 of the product report. Each shows what the data supports and says what's missing. */
-import { AlertTriangle, ExternalLink, Package } from "lucide-react";
+import Link from "next/link";
+import { AlertTriangle, ExternalLink, Lock, Package } from "lucide-react";
 import { AdAngle, AdEvidence, Criterion, ResearchReport } from "@/lib/api";
 import { AngleList } from "@/components/visual/Visuals";
 import { cn, CriterionKey, formatPrice, SOURCE_LABEL } from "@/lib/utils";
@@ -196,10 +197,12 @@ export function CreativeSection({ report, criteria, suggested }: {
 }
 
 export function SupplierSection({
-  suppliers, criteria, costUsd, costEstimated, onQuote, report,
+  suppliers, criteria, costUsd, costEstimated, onQuote, report, locked = false, lockedCount = 0,
 }: {
   suppliers: { platform: string; supplier_name: string; supplier_url: string; unit_cost_usd: number | null }[];
   criteria: Criteria; costUsd: number | null; costEstimated: boolean; onQuote: () => void; report: Report | undefined;
+  /** Plan doesn't include supplier listings (Pro): show how many exist and an upgrade link. */
+  locked?: boolean; lockedCount?: number;
 }) {
   return (
     <div className="space-y-4">
@@ -207,7 +210,19 @@ export function SupplierSection({
       <div className="grid md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <h4 className="text-xs font-semibold text-zinc-300">Supplier listings</h4>
-          {suppliers?.length ? suppliers.map((s) => (
+          {locked ? (
+            <div className="rounded-lg border border-violet-500/20 bg-violet-600/5 px-3 py-3 space-y-2">
+              <p className="text-sm text-zinc-300 flex items-center gap-2">
+                <Lock size={14} className="text-violet-300 shrink-0" aria-hidden />
+                {lockedCount > 0
+                  ? `${lockedCount} supplier listing${lockedCount === 1 ? "" : "s"} found, with unit costs and links.`
+                  : "Supplier listings, unit costs and links are part of Pro."}
+              </p>
+              <Link href="/dashboard/billing" className="inline-block px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-500 print:hidden">
+                Unlock with Pro
+              </Link>
+            </div>
+          ) : suppliers?.length ? suppliers.map((s) => (
             <a key={s.supplier_url} href={s.supplier_url} target="_blank" rel="noreferrer"
                className="flex items-center justify-between gap-2 text-sm bg-zinc-800/60 hover:bg-zinc-800 rounded-lg px-3 py-2 min-h-[44px]">
               <span className="text-zinc-300">{s.supplier_name}</span>

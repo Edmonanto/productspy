@@ -104,7 +104,15 @@ def _search_summary(t: Any) -> dict[str, Any] | None:
             "geo": t.get("geo"), "series": [v for v in pts if isinstance(v, (int, float))][-26:]}
 
 
-def serialize_pick(r: Any) -> dict[str, Any]:
+# Score signals that come from Google Trends — Pro data, like the chart itself.
+SEARCH_SIGNALS = ("search_status", "search_growth", "search_level", "search_term", "search_geo")
+
+
+def serialize_pick(r: Any, ent: dict[str, Any] | None = None) -> dict[str, Any]:
+    """One visible pick. `ent` gates Pro-only fields; None means full access
+    (internal callers such as the Pro-only CSV export)."""
+    trends_ok = ent is None or bool(ent.get("search_trends"))
+    suppliers_ok = ent is None or bool(ent.get("suppliers"))
     sig = _json(r["signals"]) or {}
     attrs = _json(r["attributes"]) or {}
     price, cost = _f(r["price_usd"]), _f(r["cost_usd"])
@@ -124,7 +132,8 @@ def serialize_pick(r: Any) -> dict[str, Any]:
                       "break_even_roas": econ.break_even_roas},
         "breakdown": _json(r["breakdown"]) or {},
         "angles": attrs.get("angles") or [],
-        "search_trend": _search_summary((attrs.get("trends") or {}).get(r.get("market"))),
+        "search_trend": _search_summary((attrs.get("trends") or {}).get(r.get("market"))) if trends_ok else None,
+        "search_trend_locked": not trends_ok,
         "reasons": _json(r["reasons"]) or [],
         "penalties": _json(r["penalties"]) or [],
         "confidence": r["confidence"],
@@ -150,8 +159,9 @@ def serialize_pick(r: Any) -> dict[str, Any]:
         "links": {
             "store_url": r["store_url"] or (r["product_url"] or None),
             "ad_url": r["ad_url"],
-            "supplier_url": r["supplier_url"],
+            "supplier_url": r["supplier_url"] if suppliers_ok else None,
         },
+        "suppliers_locked": not suppliers_ok,
     }
 
 
@@ -307,7 +317,7 @@ async def get_winners(
         return {"market": code, "date": None, "winners": [], "locked_count": 0, "plan": ent["plan"],
                 "message": "No picks yet for this market — the first daily scan hasn't finished."}
     visible = int(ent["winners_per_day"])
-    winners = [serialize_pick(r) for r in rows[:visible]]
+    winners = [serialize_pick(r, ent) for r in rows[:visible]]
     winners += [{"rank": r["rank"], "tier": r["tier"], "total": r["total"], "locked": True}
                 for r in rows[visible:]]
     return {"market": code, "date": pick_date.isoformat(), "winners": winners,
@@ -347,8 +357,10 @@ async def run_status(user: CurrentUser = Depends(current_user)) -> dict[str, Any
     } for r in rows]}
 
 
-def _score_out(latest: Any) -> dict[str, Any]:
+def _score_out(latest: Any, trends_ok: bool = True) -> dict[str, Any]:
     sig = _json(latest["signals"]) or {}
+    if not trends_ok:
+        sig = {k: v for k, v in sig.items() if k not in SEARCH_SIGNALS}
     return {
         "scored_on": latest["scored_on"].isoformat(), "total": latest["total"],
         "breakdown": _json(latest["breakdown"]), "reasons": _json(latest["reasons"]),
@@ -396,6 +408,7 @@ async def product_evidence(product_id: str, market: str | None = None,
 
     attrs = _json(p["attributes"]) or {}
     price, cost = _f(p["price_usd"]), _f(p["cost_usd"])
+    suppliers = await store.product_suppliers(product_id)
     return {
         "market": code,
         "product": {
@@ -408,8 +421,9 @@ async def product_evidence(product_id: str, market: str | None = None,
                            ("wow", "problem", "demo3s", "upsell", "brandable", "ip_risk", "fragile_heavy", "seasonal")},
             "angles": attrs.get("angles") or [],
         },
-        "search_trend": (attrs.get("trends") or {}).get(code),
-        "score": None if latest is None else _score_out(latest),
+        "search_trend": (attrs.get("trends") or {}).get(code) if ent["search_trends"] else None,
+        "search_trend_locked": not ent["search_trends"],
+        "score": None if latest is None else _score_out(latest, bool(ent["search_trends"])),
         "criteria_labels": CRITERIA_LABEL,
         "assumptions": economics.DEFAULTS,
         "history": [{"date": h["scored_on"].isoformat(), "total": h["total"],
@@ -419,7 +433,9 @@ async def product_evidence(product_id: str, market: str | None = None,
                     for h in reversed(history)],
         "suppliers": [{"platform": s["platform"], "supplier_name": s["supplier_name"],
                        "supplier_url": s["supplier_url"], "unit_cost_usd": _f(s["unit_cost_usd"])}
-                      for s in await store.product_suppliers(product_id)],
+                      for s in suppliers] if ent["suppliers"] else [],
+        "supplier_count": len(suppliers),   # shown on the locked teaser
+        "suppliers_locked": not ent["suppliers"],
         "ads": ads if ent["ad_evidence"] else {},
         "ad_counts": counts,
         "ad_evidence_locked": not ent["ad_evidence"],

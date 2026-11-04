@@ -151,7 +151,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
               </span>
             ))}
             <TrendBadge trend={pick.trend} />
-            <SearchSpark search={pick.search_trend} />
+            <SearchSpark search={pick.search_trend} locked={pick.search_trend_locked} />
             {pick.confidence && (
               <span className={cn(
                 "rounded px-1.5 py-0.5",

@@ -200,3 +200,56 @@ def test_unlaunched_market_is_refused(make_client):
         r = c.get("/api/v1/winners?market=AE")
         assert r.status_code == 400 and "isn't available yet" in r.json()["detail"]
         assert c.post("/api/v1/winners/preferences", json={"markets": ["AE"]}).status_code == 400
+
+
+def test_suppliers_and_trends_are_pro_only(make_client, monkeypatch):
+    """Pricing page: 'Suppliers + Google Trends' are Pro. Free and Starter get a teaser."""
+    factory, _ = make_client
+    trends = {"US": {"status": "rising", "growth": 1.4, "term": "posture corrector", "geo": "US",
+                     "series": [{"date": "2026-10-01", "value": 50}]}}
+
+    async def product(_pid):
+        return {"id": PID, "title": "Posture Corrector", "image_url": None, "category": None,
+                "price_usd": 34.99, "cost_usd": 6.2, "cost_estimated": False, "product_url": "",
+                "attributes": json.dumps({"trends": trends}), "first_seen_at": datetime.now(timezone.utc)}
+
+    async def history(_pid, _m):
+        return [{"scored_on": TODAY, "total": 82, "breakdown": "{}", "reasons": "[]", "penalties": "[]",
+                 "confidence": "high", "excluded": None,
+                 "signals": json.dumps({"search_status": "rising", "search_growth": 1.4, "advertisers": 4})}]
+
+    async def none(*_a):
+        return []
+
+    async def suppliers(_pid):
+        return [{"platform": "aliexpress", "supplier_name": "Ali", "supplier_url": "https://ali.example/1",
+                 "unit_cost_usd": 5.1}]
+
+    monkeypatch.setattr(store, "product", product)
+    monkeypatch.setattr(store, "score_history", history)
+    monkeypatch.setattr(store, "product_ads", none)
+    monkeypatch.setattr(store, "product_suppliers", suppliers)
+
+    for plan in ("free", "starter"):
+        with factory(plan) as c:
+            body = c.get(f"/api/v1/winners/products/{PID}?market=US").json()
+        assert body["suppliers"] == [] and body["suppliers_locked"] is True and body["supplier_count"] == 1
+        assert body["search_trend"] is None and body["search_trend_locked"] is True
+        assert "search_status" not in body["score"]["signals"] or body["score"]["signals"]["search_status"] is None
+        assert body["score"]["signals"]["advertisers"] == 4
+    with factory("pro") as c:
+        body = c.get(f"/api/v1/winners/products/{PID}?market=US").json()
+    assert body["suppliers"][0]["supplier_url"] == "https://ali.example/1" and body["suppliers_locked"] is False
+    assert body["search_trend"]["status"] == "rising" and body["score"]["signals"]["search_status"] == "rising"
+
+
+def test_list_cards_hide_supplier_link_and_trend_below_pro():
+    from app import config
+    from app.routers.winners import serialize_pick
+    row = _pick(1) | {"market": "US", "supplier_url": "https://ali.example/1",
+                      "attributes": json.dumps({"trends": {"US": {"status": "rising", "series": [{"value": 3}]}}})}
+    free = serialize_pick(row, {"plan": "free", **config.WINNERS_PLANS["free"]})
+    assert free["links"]["supplier_url"] is None and free["suppliers_locked"] is True
+    assert free["search_trend"] is None and free["search_trend_locked"] is True
+    pro = serialize_pick(row, {"plan": "pro", **config.WINNERS_PLANS["pro"]})
+    assert pro["links"]["supplier_url"] == "https://ali.example/1" and pro["search_trend"]["status"] == "rising"

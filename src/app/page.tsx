@@ -57,7 +57,7 @@ const PLANS = [
 ];
 
 const FAQ = [
-  ["Do I need an account?", "No, not to look around. Today's #1 pick and the profit calculator on this page are free. A free account (Google, 10 seconds, no card) unlocks the full list, the ads, suppliers and AI research."],
+  ["Do I need an account?", "No, not to look around. Today's #1 pick and the profit calculator on this page are free. A free account (Google, 10 seconds, no card) starts your 7 days of Pro: the full list, the ads, suppliers, Google Trends and AI research. After the trial, the Free plan keeps the top 3 picks a day."],
   ["Do I need a credit card for the trial?", "No. You get 7 days of Pro free. After that you stay on the Free plan unless you choose a paid one."],
   ["Where does the data come from?", "The public Facebook Ad Library, TikTok and Google Trends — the same places pros check by hand, scanned for you every night."],
   ["Which countries?", "United States, United Kingdom and France today. Germany, Canada, Australia and the Gulf are next."],

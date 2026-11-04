@@ -136,6 +136,10 @@ export interface WinnersEntitlements {
   history_days: number;
   ad_evidence: boolean;
   export_csv: boolean;
+  /** Supplier listings and links (Pro and up). */
+  suppliers?: boolean;
+  /** Google Trends charts (Pro and up). */
+  search_trends?: boolean;
 }
 
 /** Points per criterion; null = no data (left out of the score). */
@@ -184,6 +188,10 @@ export interface WinnerPick {
   angles?: AdAngle[];
   /** Google Trends in this market: status + last 26 weekly points (relative 0-100 index). */
   search_trend?: { status: string; growth: number | null; term: string | null; geo: string | null; series: number[] } | null;
+  /** Google Trends exists but the plan doesn't include it (Pro). */
+  search_trend_locked?: boolean;
+  /** Supplier link hidden by plan (Pro). */
+  suppliers_locked?: boolean;
   product?: {
     id: string;
     title: string;
@@ -264,6 +272,10 @@ export interface ProductEvidence {
   assumptions?: Record<string, number>;
   history: { date: string; total: number; paid_ads?: number; videos?: number }[];
   suppliers: { platform: string; supplier_name: string; supplier_url: string; unit_cost_usd: number | null }[];
+  /** Plan doesn't include suppliers / Google Trends (Pro): show a teaser instead. */
+  suppliers_locked?: boolean;
+  supplier_count?: number;
+  search_trend_locked?: boolean;
   ads: Record<string, AdEvidence[]>;
   ad_counts: Record<string, number>;
   ad_evidence_locked: boolean;

@@ -290,7 +290,7 @@ function EvidenceInner() {
       <Section id="demand" n={3} title="Demand & trend analysis">
         {score ? (
           <>
-            <TrendPanel trend={score.trend ?? "unknown"} why={score.trend_why ?? null} signals={score.signals ?? {}} history={data.history ?? []} search={data.search_trend ?? null} />
+            <TrendPanel trend={score.trend ?? "unknown"} why={score.trend_why ?? null} signals={score.signals ?? {}} history={data.history ?? []} search={data.search_trend ?? null} searchLocked={data.search_trend_locked} />
             {ready && <p className="text-sm text-zinc-300 border-t border-zinc-800 pt-3"><span className="text-violet-300 text-xs mr-1">AI summary</span>{ready.ai.demand_summary}</p>}
           </>
         ) : <Empty>No demand data yet.</Empty>}
@@ -355,7 +355,8 @@ function EvidenceInner() {
       {/* 9 Supplier */}
       <Section id="supplier" n={9} title="Supplier & fulfilment">
         <SupplierSection suppliers={data.suppliers ?? []} criteria={criteria} costUsd={p.cost_usd} costEstimated={p.cost_estimated}
-                         onQuote={() => setQuoteQty(100)} report={ready} />
+                         onQuote={() => setQuoteQty(100)} report={ready}
+                         locked={data.suppliers_locked} lockedCount={data.supplier_count ?? 0} />
       </Section>
 
       {/* 10 Risks */}
