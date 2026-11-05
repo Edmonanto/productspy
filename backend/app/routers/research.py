@@ -61,10 +61,41 @@ async def _product(product_id: str) -> dict:
     return d
 
 
-def _report_out(row: Optional[dict]) -> Optional[dict]:
+SUPPLIER_LOCKED = "Supplier finding — included in Pro."
+
+
+def gate_report(report: Any, ent: dict[str, Any]) -> Any:
+    """Reports are shared per product, so plans are applied on the way out:
+    without the `suppliers` entitlement (Free, Starter) supplier sources lose
+    their link and label, and findings that cite them are replaced by a
+    "part of Pro" note."""
+    if not isinstance(report, dict) or ent.get("suppliers"):
+        return report
+    sources = report.get("sources") or []
+    sup = {s.get("id") for s in sources if isinstance(s, dict) and s.get("kind") == "supplier"}
+    if not sup:
+        return report
+    out = dict(report)
+    out["sources"] = [dict(s, url=None, label="Supplier listing (Pro)") if s.get("id") in sup else s
+                      for s in sources if isinstance(s, dict)]
+    ai = dict(out.get("ai") or {})
+    findings = []
+    for f in ai.get("key_findings") or []:
+        if isinstance(f, dict) and set(f.get("sources") or []) & sup:
+            f = {**f, "text": SUPPLIER_LOCKED, "sources": []}
+        findings.append(f)
+    ai["key_findings"] = findings
+    out["ai"] = ai
+    return out
+
+
+def _report_out(row: Optional[dict], ent: Optional[dict[str, Any]] = None) -> Optional[dict]:
     if not row:
         return None
-    return {"id": str(row["id"]), "status": row["status"], "report": _json(row.get("report")),
+    report = _json(row.get("report"))
+    if ent is not None:
+        report = gate_report(report, ent)
+    return {"id": str(row["id"]), "status": row["status"], "report": report,
             "warnings": _json(row.get("warnings")) or [], "model": row.get("model"),
             "error": row.get("error"), "created_at": row["created_at"], "finished_at": row.get("finished_at")}
 
@@ -76,7 +107,7 @@ async def get_report(product_id: str, market: str | None = None,
     product_id = _uuid(product_id)
     code, ent = await _resolve_market(user, market)
     await _product(product_id)
-    return {"market": code, "report": _report_out(await research.latest_report(product_id, code)),
+    return {"market": code, "report": _report_out(await research.latest_report(product_id, code), ent),
             "quota": {"used": await research.reports_today(user.id), "limit": ent.get("reports_per_day", 0)}}
 
 
@@ -91,12 +122,12 @@ async def create_report(product_id: str, background: BackgroundTasks, market: st
 
     cached = await research.cached_report(product_id, code)
     if cached and cached["status"] == "pending":
-        return {"market": code, "report": _report_out(cached), "cached": True}
+        return {"market": code, "report": _report_out(cached, ent), "cached": True}
     if cached and cached["status"] == "ready":
         # Refreshing only makes sense when the evidence changed since the report.
         newer = latest_score and latest_score["scored_on"] > cached["created_at"].date()
         if not (refresh and newer):
-            return {"market": code, "report": _report_out(cached), "cached": True}
+            return {"market": code, "report": _report_out(cached, ent), "cached": True}
 
     from ..winners.llm import llm_available
     if not llm_available():
