@@ -5,6 +5,6 @@ export const SITE = {
   name: "ProductSpy Pro",
   url: "https://productspy.pro",
   company: "Chengdu Beiyanxinghe Technology Co., Ltd.",
-  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "support@productspy.pro",
+  supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL || "onlinesupport2000@gmail.com",
   updated: "October 25, 2026",
 };
