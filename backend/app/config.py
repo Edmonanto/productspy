@@ -246,6 +246,8 @@ TRIAL_PLAN = os.environ.get("TRIAL_PLAN", "pro")
 # the trial still works, it just isn't announced by email.
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 EMAIL_FROM = os.environ.get("EMAIL_FROM", "ProductSpy Pro <hello@productspy.pro>")
+# Where customer replies to our emails go (Reply-To). Same inbox as the site's contact page.
+SUPPORT_EMAIL = os.environ.get("SUPPORT_EMAIL", "onlinesupport2000@gmail.com")
 # Daily winners email (app/winners/digest.py). Links in emails point at the
 # public API for one-click unsubscribe; DIGEST_SECRET signs those links
 # (falls back to the Supabase JWT secret).

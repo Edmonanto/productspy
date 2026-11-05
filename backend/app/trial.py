@@ -126,7 +126,8 @@ async def send_email(to: str | None, subject: str, html: str) -> bool:
             r = await client.post(
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {config.RESEND_API_KEY}"},
-                json={"from": config.EMAIL_FROM, "to": [to], "subject": subject, "html": html},
+                json={"from": config.EMAIL_FROM, "to": [to], "subject": subject, "html": html,
+                      **({"reply_to": config.SUPPORT_EMAIL} if config.SUPPORT_EMAIL else {})},
             )
         if r.status_code >= 300:
             log.warning("email to %s failed: %s %s", to, r.status_code, r.text[:200])
