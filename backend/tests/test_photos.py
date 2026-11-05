@@ -158,3 +158,37 @@ async def test_expired_links_fall_back_to_the_stored_photo(monkeypatch):
         executed.clear()
         assert await photos.ensure_photo("p1", "Mini Blender", ours, [_ad(1, "https://cdn/dead.jpg")]) is expect
         assert bool(executed) is (verdict is True)      # marked checked only on a yes
+
+
+
+async def test_refresh_expired_covers_for_leading_candidates(monkeypatch):
+    from app import config
+    from app.winners import pipeline, store
+    from app.winners.collectors import apify
+    v1 = AdRecord(platform="tiktok_organic", external_id="v1", market="US",
+                  thumbnail_url="https://p16/old1.jpg", ad_url="https://www.tiktok.com/@a/video/1")
+    v2 = AdRecord(platform="tiktok_organic", external_id="v2", market="US",
+                  thumbnail_url="https://p16/old2.jpg", ad_url="https://www.tiktok.com/@b/video/2")
+    fb = AdRecord(platform="meta", external_id="m1", market="US", thumbnail_url="https://fb/x.jpg")
+    results = {"p1": (None, [v1]), "p2": (None, [fb]), "p3": (None, [v2]), "p4": (None, [v2])}
+    sent, saved = {}, []
+
+    async def stored(pid):
+        return {"ai_checked": True} if pid == "p4" else None     # p4 already has a photo
+
+    async def refresh(urls, market):
+        sent["urls"] = urls
+        return {"v1": AdRecord(platform="tiktok_organic", external_id="v1", market="US",
+                               thumbnail_url="https://p16/fresh1.jpg", ad_url=v1.ad_url)}
+
+    async def upsert(a):
+        saved.append(a.external_id)
+
+    monkeypatch.setattr(photos, "stored", stored)
+    monkeypatch.setattr(apify, "refresh_tiktok_videos", refresh)
+    monkeypatch.setattr(store, "upsert_ad", upsert)
+    monkeypatch.setattr(config, "PHOTO_REFRESH_MAX", 20)
+    n = await pipeline.refresh_expired_covers("US", ["p1", "p2", "p3", "p4"], results)
+    assert sent["urls"] == [v1.ad_url, v2.ad_url]            # TikTok-only candidates without a photo
+    assert n == 1 and v1.thumbnail_url == "https://p16/fresh1.jpg" and saved == ["v1"]
+    assert v2.thumbnail_url == "https://p16/old2.jpg"        # not returned: unchanged

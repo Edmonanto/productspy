@@ -193,14 +193,19 @@ USE_APIFY = os.environ.get("USE_APIFY", "").lower() == "true"
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
 APIFY_META_ACTOR = os.environ.get("APIFY_META_ACTOR", "curious_coder~facebook-ads-library-scraper")
 APIFY_TIKTOK_ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "clockworks~tiktok-scraper")
-# TikTok Creative Center "Top Ads" (the free Playwright collector gets 0 from a
-# server IP). azzouzana's actor: ~$1 per 1,000 ads; set to "" to switch off.
-APIFY_TIKTOK_ADS_ACTOR = os.environ.get("APIFY_TIKTOK_ADS_ACTOR", "azzouzana~tiktok-creative-center-top-ads-scraper")
+# TikTok Creative Center "Top Ads" via Apify (the free Playwright collector gets
+# 0 from a server IP). Off by default: azzouzana~tiktok-creative-center-top-ads-scraper
+# returned 0 ads in 3 s on every run (2026-11-05, its logs are encrypted).
+# Set an actor whose output parse_top_ad()/parse_material() understands to turn it on.
+APIFY_TIKTOK_ADS_ACTOR = os.environ.get("APIFY_TIKTOK_ADS_ACTOR", "")
 APIFY_TIKTOK_ADS_MAX = int(os.environ.get("APIFY_TIKTOK_ADS_MAX", "60"))
 # Apify spend control: items fetched per market per scan, and how often a
 # market may be scraped (a re-run the same day reuses what's already stored).
 APIFY_META_MAX = int(os.environ.get("APIFY_META_MAX", "150"))
 APIFY_TIKTOK_MAX = int(os.environ.get("APIFY_TIKTOK_MAX", "40"))
+# Pick candidates whose only photos are expired TikTok covers: re-fetch that
+# many videos per market per night (APIFY_TIKTOK_ACTOR, postURLs) for fresh covers.
+PHOTO_REFRESH_MAX = int(os.environ.get("PHOTO_REFRESH_MAX", "20"))
 APIFY_TRENDS_MAX = int(os.environ.get("APIFY_TRENDS_MAX", "10"))  # Google Trends lookups per market per day (7-day cache)
 APIFY_MIN_HOURS_BETWEEN = int(os.environ.get("APIFY_MIN_HOURS_BETWEEN", "20"))
 # How far back the nightly scan looks for ads not yet turned into products.

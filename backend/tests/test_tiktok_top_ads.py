@@ -31,9 +31,10 @@ async def test_collects_product_sales_ads_for_the_market(monkeypatch):
     assert abs(r.ctr - 0.031) < 1e-9 and r.likes == 15200
 
 
-def test_enabled_by_default_with_apify(monkeypatch):
+def test_enabled_only_with_an_actor(monkeypatch):
     monkeypatch.setattr(config, "USE_APIFY", True)
     monkeypatch.setattr(config, "APIFY_TOKEN", "t")
+    monkeypatch.setattr(config, "APIFY_TIKTOK_ADS_ACTOR", "someone~top-ads")
     assert apify.ApifyTikTokAdsCollector().enabled()
     monkeypatch.setattr(config, "APIFY_TIKTOK_ADS_ACTOR", "")
     assert not apify.ApifyTikTokAdsCollector().enabled()

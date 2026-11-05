@@ -220,6 +220,34 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
     return verified
 
 
+async def refresh_expired_covers(market_code: str, ranked: list[str], results: dict) -> int:
+    """Leading candidates with no stored photo whose pictures come from TikTok
+    videos: those cover links expire, so re-fetch the videos (one Apify run)
+    and use the fresh covers. Without this the best-scoring products were
+    dropped every night as "no photo that shows this product"."""
+    from .collectors.apify import refresh_tiktok_videos
+    need: list = []
+    for pid in ranked[: PHOTO_CANDIDATES * 4]:
+        if len(need) >= config.PHOTO_REFRESH_MAX:
+            break
+        if await photos.stored(pid):
+            continue
+        video = next((a for a in results[pid][1] if a.platform == "tiktok_organic" and a.ad_url), None)
+        if video is not None:
+            need.append(video)
+    if not need:
+        return 0
+    fresh = await refresh_tiktok_videos([a.ad_url for a in need], market_code)
+    n = 0
+    for a in need:
+        rec = fresh.get(a.external_id)
+        if rec and rec.thumbnail_url:
+            a.thumbnail_url = rec.thumbnail_url
+            await store.upsert_ad(rec)
+            n += 1
+    return n
+
+
 async def score_step(market_code: str, day: date, stats: dict, errors: list | None = None) -> None:
     errors = errors if errors is not None else []
     now = datetime.now(timezone.utc)
@@ -273,6 +301,10 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
     # product with no photo of itself is not picked.
     ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
                     key=lambda pid: results[pid][0].total, reverse=True)
+    try:
+        stats["photos_refreshed"] = await refresh_expired_covers(market_code, ranked, results)
+    except Exception:
+        log.exception("[%s] tiktok cover refresh failed", market_code)
     photo_ok: set[str] = set()
     no_image = 0
     for pid in ranked:
