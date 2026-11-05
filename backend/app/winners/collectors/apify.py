@@ -154,6 +154,24 @@ def parse_apify_tiktok(item: dict, market: str) -> AdRecord:
     )
 
 
+async def refresh_tiktok_videos(urls: list[str], market: str) -> dict[str, AdRecord]:
+    """Fresh data (cover image included) for specific TikTok videos, by id.
+    Stored cover links are signed and expire within days."""
+    if not (urls and _apify_on()):
+        return {}
+    items = await run_actor(config.APIFY_TIKTOK_ACTOR, {
+        "postURLs": urls, "resultsPerPage": 1,
+        "shouldDownloadVideos": False, "shouldDownloadCovers": False,
+    })
+    out: dict[str, AdRecord] = {}
+    for it in items if isinstance(items, list) else []:
+        if isinstance(it, dict) and it.get("id"):
+            rec = parse_apify_tiktok(it, market)
+            if rec.thumbnail_url:
+                out[rec.external_id] = rec
+    return out
+
+
 class ApifyMetaCollector(Collector):
     name = "apify_meta"
     paid = True

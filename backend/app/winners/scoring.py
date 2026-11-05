@@ -83,7 +83,11 @@ RISING_THRESHOLD = 55
 WATCH_FLOOR = 40
 MAX_PICKS = 10
 MIN_PICKS = 5
-REPICK_COOLDOWN_DAYS = 30
+# Days before a picked product can be picked again. 30 used up the strong
+# products within a week (the US kept list topped out at 54 while 55-79
+# products waited out the cooldown); a product still winning after a week
+# deserves to come back.
+REPICK_COOLDOWN_DAYS = int(os.environ.get("REPICK_COOLDOWN_DAYS", "7"))
 KNOWN_FLOOR = 50          # points of criteria that must be known before full scale-up
 SINGLE_SOURCE_CAP = 85    # max score for a product seen on one platform only
 # A single store whose ads have run for half a year with nothing new is a
