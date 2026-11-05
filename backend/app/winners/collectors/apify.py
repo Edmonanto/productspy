@@ -22,7 +22,7 @@ from app import config
 from app.winners.markets import Market
 from .base import AdRecord, Collector, log, to_dt, to_int
 from .meta_ads import iter_ad_nodes, library_url, parse_web_ad
-from .tiktok_ads import iter_materials, parse_material
+from .tiktok_ads import iter_materials, parse_material, parse_top_ad
 from .tiktok_organic import TikTokOrganicCollector
 
 APIFY_RUN = "https://api.apify.com/v2/acts/{actor}/run-sync-get-dataset-items"
@@ -214,13 +214,21 @@ class ApifyTikTokAdsCollector(Collector):
     def enabled(self) -> bool:
         return _apify_on() and bool(config.APIFY_TIKTOK_ADS_ACTOR)
 
-    async def collect(self, market: Market, limit: int = 200) -> list[AdRecord]:
+    async def collect(self, market: Market, limit: int | None = None) -> list[AdRecord]:
+        limit = limit or config.APIFY_TIKTOK_ADS_MAX
+        # Product-sales ads only (no apps/games/leads), with details: the
+        # landing page is the store we read the selling price from.
         items = await run_actor(config.APIFY_TIKTOK_ADS_ACTOR, {
-            "region": market.tiktok_regions[0], "period": int(config.TIKTOK_CC_PERIOD),
-            "maxItems": limit,
+            "countryCode": market.tiktok_regions[0], "period": str(config.TIKTOK_CC_PERIOD),
+            "maxItems": max(10, limit), "extractDetails": True,
+            "objective": "campaign_objective_product_sales", "orderBy": "for_you",
         })
-        out = {}
-        for mat in iter_materials(items):
+        out: dict[str, AdRecord] = {}
+        for it in items if isinstance(items, list) else []:
+            rec = parse_top_ad(it, market.code) if isinstance(it, dict) and "adId" in it else None
+            if rec:
+                out.setdefault(rec.external_id, rec)
+        for mat in iter_materials(items):          # older snake_case actors
             rec = parse_material(mat, market.code)
             if rec:
                 out.setdefault(rec.external_id, rec)

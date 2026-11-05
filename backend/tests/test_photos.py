@@ -110,3 +110,51 @@ def test_image_route(monkeypatch):
         r = c.get("/api/v1/images/22222222-2222-2222-2222-222222222222.jpg")
         assert r.status_code == 200 and r.content == b"JPEGDATA"
         assert r.headers["content-type"] == "image/jpeg" and "immutable" in r.headers["cache-control"]
+
+
+async def test_capture_stores_first_usable_picture_unchecked(monkeypatch):
+    saved = []
+    urls = {"https://cdn/dead.jpg": None, "https://cdn/ok.jpg": (_jpeg(), "image/jpeg")}
+
+    async def download(url):
+        return urls.get(url)
+
+    async def save(pid, photo, checked):
+        saved.append((pid, photo.source_url, photo.ad_key, checked))
+
+    monkeypatch.setattr(photos, "download", download)
+    monkeypatch.setattr(photos, "save", save)
+    ok = await photos.capture("p1", None, [_ad(1, "https://cdn/dead.jpg"), _ad(2, "https://cdn/ok.jpg")])
+    assert ok and saved == [("p1", "https://cdn/ok.jpg", "meta:2", False)]
+    assert not await photos.capture("p2", None, [_ad(3, "https://cdn/dead.jpg")])
+
+
+async def test_expired_links_fall_back_to_the_stored_photo(monkeypatch):
+    from app import config, db
+    ours = f"{config.API_PUBLIC_URL}/images/p1.jpg?v=1"
+    executed = []
+
+    async def stored(pid):
+        return {"ai_checked": False, "age_days": 2}
+
+    async def get(pid):
+        return (_jpeg(), "image/jpeg")
+
+    async def nothing(*a, **k):          # every ad link has expired
+        return None
+
+    async def execute(sql, *args):
+        executed.append(sql)
+
+    monkeypatch.setattr(photos, "stored", stored)
+    monkeypatch.setattr(photos, "get", get)
+    monkeypatch.setattr(photos, "download", nothing)
+    monkeypatch.setattr(photos, "llm_available", lambda: True)
+    monkeypatch.setattr(db, "execute", execute)
+    for verdict, expect in ((True, True), (None, True), (False, False)):
+        async def shows(name, jpeg, v=verdict):
+            return v
+        monkeypatch.setattr(photos, "shows_product", shows)
+        executed.clear()
+        assert await photos.ensure_photo("p1", "Mini Blender", ours, [_ad(1, "https://cdn/dead.jpg")]) is expect
+        assert bool(executed) is (verdict is True)      # marked checked only on a yes

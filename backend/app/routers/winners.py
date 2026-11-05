@@ -286,6 +286,60 @@ def preview_payload(code: str, pick_date: date | None, rows: list[Any]) -> dict[
             "total": len(rows), "picks": out, "markets": _live()}
 
 
+# ── Public "winning products" pages (SEO) ───────────────────────────────────
+# Only each day's #1 — the free pick of the day, already public on the landing
+# page. Nothing from the paid list: no other ranks, ads, stores or suppliers.
+PUBLIC_DAYS = 60
+PUBLIC_TTL_S = 1800
+_public_cache: dict[str, tuple[float, list[dict[str, Any]]]] = {}
+
+
+def public_pick(r: Any) -> dict[str, Any]:
+    sig = _json(r["signals"]) or {}
+    attrs = _json(r["attributes"]) or {}
+    angle = (attrs.get("angles") or [None])[0]
+    return {
+        "date": r["pick_date"].isoformat(), "product_id": str(r["product_id"]),
+        "title": r["title"], "image_url": r["image_url"], "category": r["category"],
+        "price_usd": _f(r["price_usd"]), "total": r["total"], "tier": r["tier"],
+        "trend": sig.get("trend") or "unknown",
+        "stores": sig.get("advertisers"), "days_running": sig.get("max_days_running"),
+        "breakdown": _json(r["breakdown"]) or {},
+        "reasons": (_json(r["reasons"]) or [])[:3],
+        "angle": {"angle": angle.get("angle"), "hook": angle.get("hook")} if isinstance(angle, dict) else None,
+    }
+
+
+async def _public_top(code: str) -> list[dict[str, Any]]:
+    import time
+    hit = _public_cache.get(code)
+    if hit and time.monotonic() - hit[0] < PUBLIC_TTL_S:
+        return hit[1]
+    rows = await store.top_picks(code, _today() - timedelta(days=PUBLIC_DAYS))
+    data = [public_pick(r) for r in rows]
+    _public_cache[code] = (time.monotonic(), data)
+    return data
+
+
+@router.get("/public/top")
+async def public_top(market: str = Query(...)) -> dict[str, Any]:
+    """No login: the free #1 pick of each of the last 60 days, newest first."""
+    code = market.upper()
+    _check_live(code)
+    return {"market": code, "days": PUBLIC_DAYS, "picks": await _public_top(code)}
+
+
+@router.get("/public/products/{product_id}")
+async def public_product(product_id: str, market: str = Query(...)) -> dict[str, Any]:
+    """No login: one product, only if it was a public #1 in this market recently."""
+    code = market.upper()
+    _check_live(code)
+    picks = [p for p in await _public_top(code) if p["product_id"] == product_id]
+    if not picks:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Not found")
+    return {"market": code, "pick": picks[0], "featured_on": [p["date"] for p in picks]}
+
+
 @router.get("/preview")
 async def public_preview(market: str | None = Query(None)) -> dict[str, Any]:
     """No login: today's picks as a teaser for the landing page. Cached 10 min per market."""

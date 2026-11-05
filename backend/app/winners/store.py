@@ -412,6 +412,70 @@ async def picks(market: str, day: date) -> list[dict]:
     return out
 
 
+async def top_picks(market: str, since: date) -> list[dict]:
+    """Each day's public #1 (the free pick of the day) since `since`, newest first.
+
+    Uses the same rule as picks(): products without a picture or that aren't
+    physical products are skipped, so #1 here is the #1 visitors were shown."""
+    rows = await db.fetch(
+        """
+        select dw.pick_date, dw.rank, dw.tier, dw.total, dw.product_id,
+               ws.breakdown, ws.signals, ws.reasons,
+               p.title, p.image_url, p.category, p.price_usd, p.attributes
+          from daily_winners dw
+          join products p on p.id = dw.product_id
+          left join winner_scores ws on ws.id = dw.score_id
+         where dw.market = $1 and dw.pick_date >= $2
+         order by dw.pick_date desc, dw.rank
+        """,
+        market, since,
+    )
+    out: list[dict] = []
+    seen: set[date] = set()
+    for r in rows:
+        if r["pick_date"] in seen or not r["image_url"] or non_product_reason(r["title"], r["category"]):
+            continue
+        seen.add(r["pick_date"])
+        out.append(dict(r))
+    return out
+
+
+async def products_missing_photo(market: str, days: int = 3, limit: int = 200) -> list[tuple[asyncpg.Record, list[AdRecord]]]:
+    """Products with an ad seen in the last `days` days and no stored photo yet,
+    with their ads (newest first): their image links are still fresh."""
+    prods = await db.fetch(
+        """
+        select p.id, p.title, p.image_url
+          from products p
+         where exists (select 1 from ad_creatives a
+                        where a.product_id = p.id and a.market = $1
+                          and a.last_seen_at > now() - make_interval(days => $2))
+           and not exists (select 1 from product_images i where i.product_id = p.id)
+         order by p.updated_at desc
+         limit $3
+        """,
+        market, days, limit,
+    )
+    if not prods:
+        return []
+    rows = await db.fetch(
+        """
+        select product_id, platform, external_id, market, advertiser_name, advertiser_id,
+               ad_text, landing_url, media_url, thumbnail_url, ad_url, started_at,
+               is_active, variant_count, reach, views, likes, comments, shares, ctr,
+               budget_level, intent_comments, sampled_comments, raw
+          from ad_creatives
+         where product_id = any($1::uuid[]) and market = $2 and thumbnail_url is not null
+         order by last_seen_at desc
+        """,
+        [p["id"] for p in prods], market,
+    )
+    ads: dict[str, list[AdRecord]] = defaultdict(list)
+    for r in rows:
+        ads[str(r["product_id"])].append(row_to_ad(r))
+    return [(p, ads.get(str(p["id"]), [])) for p in prods]
+
+
 async def pick_dates(market: str, since: date) -> list[asyncpg.Record]:
     return await db.fetch(
         """

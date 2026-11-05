@@ -173,6 +173,39 @@ async def find_photo(name: str, image_url: Optional[str], ads: list[AdRecord]) -
     return fallback, False
 
 
+async def capture(product_id: str, image_url: Optional[str], ads: list[AdRecord]) -> bool:
+    """Store the first usable picture right away, while its link still works
+    (ad thumbnails expire within days). Not AI-checked yet: ensure_photo()
+    checks it if the product becomes a pick candidate."""
+    for url, ad_key in candidates(None if is_ours(image_url) else image_url, ads)[:MAX_TRIES]:
+        got = await download(url)
+        jpeg = shrink(got[0]) if got else None
+        if jpeg:
+            await save(product_id, Photo(jpeg, "image/jpeg", url, ad_key), False)
+            return True
+    return False
+
+
+async def capture_step(market: str, stats: dict, limit: int = 200, parallel: int = 6) -> None:
+    """Nightly, right after collection: save a photo for every new product."""
+    import asyncio
+    from . import store
+    todo = await store.products_missing_photo(market, limit=limit)
+    sem = asyncio.Semaphore(parallel)
+
+    async def one(prod, ads) -> bool:
+        async with sem:
+            try:
+                return await capture(str(prod["id"]), prod["image_url"], ads)
+            except Exception:
+                log.exception("photo capture failed for %s", prod["id"])
+                return False
+
+    done = await asyncio.gather(*(one(p, a) for p, a in todo))
+    stats["photos_captured"] = sum(done)
+    stats["photos_capture_missed"] = len(done) - sum(done)
+
+
 async def save(product_id: str, photo: Photo, checked: bool) -> str:
     url = public_url(product_id)
     await db.execute(
@@ -207,7 +240,18 @@ async def ensure_photo(product_id: str, name: str, image_url: Optional[str], ads
         return True
     photo, checked = await find_photo(name, None if is_ours(image_url) else image_url, ads)
     if photo is None:
-        return bool(have) and is_ours(image_url) and not llm_available()
+        # No fresh picture to try (links expired) — fall back to the one we
+        # stored when the product was new, checked now by the AI.
+        if not (have and is_ours(image_url)):
+            return False
+        if not llm_available():
+            return True
+        got = await get(product_id)
+        verdict = await shows_product(name, got[0]) if got else None
+        if verdict is True:
+            await db.execute("update product_images set ai_checked = true, updated_at = now() "
+                             "where product_id = $1", product_id)
+        return verdict is not False      # None = AI couldn't tell: keep the stored photo
     await save(product_id, photo, checked)
     return True
 

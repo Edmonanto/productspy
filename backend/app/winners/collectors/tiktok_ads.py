@@ -85,6 +85,35 @@ def parse_material(m: dict, market: str) -> Optional[AdRecord]:
     )
 
 
+def parse_top_ad(m: dict, market: str) -> Optional[AdRecord]:
+    """One row of the Apify Creative Center "Top Ads" actor (camelCase fields:
+    adId, adTitle, brandName, ctr, likes, coverUrl, landingPageUrl, ...)."""
+    aid = m.get("adId") or m.get("id")
+    if not aid:
+        return None
+    objective = str(m.get("objectiveKey") or "").lower()
+    if any(s in objective for s in _SKIP_OBJECTIVES):
+        return None
+    aid = str(aid)
+    return AdRecord(
+        platform="tiktok_ads",
+        external_id=aid,
+        market=market,
+        advertiser_name=m.get("brandName"),
+        ad_text=m.get("adTitle"),
+        landing_url=m.get("landingPageUrl") or None,
+        media_url=m.get("videoUrl720p") or m.get("videoUrl540p") or m.get("videoUrl360p"),
+        thumbnail_url=m.get("coverUrl"),
+        ad_url=m.get("creativeCenterUrl") or m.get("detailUrl")
+               or f"https://ads.tiktok.com/business/creativecenter/topads/{aid}/pc/en",
+        likes=to_int(m.get("likes")),
+        ctr=_norm_ctr(m.get("ctr")),
+        budget_level=to_int(m.get("costScore")),
+        raw={"industry": m.get("industryKey"), "objective": objective,
+             "keywords": m.get("keywords"), "duration": m.get("durationSec"), "rank": m.get("rank")},
+    )
+
+
 class TikTokCreativeCenterCollector(Collector):
     name = "tiktok_creative_center"
 

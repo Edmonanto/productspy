@@ -9,4 +9,5 @@ def _clear_winner_caches():
     from app.routers import winners as _w
     _w._picks_cache.clear()
     _w._preview_cache.clear()
+    _w._public_cache.clear()
     yield

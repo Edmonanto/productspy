@@ -193,7 +193,10 @@ USE_APIFY = os.environ.get("USE_APIFY", "").lower() == "true"
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
 APIFY_META_ACTOR = os.environ.get("APIFY_META_ACTOR", "curious_coder~facebook-ads-library-scraper")
 APIFY_TIKTOK_ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "clockworks~tiktok-scraper")
-APIFY_TIKTOK_ADS_ACTOR = os.environ.get("APIFY_TIKTOK_ADS_ACTOR", "")
+# TikTok Creative Center "Top Ads" (the free Playwright collector gets 0 from a
+# server IP). azzouzana's actor: ~$1 per 1,000 ads; set to "" to switch off.
+APIFY_TIKTOK_ADS_ACTOR = os.environ.get("APIFY_TIKTOK_ADS_ACTOR", "azzouzana~tiktok-creative-center-top-ads-scraper")
+APIFY_TIKTOK_ADS_MAX = int(os.environ.get("APIFY_TIKTOK_ADS_MAX", "60"))
 # Apify spend control: items fetched per market per scan, and how often a
 # market may be scraped (a re-run the same day reuses what's already stored).
 APIFY_META_MAX = int(os.environ.get("APIFY_META_MAX", "150"))

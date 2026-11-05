@@ -360,6 +360,11 @@ async def run_market(market_code: str, day: date | None = None,
         await extract_step(market_code, stats)
         extract_health(stats, errors, llm_available())
         try:
+            await photos.capture_step(market_code, stats)
+        except Exception as exc:
+            log.exception("[%s] photo capture failed", market_code)
+            errors.append({"step": "photos", "error": str(exc)[:300]})
+        try:
             await enrich_step(market_code, stats)
         except Exception as exc:
             log.exception("[%s] enrichment failed", market_code)

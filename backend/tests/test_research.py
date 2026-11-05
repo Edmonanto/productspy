@@ -299,3 +299,19 @@ def test_no_ai_key_is_a_clear_error_and_costs_nothing(client):
     with c:
         r = c.post(f"/api/v1/research/{PID}/report?market=US")
     assert r.status_code == 503 and "no AI key" in r.json()["detail"] and state["started"] == []
+
+
+def test_supplier_findings_and_links_are_pro_only():
+    from app import config
+    from app.routers.research import SUPPLIER_LOCKED, gate_report
+    report = {"sources": [{"id": "S1", "kind": "ad", "label": "TikTok ad", "url": "https://ad"},
+                          {"id": "S2", "kind": "supplier", "label": "AliExpress listing", "url": "https://ali/1"}],
+              "ai": {"key_findings": [{"text": "Ads run 40 days", "type": "fact", "sources": ["S1"]},
+                                      {"text": "Unit cost $4.10 on AliExpress", "type": "fact", "sources": ["S2"]}]}}
+    free = gate_report(report, {"plan": "free", **config.WINNERS_PLANS["free"]})
+    assert free["sources"][1] == {"id": "S2", "kind": "supplier", "label": "Supplier listing (Pro)", "url": None}
+    assert free["ai"]["key_findings"][0]["text"] == "Ads run 40 days"
+    assert free["ai"]["key_findings"][1] == {"text": SUPPLIER_LOCKED, "type": "fact", "sources": []}
+    assert report["sources"][1]["url"] == "https://ali/1"         # the shared report itself is untouched
+    pro = gate_report(report, {"plan": "pro", **config.WINNERS_PLANS["pro"]})
+    assert pro is report
