@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
-from .. import config, funnel, partners, repository, trial
+from .. import config, funnel, owner_notify, partners, repository, trial
 from ..auth import CurrentUser, current_user
 from ..billing import paypal_provider, stripe_provider
 from ..schemas import BillingStatus, Trial
@@ -154,6 +154,14 @@ def _period_end(value: Any) -> datetime | None:
         return None
 
 
+async def _row_or_none(user_id: str):
+    """The subscription before this event (for the owner email); never fails the webhook."""
+    try:
+        return await repository.subscription_row(user_id)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 async def _apply(provider: str, parsed: dict[str, Any]) -> None:
     """Resolve the user and write the new subscription state."""
     user_id = parsed.get("user_id")
@@ -175,6 +183,7 @@ async def _apply(provider: str, parsed: dict[str, Any]) -> None:
             log.error("paypal event for unknown plan %s (user %s) — subscription not changed",
                       parsed.get("plan_id"), user_id)
             return
+    before = await _row_or_none(user_id)
     await repository.upsert_subscription(
         user_id=user_id,
         plan=parsed.get("plan") or config.DEFAULT_PLAN,
@@ -189,6 +198,14 @@ async def _apply(provider: str, parsed: dict[str, Any]) -> None:
     # shows as "trialing" on Stripe (billing starts when the trial ends).
     if parsed.get("plan") in config.PAID_PLANS and parsed["status"] in ("active", "trialing"):
         await funnel.record("paid", user_id=user_id, source=parsed.get("plan"))
+        # Email the owner on a real change only — not on every renewal webhook.
+        was_paid = bool(before) and owner_notify.is_paid(before["plan"], before["status"]) \
+            and before["provider"] == provider
+        if not was_paid or before["plan"] != parsed.get("plan"):
+            await owner_notify.notify_subscription(  # never raises
+                (before["email"] if before else None) or parsed.get("email"),
+                parsed["plan"], provider, parsed["status"],
+                previous_plan=before["plan"] if before else None)
 
 
 @router.post("/webhook/stripe", include_in_schema=False)

@@ -20,10 +20,8 @@ log = logging.getLogger("quote_emails")
 def recipients() -> list[str]:
     if config.QUOTE_EMAILS:
         return sorted(config.QUOTE_EMAILS)
-    out = set(config.ADMIN_EMAILS)
-    if config.SUPPORT_EMAIL:
-        out.add(config.SUPPORT_EMAIL.lower())
-    return sorted(out)
+    from app import owner_notify
+    return owner_notify.recipients()
 
 
 def _money(v) -> str:

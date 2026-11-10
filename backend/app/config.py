@@ -55,8 +55,13 @@ MIGRATE_ON_START = os.environ.get("MIGRATE_ON_START", "true").lower() == "true"
 ADMIN_EMAILS = {
     e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()
 }
+# Owner notifications (app/owner_notify.py): new signups, new subscribers,
+# daily usage report. Empty = ADMIN_EMAILS plus SUPPORT_EMAIL.
+NOTIFY_EMAILS = {
+    e.strip().lower() for e in os.environ.get("NOTIFY_EMAILS", "").split(",") if e.strip()
+}
 # Who gets an email when a customer submits a quote request (app/quote_emails.py).
-# Empty = ADMIN_EMAILS plus SUPPORT_EMAIL.
+# Empty = NOTIFY_EMAILS / ADMIN_EMAILS plus SUPPORT_EMAIL.
 QUOTE_EMAILS = {
     e.strip().lower() for e in os.environ.get("QUOTE_EMAILS", "").split(",") if e.strip()
 }
