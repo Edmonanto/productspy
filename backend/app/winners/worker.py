@@ -160,7 +160,10 @@ async def _report(owner_notify) -> int:
     except Exception:
         pass
     try:
-        return await owner_notify.daily_report()
+        sent = await owner_notify.daily_report()
+        from .video_brief import send_daily as send_video_brief
+        log.info("video brief: %s sent", await send_video_brief())
+        return sent
     finally:
         try:
             await db.disconnect()

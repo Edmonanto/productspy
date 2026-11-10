@@ -60,6 +60,10 @@ ADMIN_EMAILS = {
 NOTIFY_EMAILS = {
     e.strip().lower() for e in os.environ.get("NOTIFY_EMAILS", "").split(",") if e.strip()
 }
+# Daily video brief (app/winners/video_brief.py): top N picks per market get a
+# "why it won" breakdown and a short-video script, emailed to the owner.
+VIDEO_BRIEF_PER_MARKET = int(os.environ.get("VIDEO_BRIEF_PER_MARKET", "2"))
+VIDEO_BRIEF_MARKETS = [m.strip().upper() for m in os.environ.get("VIDEO_BRIEF_MARKETS", "US,UK,FR").split(",") if m.strip()]
 # Who gets an email when a customer submits a quote request (app/quote_emails.py).
 # Empty = NOTIFY_EMAILS / ADMIN_EMAILS plus SUPPORT_EMAIL.
 QUOTE_EMAILS = {
