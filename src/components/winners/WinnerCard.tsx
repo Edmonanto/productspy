@@ -121,6 +121,7 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
                 {margin != null && <span className={margin >= 30 ? "text-emerald-400" : "text-amber-300"}>{margin}% margin before ads{p.cost_estimated ? " (est.)" : ""}</span>}
                 {pick.tier === "rising" && <span className="text-[10px] font-semibold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded px-1">Rising</span>}
                 {pick.tier === "watch" && <span className="text-[10px] font-semibold uppercase bg-sky-500/10 text-sky-300 border border-sky-500/30 rounded px-1">Watch</span>}
+                {pick.still_winning && <span title="Picked in the last few days and still scoring high" className="text-[10px] font-semibold uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded px-1">Still winning</span>}
               </div>
             </div>
             <ScoreRing score={pick.total} size={52} stroke={5} />

@@ -244,7 +244,12 @@ def test_hard_filters():
     base = dict(sell_price_usd=30, cost_usd=5)
     assert score(aggregate(_ads_strong(), now=NOW, restricted=True, **base)).excluded == "restricted category"
     assert score(aggregate(_ads_strong(), now=NOW, ip_risk="high", **base)).excluded == "brand / IP copy risk"
-    assert "already picked" in score(aggregate(_ads_strong(), now=NOW, last_picked_days_ago=3, **base)).excluded
+    # Picked 3 days ago and still strong: stays in, labelled "still winning".
+    again = score(aggregate(_ads_strong(), now=NOW, last_picked_days_ago=3, **base))
+    assert again.total >= 70 and again.excluded is None and again.signals["still_winning"] is True
+    # Picked 3 days ago but no longer strong: hidden for the cooldown.
+    weak = score(aggregate(_ads_strong()[:1], now=NOW, last_picked_days_ago=3))
+    assert weak.total < 70 and "already picked" in weak.excluded
     assert score(aggregate(_ads_strong(), now=NOW, last_picked_days_ago=40, **base)).excluded is None
 
 

@@ -88,6 +88,9 @@ MIN_PICKS = 5
 # products waited out the cooldown); a product still winning after a week
 # deserves to come back.
 REPICK_COOLDOWN_DAYS = int(os.environ.get("REPICK_COOLDOWN_DAYS", "7"))
+# A product picked within REPICK_COOLDOWN_DAYS is picked again only if it still
+# scores at least this (shown as "still winning").
+STILL_WINNING_SCORE = int(os.environ.get("STILL_WINNING_SCORE", "70"))
 KNOWN_FLOOR = 50          # points of criteria that must be known before full scale-up
 SINGLE_SOURCE_CAP = 85    # max score for a product seen on one platform only
 # A single store whose ads have run for half a year with nothing new is a
@@ -338,8 +341,7 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
         excluded = "restricted category"
     elif s.ip_risk == "high":
         excluded = "brand / IP copy risk"
-    elif s.last_picked_days_ago is not None and s.last_picked_days_ago < REPICK_COOLDOWN_DAYS:
-        excluded = f"already picked {s.last_picked_days_ago} days ago"
+    recent_pick = s.last_picked_days_ago is not None and s.last_picked_days_ago < REPICK_COOLDOWN_DAYS
 
     trend, trend_why = trend_status(s)
 
@@ -579,6 +581,16 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
                               "one brand's established product, not yet copied by others"})
     total = max(0, total + sum(p["points"] for p in penalties))
 
+    # Picked in the last few days: keep the list fresh, unless it is still
+    # strong — then it stays, labelled "still winning", instead of hiding the
+    # best products of the day behind the cooldown.
+    still_winning = False
+    if recent_pick and excluded is None:
+        if total >= STILL_WINNING_SCORE:
+            still_winning = True
+        else:
+            excluded = f"already picked {s.last_picked_days_ago} days ago"
+
     confidence = ("high" if n_src >= 2 and known_max >= 75
                   else "medium" if n_src >= 2 or known_max >= 70 else "low")
 
@@ -607,6 +619,7 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
         "trend": trend, "trend_why": trend_why, "band": band(total),
         "strengths": strengths[:6], "weaknesses": weaknesses[:6],
         "economics": asdict(econ),
+        "still_winning": still_winning,
     })
     return ScoreResult(
         total=total, breakdown=breakdown, penalties=penalties, reasons=strengths[:7],
