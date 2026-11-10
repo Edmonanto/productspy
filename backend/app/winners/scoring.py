@@ -639,13 +639,15 @@ def pick_winners(scored: list[tuple[str, ScoreResult]], max_picks: int = MAX_PIC
         proven = (sig.get("advertisers") or 0) >= WINNER_MIN_STORES or (sig.get("creators") or 0) >= 3
         return r.total >= WINNER_THRESHOLD and r.confidence != "low" and proven
 
+    # Always fill the list to max_picks (paid plans get 10 a day): winners
+    # first, then "rising", then "watch". min_picks is only the alert floor.
     winners = [(pid, r, "winner") for pid, r in eligible if is_winner(r)][:max_picks]
-    if len(winners) < min_picks:
+    if len(winners) < max_picks:
         fillers = [(pid, r, "rising") for pid, r in eligible
                    if r.total >= RISING_THRESHOLD and not is_winner(r)]
-        winners += fillers[: min_picks - len(winners)]
-    if len(winners) < min_picks:
+        winners += fillers[: max_picks - len(winners)]
+    if len(winners) < max_picks:
         watch = [(pid, r, "watch") for pid, r in eligible
                  if WATCH_FLOOR <= r.total < RISING_THRESHOLD]
-        winners += watch[: min_picks - len(winners)]
+        winners += watch[: max_picks - len(winners)]
     return winners
