@@ -196,6 +196,10 @@ PROXY_URL = os.environ.get("PROXY_URL", "")
 # Paid, lower-maintenance sources (apify.com).
 USE_APIFY = os.environ.get("USE_APIFY", "").lower() == "true"
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
+# Our own monthly spending cap on Apify, in USD (0 = off). The free plan's
+# account limit can't be lowered, so before every run we read the account's
+# usage for the current billing cycle and stop scraping once it reaches this.
+APIFY_MONTHLY_BUDGET_USD = float(os.environ.get("APIFY_MONTHLY_BUDGET_USD", "30"))
 APIFY_META_ACTOR = os.environ.get("APIFY_META_ACTOR", "curious_coder~facebook-ads-library-scraper")
 APIFY_TIKTOK_ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "clockworks~tiktok-scraper")
 # TikTok Creative Center "Top Ads" via Apify (the free Playwright collector gets
