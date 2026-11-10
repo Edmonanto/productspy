@@ -9,9 +9,9 @@ price and a message.
 """
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 
-from .. import config, repository
+from .. import config, quote_emails, repository
 from ..auth import CurrentUser, current_user
 from ..schemas import Quote, QuoteCreate, QuoteList, QuoteReply
 
@@ -54,7 +54,9 @@ def _valid_uuid(value: str) -> bool:
 
 
 @router.post("/", response_model=Quote, status_code=status.HTTP_201_CREATED)
-async def request_quote(body: QuoteCreate, user: CurrentUser = Depends(current_user)) -> Quote:
+async def request_quote(
+    body: QuoteCreate, background: BackgroundTasks, user: CurrentUser = Depends(current_user)
+) -> Quote:
     if not _valid_uuid(body.product_id):
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Product not found")
     title = await repository.product_title(body.product_id)
@@ -77,7 +79,9 @@ async def request_quote(body: QuoteCreate, user: CurrentUser = Depends(current_u
         target_price_usd=body.target_price_usd,
         notes=body.notes.strip(),
     )
-    return _to_quote(row)
+    quote = _to_quote(row)
+    background.add_task(quote_emails.notify_new, quote.model_dump())
+    return quote
 
 
 @router.get("/", response_model=QuoteList)
@@ -92,7 +96,10 @@ async def list_quotes(
 
 @router.post("/{quote_id}/reply", response_model=Quote)
 async def reply_to_quote(
-    quote_id: str, body: QuoteReply, user: CurrentUser = Depends(current_user)
+    quote_id: str,
+    body: QuoteReply,
+    background: BackgroundTasks,
+    user: CurrentUser = Depends(current_user),
 ) -> Quote:
     if not is_admin(user):
         raise HTTPException(status.HTTP_403_FORBIDDEN, detail="Only admins can reply to quotes")
@@ -108,4 +115,6 @@ async def reply_to_quote(
     )
     if row is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="Quote not found")
-    return _to_quote(row)
+    quote = _to_quote(row)
+    background.add_task(quote_emails.notify_customer, quote.model_dump())
+    return quote

@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import useSWR from "swr";
+import useSWR, { mutate } from "swr";
 import { CalendarDays, Download, Info, LayoutGrid, List, Lock, Trophy } from "lucide-react";
 import Topbar from "@/components/layout/Topbar";
 import MarketPicker from "@/components/winners/MarketPicker";
@@ -133,9 +133,19 @@ function WinnersInner() {
             <p className="text-white font-medium">This market isn&apos;t on your plan</p>
             <p className="text-zinc-500 text-sm max-w-md mx-auto">{err.message}</p>
             <div className="flex justify-center gap-2">
-              <Link href="/dashboard/settings" className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-sm hover:bg-zinc-700">
-                Change market
-              </Link>
+              <button
+                onClick={async () => {
+                  const max = meta.data?.entitlements.markets ?? 1;
+                  const cur = meta.data?.following ?? [];
+                  const next = cur.length < max ? [...cur, market!] : [...cur.slice(0, max - 1), market!];
+                  await winnersApi.setMarkets(next);
+                  await mutate("winner-markets");
+                  await mutate(["winners", market, date]);
+                }}
+                className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-sm hover:bg-zinc-700"
+              >
+                Switch to this market
+              </button>
               <Link href="/dashboard/billing" className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm hover:bg-violet-500">
                 Upgrade
               </Link>

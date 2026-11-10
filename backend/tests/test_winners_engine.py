@@ -692,3 +692,15 @@ def test_number_formats():
     assert _num("1,299") == 1299.0
     assert _num("39.99") == 39.99
     assert _num("abc") is None
+
+
+def test_tiktok_views_raise_demand():
+    """A 5M-view video is stronger evidence than a 100k one (used to score the same)."""
+    from app.winners.scoring import Signals, score
+    base = dict(videos=1, creators=1, fragile_heavy=False, wow=7, problem=7, demo3s=True,
+                upsell=5, brandable=5, ip_risk="none", seasonal=False)
+    small = score(Signals(total_views=100_000, **base))
+    big = score(Signals(total_views=5_000_000, **base))
+    assert big.breakdown["demand"] > small.breakdown["demand"]
+    assert big.total > small.total
+    assert big.confidence == "low"   # one video is still not proof of a winner

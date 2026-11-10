@@ -96,6 +96,8 @@ EVERGREEN_DAYS = 180
 EVERGREEN_PENALTY = 12
 OLD_SINGLE_STORE_DAYS = 365
 OLD_SINGLE_STORE_PENALTY = 6
+# TikTok lifetime views across the product's videos -> demand points (of 3).
+VIEW_TIERS = [(10_000_000, 3), (3_000_000, 2.5), (1_000_000, 2), (300_000, 1.5), (100_000, 1), (30_000, 0.5)]
 WINNER_MIN_STORES = 2     # "winner" needs proof from 2+ stores (or 3+ creators); else "rising" at best
 
 BANDS = [(85, "Exceptional research candidate"), (70, "Strong candidate worth validating"),
@@ -371,7 +373,11 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
         c.add(_tier(s.creators, [(10, 3), (5, 2.5), (3, 1.5), (1, 0.5)]), 3)
         c.ev(f"{s.creators} creator{'s' if s.creators != 1 else ''} posted about it"
              + (f" ({s.total_views:,} lifetime views — views are not sales)" if s.total_views else ""))
+        # Reach matters too: 5M views is real interest, 50k is not. Without
+        # this, every one-video product scored the same whatever its views.
+        c.add(_tier(s.total_views or 0, VIEW_TIERS), 3)
     else:
+        c.add(None, 3)
         c.add(None, 3)
     if s.views_per_hour is not None:
         c.add(_tier(s.views_per_hour, [(10_000, 2), (2_000, 1.5), (500, 0.5)]), 2)

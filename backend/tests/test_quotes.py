@@ -142,3 +142,55 @@ def test_admin_quote_needs_a_price(client):
     app.dependency_overrides[current_user] = lambda: ADMIN
     res = client.post(f"/api/v1/quotes/{_quote_row()['id']}/reply", json={"reply": "hi"})
     assert res.status_code == 422
+
+
+# ── emails ──────────────────────────────────────────────────────────────────
+def test_new_quote_emails_the_owner(client, monkeypatch):
+    from app import quote_emails, trial
+    sent = []
+
+    async def fake_send(to, subject, html, reply_to=None):
+        sent.append((to, subject, html, reply_to))
+        return True
+
+    async def product_title(_pid):
+        return "Posture Corrector"
+
+    async def today(_uid):
+        return 0
+
+    async def create(**kw):
+        return _quote_row(quantity=kw["quantity"], notes=kw["notes"])
+
+    monkeypatch.setattr(config, "RESEND_API_KEY", "k")
+    monkeypatch.setattr(config, "QUOTE_EMAILS", set())
+    monkeypatch.setattr(config, "SUPPORT_EMAIL", "help@x.com")
+    monkeypatch.setattr(trial, "send_email", fake_send)
+    monkeypatch.setattr(repository, "product_title", product_title)
+    monkeypatch.setattr(repository, "quotes_created_today", today)
+    monkeypatch.setattr(repository, "create_quote", create)
+
+    res = client.post("/api/v1/quotes/", json={
+        "product_id": PID, "quantity": 200, "destination_country": "US", "notes": "<b>fast</b>",
+    })
+    assert res.status_code == 201
+    assert sorted(s[0] for s in sent) == ["boss@x.com", "help@x.com"]
+    to, subject, html, reply_to = sent[0]
+    assert "Posture Corrector" in subject and "200" in subject
+    assert reply_to == USER.email                      # reply goes straight to the customer
+    assert "&lt;b&gt;fast" in html                      # customer text is escaped
+    assert quote_emails.recipients() == ["boss@x.com", "help@x.com"]
+
+
+def test_quote_emails_override(monkeypatch):
+    from app import quote_emails
+    monkeypatch.setattr(config, "QUOTE_EMAILS", {"me@x.com"})
+    assert quote_emails.recipients() == ["me@x.com"]
+
+
+def test_reply_email_has_total():
+    from app import quote_emails
+    subject, html = quote_emails.reply_email(_quote_row(status="quoted", quoted_unit_usd=2.5,
+                                                        quoted_shipping_usd=1.0, reply="ok"))
+    assert subject.startswith("Your quote is ready")
+    assert "$700.00" in html  # (2.50 + 1.00) × 200
