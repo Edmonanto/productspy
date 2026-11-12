@@ -143,6 +143,10 @@ Only ads that sell ONE specific physical product count. Use "product": null when
 - a general fashion/clothing/shoe/jewellery store (no single hero item)
 - a giveaway, contest, creator/influencer content, entertainment or a meme with nothing to buy
 - too vague to know what single item is sold
+The name must be ONE specific item a buyer could source, never a category:
+"heart pendant necklace" not "necklace", "egg separator" not "kitchen gadget",
+"invisible desk wireless charger" not "charger", "snail mucin serum" not "skin care product".
+If the ad shows several different items, use null.
 When in doubt, use null. Use the SAME key for the same product across ads.
 
 Ads:

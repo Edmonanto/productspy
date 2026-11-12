@@ -73,7 +73,18 @@ export default function MarketPicker({ markets, following, value, onChange }: Pr
 
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Market">
+      <div
+        className="flex items-center gap-1.5 flex-wrap"
+        role="tablist"
+        aria-label="Market"
+        onKeyDown={(e) => {
+          // Arrow keys move between markets, like real tabs.
+          if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+          const i = ordered.indexOf(value);
+          const next = ordered[(i + (e.key === "ArrowRight" ? 1 : ordered.length - 1)) % ordered.length];
+          if (next) { e.preventDefault(); pick(next); }
+        }}
+      >
         {ordered.map((code) => {
           const m = byCode[code];
           const active = value === code;
@@ -83,16 +94,18 @@ export default function MarketPicker({ markets, following, value, onChange }: Pr
               key={code}
               role="tab"
               aria-selected={active}
-              disabled={!!busy}
+              tabIndex={active ? 0 : -1}
+              disabled={busy === code}
               onClick={() => pick(code)}
               title={followed ? m.name : `Switch to ${m.name}`}
               className={cn(
-                "flex items-center gap-1.5 px-3 py-1.5 max-md:min-h-[44px] rounded-lg text-xs font-medium border transition-colors disabled:cursor-wait",
+                "flex items-center gap-1.5 px-3.5 py-2 max-md:min-h-[44px] rounded-lg text-sm font-medium border select-none",
+                "transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 disabled:cursor-wait",
                 active
-                  ? "bg-violet-600/20 text-violet-200 border-violet-500/40"
+                  ? "bg-violet-600 text-white border-violet-400 shadow-md shadow-violet-900/40 ring-1 ring-violet-300/40"
                   : followed
-                    ? "bg-zinc-900 text-zinc-300 border-zinc-800 hover:text-white hover:border-zinc-700"
-                    : "bg-transparent text-zinc-500 border-dashed border-zinc-800 hover:text-white hover:border-zinc-600"
+                    ? "bg-zinc-900 text-zinc-300 border-zinc-700 hover:text-white hover:border-violet-500/60 hover:bg-zinc-800"
+                    : "bg-transparent text-zinc-500 border-dashed border-zinc-700 hover:text-white hover:border-violet-500/60"
               )}
             >
               {busy === code ? <Loader2 size={13} className="animate-spin" /> : <span className="text-sm leading-none">{m.flag}</span>}

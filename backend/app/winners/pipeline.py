@@ -20,7 +20,7 @@ from .enrich import fetch_selling_price, fetch_supplier_cost
 from .angles import angles_step
 from .trends import trends_step
 from .extract import cluster_keys, guess_products_detailed
-from .filters import is_catalog_template, non_product_advertiser, non_product_reason
+from .filters import is_catalog_template, non_product_advertiser, non_product_reason, too_vague
 from .markets import get_market
 from .scoring import MAX_PICKS, aggregate, pick_winners, score
 from .llm import llm_available
@@ -165,7 +165,8 @@ def _signals(prod, ads, day: date, now: datetime, last, history: list | None = N
 
 async def verify_step(market_code: str, products: dict, results: dict, stats: dict,
                       day: date, now: datetime, picked: dict,
-                      history: dict | None = None, searches: dict | None = None) -> set[str]:
+                      history: dict | None = None, searches: dict | None = None,
+                      names: dict | None = None) -> set[str]:
     """Make sure the ads behind the leading products really advertise them.
 
     Returns the ids of products whose ads have all been checked (this run or
@@ -175,6 +176,7 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
     """
     history = history or {}
     searches = searches or {}
+    names = names if names is not None else {}
     ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
                     key=lambda pid: results[pid][0].total, reverse=True)[:CANDIDATES]
     rejected = renamed = dropped = 0
@@ -203,7 +205,9 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
             verdict.best.thumbnail_url if verdict.best and verdict.best.thumbnail_url else None,
             verdict.name if verdict.name and verdict.name != prod["title"] else None,
         )
-        renamed += bool(verdict.name and verdict.name != prod["title"])
+        if verdict.name and verdict.name != prod["title"]:
+            names[pid] = verdict.name
+            renamed += 1
         if not verdict.keep:
             res = score(_signals(prod, [], day, now, picked.get(pid)))
             res.excluded = "its ads don't show this product"
@@ -281,11 +285,31 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
         errors.append({"step": "google_trends", "error": str(exc)[:500]})
 
     verified: set[str] | None = None
+    names: dict[str, str] = {}      # product id -> specific name the check gave it
     try:
         verified = await verify_step(market_code, products, results, stats, day, now, picked,
-                                     history, searches)
-    except Exception:   # a failed check must not cost the day's picks
+                                     history, searches, names)
+    except Exception as exc:   # a failed check must not cost the day's picks
         log.exception("[%s] verification failed", market_code)
+        errors.append({"step": "verify", "error": str(exc)[:300]})
+    if llm_available() and not verified and any(not r.excluded for r, _ in results.values()):
+        # Silent before: every check failed, so picks were shown with ads that
+        # were never matched to the product.
+        errors.append({"step": "verify", "error":
+            "No product's ads could be checked against the product today — picks are unverified. "
+            "See the 'verify' line in api_usage and the worker logs."})
+
+    def title(pid: str) -> str:
+        return names.get(pid) or products[pid][0]["title"]
+
+    # A category name ("Necklace", "Kitchen Gadget") groups different items: its
+    # numbers don't describe one product, so it is never picked.
+    vague = 0
+    for pid, (res, _) in results.items():
+        if not res.excluded and too_vague(title(pid)):
+            res.excluded = "name too vague: its ads show different items"
+            vague += 1
+    stats["too_vague"] = vague
 
     # With an AI key, only products whose ads were all checked can be picked —
     # so every pick is backed by ads that really sell it. (If the AI was down
@@ -313,7 +337,7 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
         res, ads = results[pid]
         prod = products[pid][0]
         try:
-            ok = await photos.ensure_photo(pid, prod["title"], prod["image_url"], ads)
+            ok = await photos.ensure_photo(pid, title(pid), prod["image_url"], ads)
         except Exception:   # our side failed (DB, Pillow...): don't empty the day over it
             log.exception("[%s] photo check failed for %s", market_code, pid)
             ok = bool(prod["image_url"])
