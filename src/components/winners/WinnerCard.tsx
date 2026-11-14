@@ -119,8 +119,11 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
               <div className="mt-1 text-xs flex items-center gap-1.5 flex-wrap">
                 <span className="text-white font-semibold">{formatPrice(p.price_usd)}</span>
                 {margin != null && <span className={margin >= 30 ? "text-emerald-400" : "text-amber-300"}>{margin}% margin before ads{p.cost_estimated ? " (est.)" : ""}</span>}
+                {pick.tier === "winner" && <span className="text-[10px] font-extrabold uppercase bg-emerald-500 text-emerald-950 rounded px-1">Winner</span>}
+                {pick.confidence === "low" && <span className="text-[10px] font-semibold uppercase bg-orange-500/15 text-orange-300 border border-orange-500/30 rounded px-1">Check ads</span>}
                 {pick.tier === "rising" && <span className="text-[10px] font-semibold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded px-1">Rising</span>}
                 {pick.tier === "watch" && <span className="text-[10px] font-semibold uppercase bg-sky-500/10 text-sky-300 border border-sky-500/30 rounded px-1">Watch</span>}
+                {pick.still_winning && <span title="Picked in the last few days and still scoring high" className="text-[10px] font-semibold uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded px-1">Still winning</span>}
               </div>
             </div>
             <ScoreRing score={pick.total} size={52} stroke={5} />
@@ -130,6 +133,17 @@ export default function WinnerCard({ pick, market }: { pick: WinnerPick; market:
             <Link href={href} className="text-white font-semibold text-base hover:text-violet-200 leading-snug">
               {p.title}
             </Link>
+            {pick.tier === "winner" && (
+              <span className="text-[10px] font-extrabold uppercase tracking-wide bg-emerald-500 text-emerald-950 rounded px-1.5 py-0.5">
+                Winner
+              </span>
+            )}
+            {pick.confidence === "low" && (
+              <span title="Thin evidence so far — check the ads before buying stock"
+                    className="text-[10px] font-semibold uppercase tracking-wide bg-orange-500/15 text-orange-300 border border-orange-500/30 rounded px-1.5 py-0.5">
+                Check ads first
+              </span>
+            )}
             {pick.tier === "rising" && (
               <span className="text-[10px] font-semibold uppercase tracking-wide bg-amber-500/15 text-amber-300 border border-amber-500/30 rounded px-1.5 py-0.5">
                 Rising

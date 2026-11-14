@@ -88,6 +88,9 @@ MIN_PICKS = 5
 # products waited out the cooldown); a product still winning after a week
 # deserves to come back.
 REPICK_COOLDOWN_DAYS = int(os.environ.get("REPICK_COOLDOWN_DAYS", "7"))
+# A product picked within REPICK_COOLDOWN_DAYS is picked again only if it still
+# scores at least this (shown as "still winning").
+STILL_WINNING_SCORE = int(os.environ.get("STILL_WINNING_SCORE", "70"))
 KNOWN_FLOOR = 50          # points of criteria that must be known before full scale-up
 SINGLE_SOURCE_CAP = 85    # max score for a product seen on one platform only
 # A single store whose ads have run for half a year with nothing new is a
@@ -96,6 +99,8 @@ EVERGREEN_DAYS = 180
 EVERGREEN_PENALTY = 12
 OLD_SINGLE_STORE_DAYS = 365
 OLD_SINGLE_STORE_PENALTY = 6
+# TikTok lifetime views across the product's videos -> demand points (of 3).
+VIEW_TIERS = [(10_000_000, 3), (3_000_000, 2.5), (1_000_000, 2), (300_000, 1.5), (100_000, 1), (30_000, 0.5)]
 WINNER_MIN_STORES = 2     # "winner" needs proof from 2+ stores (or 3+ creators); else "rising" at best
 
 BANDS = [(85, "Exceptional research candidate"), (70, "Strong candidate worth validating"),
@@ -336,8 +341,7 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
         excluded = "restricted category"
     elif s.ip_risk == "high":
         excluded = "brand / IP copy risk"
-    elif s.last_picked_days_ago is not None and s.last_picked_days_ago < REPICK_COOLDOWN_DAYS:
-        excluded = f"already picked {s.last_picked_days_ago} days ago"
+    recent_pick = s.last_picked_days_ago is not None and s.last_picked_days_ago < REPICK_COOLDOWN_DAYS
 
     trend, trend_why = trend_status(s)
 
@@ -371,7 +375,11 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
         c.add(_tier(s.creators, [(10, 3), (5, 2.5), (3, 1.5), (1, 0.5)]), 3)
         c.ev(f"{s.creators} creator{'s' if s.creators != 1 else ''} posted about it"
              + (f" ({s.total_views:,} lifetime views — views are not sales)" if s.total_views else ""))
+        # Reach matters too: 5M views is real interest, 50k is not. Without
+        # this, every one-video product scored the same whatever its views.
+        c.add(_tier(s.total_views or 0, VIEW_TIERS), 3)
     else:
+        c.add(None, 3)
         c.add(None, 3)
     if s.views_per_hour is not None:
         c.add(_tier(s.views_per_hour, [(10_000, 2), (2_000, 1.5), (500, 0.5)]), 2)
@@ -573,6 +581,16 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
                               "one brand's established product, not yet copied by others"})
     total = max(0, total + sum(p["points"] for p in penalties))
 
+    # Picked in the last few days: keep the list fresh, unless it is still
+    # strong — then it stays, labelled "still winning", instead of hiding the
+    # best products of the day behind the cooldown.
+    still_winning = False
+    if recent_pick and excluded is None:
+        if total >= STILL_WINNING_SCORE:
+            still_winning = True
+        else:
+            excluded = f"already picked {s.last_picked_days_ago} days ago"
+
     confidence = ("high" if n_src >= 2 and known_max >= 75
                   else "medium" if n_src >= 2 or known_max >= 70 else "low")
 
@@ -601,6 +619,7 @@ def score(s: Signals, weights: Optional[dict[str, float]] = None) -> ScoreResult
         "trend": trend, "trend_why": trend_why, "band": band(total),
         "strengths": strengths[:6], "weaknesses": weaknesses[:6],
         "economics": asdict(econ),
+        "still_winning": still_winning,
     })
     return ScoreResult(
         total=total, breakdown=breakdown, penalties=penalties, reasons=strengths[:7],
@@ -620,13 +639,15 @@ def pick_winners(scored: list[tuple[str, ScoreResult]], max_picks: int = MAX_PIC
         proven = (sig.get("advertisers") or 0) >= WINNER_MIN_STORES or (sig.get("creators") or 0) >= 3
         return r.total >= WINNER_THRESHOLD and r.confidence != "low" and proven
 
+    # Always fill the list to max_picks (paid plans get 10 a day): winners
+    # first, then "rising", then "watch". min_picks is only the alert floor.
     winners = [(pid, r, "winner") for pid, r in eligible if is_winner(r)][:max_picks]
-    if len(winners) < min_picks:
+    if len(winners) < max_picks:
         fillers = [(pid, r, "rising") for pid, r in eligible
                    if r.total >= RISING_THRESHOLD and not is_winner(r)]
-        winners += fillers[: min_picks - len(winners)]
-    if len(winners) < min_picks:
+        winners += fillers[: max_picks - len(winners)]
+    if len(winners) < max_picks:
         watch = [(pid, r, "watch") for pid, r in eligible
                  if WATCH_FLOOR <= r.total < RISING_THRESHOLD]
-        winners += watch[: min_picks - len(winners)]
+        winners += watch[: max_picks - len(winners)]
     return winners

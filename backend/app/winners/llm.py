@@ -36,9 +36,15 @@ def extract_json(text: str) -> Any:
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S)
     if fence:
         text = fence.group(1).strip()
-    for opener, closer in (("[", "]"), ("{", "}")):
+    # Whichever bracket opens first is the reply. Trying "[" first used to pull
+    # the inner array out of an object reply ({"matches": [0, 2], ...} -> [0, 2]),
+    # so every caller that expects an object (ad verification, cleanup, Shopify
+    # copy) silently got a list and fell back to doing nothing.
+    pairs = sorted((p for p in (("[", "]"), ("{", "}")) if text.find(p[0]) != -1),
+                   key=lambda p: text.find(p[0]))
+    for opener, closer in pairs:
         start, end = text.find(opener), text.rfind(closer)
-        if start != -1 and end > start:
+        if end > start:
             try:
                 return json.loads(text[start:end + 1])
             except ValueError:

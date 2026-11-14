@@ -171,6 +171,8 @@ export interface WinnerPick {
   rank: number;
   tier: "winner" | "rising" | "watch";
   total: number;
+  /** Picked in the last few days and still scoring 70+. */
+  still_winning?: boolean;
   /** Beyond the plan's daily allowance: rank and score only. */
   locked: boolean;
   breakdown?: Breakdown;

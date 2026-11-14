@@ -3,8 +3,8 @@
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import useSWR from "swr";
-import { CalendarDays, Download, Info, LayoutGrid, List, Lock, Trophy } from "lucide-react";
+import useSWR, { mutate, preload } from "swr";
+import { AlertTriangle, CalendarDays, Download, Eye, Home, Info, LayoutGrid, List, Loader2, Lock, TrendingUp, Trophy } from "lucide-react";
 import Topbar from "@/components/layout/Topbar";
 import MarketPicker from "@/components/winners/MarketPicker";
 import WinnerCard, { LockedWinnerCard } from "@/components/winners/WinnerCard";
@@ -24,11 +24,25 @@ function WinnersInner() {
   useEffect(() => { try { const v = localStorage.getItem("ps.view"); if (v === "list" || v === "grid") setView(v); } catch {} }, []);
   const pickView = (v: "grid" | "list") => { setView(v); try { localStorage.setItem("ps.view", v); } catch {} };
 
-  const { data, error, isLoading } = useSWR(
+  // keepPreviousData: switching market keeps the current picks on screen
+  // (dimmed) instead of flashing empty skeletons while the next list loads.
+  const { data, error, isLoading, isValidating } = useSWR(
     market ? ["winners", market, date] : null,
     () => winnersApi.list(market!, date),
-    { refreshInterval: 15 * 60_000 }
+    { refreshInterval: 15 * 60_000, keepPreviousData: true }
   );
+  const switching = isValidating && !!data && data.market !== undefined && data.market !== market;
+  // Load the other followed markets in the background so switching is instant.
+  const followingKey = (meta.data?.following ?? []).join(",");
+  useEffect(() => {
+    if (date) return;
+    for (const code of followingKey.split(",")) {
+      if (code && code !== market) preload(["winners", code, undefined], () => winnersApi.list(code));
+    }
+  }, [followingKey, market, date]);
+  type Tier = "all" | "winner" | "rising" | "watch";
+  const [tier, setTier] = useState<Tier>("all");
+  useEffect(() => { setTier("all"); }, [market]);
   const { data: dates } = useSWR(market ? ["winner-dates", market] : null, () => winnersApi.dates(market!));
   const { data: runs } = useSWR("winner-status", winnersApi.status);
   const lastRun = runs?.runs.find((r) => r.market === market);
@@ -40,6 +54,16 @@ function WinnersInner() {
   const nRising = winners.filter((w) => w.tier === "rising").length;
   const nWatch = winners.filter((w) => w.tier === "watch").length;
   const marketInfo = meta.data?.markets.find((m) => m.code === market);
+  const shown = tier === "all" ? winners : winners.filter((w) => w.locked || w.tier === tier);
+
+  // What to look at first: the top pick, the best margin, the most stores,
+  // and any pick whose evidence is thin.
+  const open = winners.filter((w) => !w.locked && w.product);
+  const top = open[0];
+  const marginOf = (w: (typeof open)[number]) => (w.economics?.complete ? w.economics.contribution_margin_pct : null);
+  const bestMargin = open.filter((w) => marginOf(w) != null).sort((a, b) => (marginOf(b) ?? 0) - (marginOf(a) ?? 0))[0];
+  const mostStores = open.filter((w) => w.stats?.stores).sort((a, b) => (b.stats?.stores ?? 0) - (a.stats?.stores ?? 0))[0];
+  const thin = open.filter((w) => w.confidence === "low").length;
 
   const pickDate = (d: string) => {
     const q = new URLSearchParams(params.toString());
@@ -79,7 +103,7 @@ function WinnersInner() {
             <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-0.5" role="group" aria-label="View">
               {([["grid", LayoutGrid, "Pictures"], ["list", List, "Details"]] as const).map(([v, Icon, label]) => (
                 <button key={v} onClick={() => pickView(v)} aria-pressed={view === v} title={label}
-                        className={`flex items-center gap-1 rounded-md px-2.5 py-1.5 max-md:min-h-[40px] text-xs ${view === v ? "bg-zinc-800 text-white" : "text-zinc-400 hover:text-white"}`}>
+                        className={`flex items-center gap-1 rounded-md px-3 py-1.5 max-md:min-h-[40px] text-xs font-medium transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${view === v ? "bg-violet-600 text-white shadow" : "text-zinc-400 hover:text-white hover:bg-zinc-800"}`}>
                   <Icon size={14} /> <span className="hidden sm:inline">{label}</span>
                 </button>
               ))}
@@ -103,7 +127,7 @@ function WinnersInner() {
             <button
               onClick={doExport}
               disabled={!data?.date}
-              className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-lg px-3 py-1.5 max-md:min-h-[44px] text-xs text-zinc-300 disabled:opacity-40"
+              className="flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 hover:border-zinc-600 hover:text-white rounded-lg px-3 py-1.5 max-md:min-h-[44px] text-xs text-zinc-300 transition-all duration-150 active:scale-95 disabled:opacity-40"
             >
               {ent?.export_csv ? <Download size={13} /> : <Lock size={13} />}
               Export CSV
@@ -133,9 +157,19 @@ function WinnersInner() {
             <p className="text-white font-medium">This market isn&apos;t on your plan</p>
             <p className="text-zinc-500 text-sm max-w-md mx-auto">{err.message}</p>
             <div className="flex justify-center gap-2">
-              <Link href="/dashboard/settings" className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-sm hover:bg-zinc-700">
-                Change market
-              </Link>
+              <button
+                onClick={async () => {
+                  const max = meta.data?.entitlements.markets ?? 1;
+                  const cur = meta.data?.following ?? [];
+                  const next = cur.length < max ? [...cur, market!] : [...cur.slice(0, max - 1), market!];
+                  await winnersApi.setMarkets(next);
+                  await mutate("winner-markets");
+                  await mutate(["winners", market, date]);
+                }}
+                className="px-4 py-2 rounded-lg bg-zinc-800 text-zinc-200 text-sm hover:bg-zinc-700"
+              >
+                Switch to this market
+              </button>
               <Link href="/dashboard/billing" className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm hover:bg-violet-500">
                 Upgrade
               </Link>
@@ -143,7 +177,7 @@ function WinnersInner() {
           </div>
         ) : err ? (
           <div className="bg-red-500/10 border border-red-500/20 text-red-300 rounded-xl p-4 text-sm">{err.message}</div>
-        ) : isLoading || !market ? (
+        ) : (isLoading && !data) || !market ? (
           <div className="space-y-3">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="h-44 bg-zinc-900 border border-zinc-800 rounded-xl animate-pulse" />
@@ -165,7 +199,68 @@ function WinnersInner() {
             )}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className={`space-y-3 transition-opacity duration-150 ${switching ? "opacity-50 pointer-events-none" : ""}`} aria-busy={switching}>
+            {switching && (
+              <div className="flex items-center gap-2 text-xs text-violet-200">
+                <Loader2 size={13} className="animate-spin" /> Loading {marketInfo?.name ?? market}…
+              </div>
+            )}
+
+            {/* Pay attention: the few numbers that matter most today */}
+            {top?.product && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+                <Link href={`/dashboard/winners/${top.product.id}?market=${market}`}
+                      className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-3 py-2.5 hover:border-amber-300 transition-colors active:scale-[.98]">
+                  <div className="text-[11px] uppercase tracking-wide text-amber-300 font-semibold flex items-center gap-1"><Trophy size={12} /> Top pick</div>
+                  <div className="text-sm text-white font-semibold line-clamp-1">{top.product.title}</div>
+                  <div className="text-xs text-amber-200 tabular-nums">Score <b className="text-amber-100">{top.total}</b>/100</div>
+                </Link>
+                {bestMargin?.product ? (
+                  <Link href={`/dashboard/winners/${bestMargin.product.id}?market=${market}`}
+                        className="rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2.5 hover:border-emerald-300 transition-colors active:scale-[.98]">
+                    <div className="text-[11px] uppercase tracking-wide text-emerald-300 font-semibold flex items-center gap-1"><TrendingUp size={12} /> Best margin</div>
+                    <div className="text-sm text-white font-semibold line-clamp-1">{bestMargin.product.title}</div>
+                    <div className="text-xs text-emerald-200 tabular-nums"><b className="text-emerald-100">{Math.round(marginOf(bestMargin) ?? 0)}%</b> before ads</div>
+                  </Link>
+                ) : <div className="hidden lg:block" />}
+                {mostStores?.product ? (
+                  <Link href={`/dashboard/winners/${mostStores.product.id}?market=${market}`}
+                        className="rounded-xl border border-sky-400/40 bg-sky-400/10 px-3 py-2.5 hover:border-sky-300 transition-colors active:scale-[.98]">
+                    <div className="text-[11px] uppercase tracking-wide text-sky-300 font-semibold flex items-center gap-1"><Home size={12} /> Most stores</div>
+                    <div className="text-sm text-white font-semibold line-clamp-1">{mostStores.product.title}</div>
+                    <div className="text-xs text-sky-200 tabular-nums"><b className="text-sky-100">{mostStores.stats?.stores}</b> stores advertising it</div>
+                  </Link>
+                ) : <div className="hidden lg:block" />}
+                <div className={`rounded-xl border px-3 py-2.5 ${thin ? "border-orange-400/40 bg-orange-400/10" : "border-zinc-800 bg-zinc-900"}`}>
+                  <div className={`text-[11px] uppercase tracking-wide font-semibold flex items-center gap-1 ${thin ? "text-orange-300" : "text-zinc-400"}`}>
+                    <AlertTriangle size={12} /> Check before you buy
+                  </div>
+                  <div className="text-xs text-zinc-300 mt-0.5">
+                    {thin
+                      ? <><b className="text-orange-200">{thin}</b> pick{thin === 1 ? " has" : "s have"} thin evidence (low confidence) — open them and check the ads first.</>
+                      : "Every pick has medium or high confidence."}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Tier filter */}
+            <div className="flex items-center gap-1.5 flex-wrap" role="tablist" aria-label="Filter picks">
+              {([
+                ["all", "All", winners.length, "bg-violet-600 text-white border-violet-400"],
+                ["winner", "Winners", nWinners, "bg-emerald-500 text-emerald-950 border-emerald-300"],
+                ["rising", "Rising", nRising, "bg-amber-400 text-amber-950 border-amber-200"],
+                ["watch", "To watch", nWatch, "bg-sky-500 text-sky-950 border-sky-300"],
+              ] as const).filter(([t, , n]) => t === "all" || n > 0).map(([t, label, n, on]) => (
+                <button key={t} role="tab" aria-selected={tier === t} onClick={() => setTier(t)}
+                        className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 max-md:min-h-[40px] text-xs font-semibold select-none transition-all duration-150 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 ${tier === t ? on : "bg-zinc-900 text-zinc-300 border-zinc-700 hover:text-white hover:border-zinc-500"}`}>
+                  {t === "watch" ? <Eye size={12} /> : t === "winner" ? <Trophy size={12} /> : null}
+                  {label}
+                  <span className={`rounded-full px-1.5 tabular-nums ${tier === t ? "bg-black/20" : "bg-zinc-800 text-zinc-400"}`}>{n}</span>
+                </button>
+              ))}
+            </div>
+
             {nWatch > 0 && nWinners + nRising === 0 && (
               <div className="text-xs text-sky-200 bg-sky-500/10 border border-sky-500/20 rounded-lg px-3 py-2">
                 No product reached 55 in this scan, so these are the strongest early signals (40–54) — worth watching,
@@ -174,12 +269,12 @@ function WinnersInner() {
             )}
             {view === "grid" ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {winners.map((w) =>
+                {shown.map((w) =>
                   w.locked ? <div key={w.rank} className="col-span-full"><LockedWinnerCard pick={w} /></div>
                     : <PickTile key={w.rank} pick={w} market={market} />
                 )}
               </div>
-            ) : winners.map((w) =>
+            ) : shown.map((w) =>
               w.locked ? <LockedWinnerCard key={w.rank} pick={w} /> : <WinnerCard key={w.rank} pick={w} market={market} />
             )}
           </div>

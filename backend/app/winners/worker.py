@@ -147,8 +147,28 @@ def main() -> int:
     if scheduled:
         problems = asyncio.run(alerts.after_scan(results, email_stats))
         log.info("alerts: %s", problems or "none")
+        from app import owner_notify
+        log.info("owner daily report: %s sent", asyncio.run(_report(owner_notify)))
     produced = sum(r["stats"].get("winners", 0) + r["stats"].get("rising", 0) for r in results)
     return 0 if produced else 1
+
+
+async def _report(owner_notify) -> int:
+    """The daily report reads signups from the database, so connect for it."""
+    try:
+        await db.connect()
+    except Exception:
+        pass
+    try:
+        sent = await owner_notify.daily_report()
+        from .video_brief import send_daily as send_video_brief
+        log.info("video brief: %s sent", await send_video_brief())
+        return sent
+    finally:
+        try:
+            await db.disconnect()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

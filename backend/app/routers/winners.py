@@ -122,6 +122,7 @@ def serialize_pick(r: Any, ent: dict[str, Any] | None = None) -> dict[str, Any]:
         "band": sig.get("band") or band(r["total"]),
         "trend": sig.get("trend") or "unknown",
         "trend_why": sig.get("trend_why"),
+        "still_winning": bool(sig.get("still_winning")),
         "strengths": sig.get("strengths") or [],
         "weaknesses": sig.get("weaknesses") or [],
         "missing": sig.get("missing_pillars") or [],

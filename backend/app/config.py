@@ -55,6 +55,20 @@ MIGRATE_ON_START = os.environ.get("MIGRATE_ON_START", "true").lower() == "true"
 ADMIN_EMAILS = {
     e.strip().lower() for e in os.environ.get("ADMIN_EMAILS", "").split(",") if e.strip()
 }
+# Owner notifications (app/owner_notify.py): new signups, new subscribers,
+# daily usage report. Empty = ADMIN_EMAILS plus SUPPORT_EMAIL.
+NOTIFY_EMAILS = {
+    e.strip().lower() for e in os.environ.get("NOTIFY_EMAILS", "").split(",") if e.strip()
+}
+# Daily video brief (app/winners/video_brief.py): top N picks per market get a
+# "why it won" breakdown and a short-video script, emailed to the owner.
+VIDEO_BRIEF_PER_MARKET = int(os.environ.get("VIDEO_BRIEF_PER_MARKET", "2"))
+VIDEO_BRIEF_MARKETS = [m.strip().upper() for m in os.environ.get("VIDEO_BRIEF_MARKETS", "US,UK,FR").split(",") if m.strip()]
+# Who gets an email when a customer submits a quote request (app/quote_emails.py).
+# Empty = NOTIFY_EMAILS / ADMIN_EMAILS plus SUPPORT_EMAIL.
+QUOTE_EMAILS = {
+    e.strip().lower() for e in os.environ.get("QUOTE_EMAILS", "").split(",") if e.strip()
+}
 # Who gets "something failed" emails (app/alerts.py). Empty = ADMIN_EMAILS.
 ALERT_EMAILS = {
     e.strip().lower() for e in os.environ.get("ALERT_EMAILS", "").split(",") if e.strip()
@@ -191,6 +205,10 @@ PROXY_URL = os.environ.get("PROXY_URL", "")
 # Paid, lower-maintenance sources (apify.com).
 USE_APIFY = os.environ.get("USE_APIFY", "").lower() == "true"
 APIFY_TOKEN = os.environ.get("APIFY_TOKEN", "")
+# Our own monthly spending cap on Apify, in USD (0 = off). The free plan's
+# account limit can't be lowered, so before every run we read the account's
+# usage for the current billing cycle and stop scraping once it reaches this.
+APIFY_MONTHLY_BUDGET_USD = float(os.environ.get("APIFY_MONTHLY_BUDGET_USD", "30"))
 APIFY_META_ACTOR = os.environ.get("APIFY_META_ACTOR", "curious_coder~facebook-ads-library-scraper")
 APIFY_TIKTOK_ACTOR = os.environ.get("APIFY_TIKTOK_ACTOR", "clockworks~tiktok-scraper")
 # TikTok Creative Center "Top Ads" via Apify (the free Playwright collector gets

@@ -116,7 +116,7 @@ def ended_email() -> tuple[str, str]:
     )
 
 
-async def send_email(to: str | None, subject: str, html: str) -> bool:
+async def send_email(to: str | None, subject: str, html: str, reply_to: str | None = None) -> bool:
     """Resend. Never raises — a missed email must not break the job."""
     if not (to and config.RESEND_API_KEY):
         return False
@@ -127,7 +127,7 @@ async def send_email(to: str | None, subject: str, html: str) -> bool:
                 "https://api.resend.com/emails",
                 headers={"Authorization": f"Bearer {config.RESEND_API_KEY}"},
                 json={"from": config.EMAIL_FROM, "to": [to], "subject": subject, "html": html,
-                      **({"reply_to": config.SUPPORT_EMAIL} if config.SUPPORT_EMAIL else {})},
+                      **({"reply_to": reply_to or config.SUPPORT_EMAIL} if (reply_to or config.SUPPORT_EMAIL) else {})},
             )
         if r.status_code >= 300:
             log.warning("email to %s failed: %s %s", to, r.status_code, r.text[:200])

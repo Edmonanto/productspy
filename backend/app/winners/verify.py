@@ -35,7 +35,9 @@ SYSTEM = (
 PROMPT = """Product: "{name}"
 
 Below are ads that were grouped under this product. For EACH ad decide if it clearly
-advertises this exact product (same kind of item; any brand, store or wording is fine).
+advertises this exact product: the SAME specific item (any brand, store or wording is fine).
+If "{name}" is a broad category (e.g. "Necklace", "Kitchen Gadget"), keep only the ads that
+show the same specific item as most of the ads, and give that item's specific name.
 Say false for: a different product, a store-wide sale or several products at once,
 an app, game, software, service, course, event, food, supplement, local business,
 creator content with nothing to buy, or text too vague to tell.
@@ -47,7 +49,7 @@ Return JSON:
 {{"is_product": true | false,
   "matches": [<i of every ad that advertises this product>],
   "best": <i of the ad that shows the product most clearly, or null>,
-  "name": "<the product's generic name in English, 2-5 words, no brand>" or null}}
+  "name": "<the specific item's generic name in English, 2-5 words, no brand, never a category>" or null}}
 
 Ads:
 {ads}
@@ -99,7 +101,8 @@ async def verify_product(name: str, ads: list[AdRecord], already_ok: set[str]) -
     for start in range(0, len(todo), MAX_ADS_PER_CHECK):
         chunk = todo[start:start + MAX_ADS_PER_CHECK]
         res = await llm_json(SYSTEM, PROMPT.format(
-            name=name, ads="\n".join(_line(i, a) for i, a in enumerate(chunk))), max_tokens=2000)
+            name=name, ads="\n".join(_line(i, a) for i, a in enumerate(chunk))), max_tokens=2000,
+            purpose="verify")
         if not isinstance(res, dict) or not isinstance(res.get("matches"), list):
             keep += chunk                      # no answer: leave these ads as they were
             failed = True

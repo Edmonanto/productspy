@@ -244,7 +244,12 @@ def test_hard_filters():
     base = dict(sell_price_usd=30, cost_usd=5)
     assert score(aggregate(_ads_strong(), now=NOW, restricted=True, **base)).excluded == "restricted category"
     assert score(aggregate(_ads_strong(), now=NOW, ip_risk="high", **base)).excluded == "brand / IP copy risk"
-    assert "already picked" in score(aggregate(_ads_strong(), now=NOW, last_picked_days_ago=3, **base)).excluded
+    # Picked 3 days ago and still strong: stays in, labelled "still winning".
+    again = score(aggregate(_ads_strong(), now=NOW, last_picked_days_ago=3, **base))
+    assert again.total >= 70 and again.excluded is None and again.signals["still_winning"] is True
+    # Picked 3 days ago but no longer strong: hidden for the cooldown.
+    weak = score(aggregate(_ads_strong()[:1], now=NOW, last_picked_days_ago=3))
+    assert weak.total < 70 and "already picked" in weak.excluded
     assert score(aggregate(_ads_strong(), now=NOW, last_picked_days_ago=40, **base)).excluded is None
 
 
@@ -282,8 +287,9 @@ def test_pick_winners_threshold_and_filler():
     scored = [("a", mk(91)), ("b", mk(75)), ("c", mk(72, "restricted")), ("d", mk(66)), ("e", mk(64)),
               ("f", mk(58)), ("g", mk(50))]
     picks = pick_winners(scored)
-    assert [p[0] for p in picks] == ["a", "b", "d", "e", "f"]
-    assert [p[2] for p in picks] == ["winner", "winner", "rising", "rising", "rising"]
+    # The list fills up to 10: winners, then rising, then watch.
+    assert [p[0] for p in picks] == ["a", "b", "d", "e", "f", "g"]
+    assert [p[2] for p in picks] == ["winner", "winner", "rising", "rising", "rising", "watch"]
     # A thin day: few reach 55, so the best of the rest (40+) show as "watch".
     thin = [("x", mk(45)), ("y", mk(41)), ("z", mk(32)), ("r", mk(65))]
     picks = pick_winners(thin)
@@ -441,7 +447,7 @@ async def test_verify_keeps_only_ads_that_show_the_product(monkeypatch):
            for i, t in enumerate(["Posture corrector, fix your back", "Summer sale on everything",
                                   "This posture brace changed my life"])]
 
-    async def fake_llm(system, prompt, max_tokens=8000):
+    async def fake_llm(system, prompt, max_tokens=8000, purpose="extract"):
         assert "Posture Corrector" in prompt
         return {"matches": [0, 2], "best": 2, "name": "posture corrector brace"}
 
@@ -540,7 +546,7 @@ async def test_verify_flags_a_non_product(monkeypatch):
     from app.winners import verify
     ads = [AdRecord(platform="meta", external_id="1", market="US", ad_text="Learn dropshipping in 30 days")]
 
-    async def fake_llm(system, prompt, max_tokens=8000):
+    async def fake_llm(system, prompt, max_tokens=8000, purpose="extract"):
         return {"is_product": False, "matches": [], "best": None, "name": None}
     monkeypatch.setattr(verify, "llm_available", lambda: True)
     monkeypatch.setattr(verify, "llm_json", fake_llm)
@@ -650,7 +656,7 @@ async def test_catalog_template_ads_never_back_a_product(monkeypatch):
                                        ("The Farmer's Dog", "{{product.name}} | {{product.brand}}"),
                                        ("BackFix", "Posture corrector that works")])]
 
-    async def fake_llm(system, prompt, max_tokens=8000):
+    async def fake_llm(system, prompt, max_tokens=8000, purpose="extract"):
         assert "{{product" not in prompt            # templates never reach the AI
         return {"is_product": True, "matches": [0], "best": 0, "name": None}
     monkeypatch.setattr(verify, "llm_available", lambda: True)
@@ -692,3 +698,40 @@ def test_number_formats():
     assert _num("1,299") == 1299.0
     assert _num("39.99") == 39.99
     assert _num("abc") is None
+
+
+def test_tiktok_views_raise_demand():
+    """A 5M-view video is stronger evidence than a 100k one (used to score the same)."""
+    from app.winners.scoring import Signals, score
+    base = dict(videos=1, creators=1, fragile_heavy=False, wow=7, problem=7, demo3s=True,
+                upsell=5, brandable=5, ip_risk="none", seasonal=False)
+    small = score(Signals(total_views=100_000, **base))
+    big = score(Signals(total_views=5_000_000, **base))
+    assert big.breakdown["demand"] > small.breakdown["demand"]
+    assert big.total > small.total
+    assert big.confidence == "low"   # one video is still not proof of a winner
+
+
+def test_extract_json_keeps_object_with_inner_array():
+    # Regression: the verification reply was cut down to its "matches" list,
+    # so no product's ads were ever checked.
+    from app.winners.llm import extract_json
+    reply = '{"is_product": true, "matches": [0, 2], "best": 0, "name": "Egg Separator"}'
+    assert extract_json(reply) == {"is_product": True, "matches": [0, 2], "best": 0, "name": "Egg Separator"}
+    assert extract_json('```json\n{"items": [{"i": 0}]}\n```') == {"items": [{"i": 0}]}
+    assert extract_json('[{"i": 0, "tags": {"a": 1}}]') == [{"i": 0, "tags": {"a": 1}}]
+
+
+def test_too_vague_names():
+    from app.winners.filters import too_vague
+    for name in ["Necklace", "Kitchen Gadget", "Skin Care Product", "Phone Accessories", "Gift Set", ""]:
+        assert too_vague(name), name
+    for name in ["Heart Pendant Necklace", "Egg Separator", "Induction Speaker", "Humidifier",
+                 "Automatic Mouthwash Dispenser", "Pet Hair Cleaner"]:
+        assert not too_vague(name), name
+
+
+def test_pet_food_is_not_a_product():
+    from app.winners.filters import non_product_reason
+    assert non_product_reason("Dog Food")
+    assert non_product_reason("Fresh Dog Food Subscription")

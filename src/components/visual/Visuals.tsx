@@ -3,7 +3,7 @@
 /** Visual building blocks: product picture (or a category illustration), radar, trend icon, metric chips. */
 import Link from "next/link";
 import {
-  Baby, Car, Flame, Lightbulb, Dumbbell, Gem, HeartPulse, Home, Laptop, Minus, Package, PawPrint, Shirt, Sparkles, Tent,
+  AlertTriangle, Baby, Car, Flame, Lightbulb, Dumbbell, Gem, HeartPulse, Home, Laptop, Minus, Package, PawPrint, Shirt, Sparkles, Tent,
   TrendingDown, TrendingUp, UtensilsCrossed, Wrench, Puzzle, Snowflake, Zap, HelpCircle, LucideIcon,
 } from "lucide-react";
 import { PolarAngleAxis, PolarGrid, Radar, RadarChart, ResponsiveContainer } from "recharts";
@@ -110,6 +110,13 @@ export function Chip({ icon: Icon, value, title, tone = "text-zinc-200" }: { ico
   );
 }
 
+const TIER_LABEL: Record<string, string> = { winner: "Winner", rising: "Rising", watch: "Watch" };
+const TIER_TONE: Record<string, string> = {
+  winner: "bg-emerald-500 text-emerald-950",
+  rising: "bg-amber-400 text-amber-950",
+  watch: "bg-sky-500/90 text-sky-950",
+};
+
 function scoreTone(s: number) {
   return s >= 70 ? "bg-emerald-500 text-emerald-950" : s >= 55 ? "bg-amber-400 text-amber-950" : "bg-zinc-600 text-white";
 }
@@ -119,12 +126,22 @@ export function PickTile({ pick, market, big = false }: { pick: WinnerPick; mark
   const p = pick.product!;
   const margin = pick.economics?.complete ? pick.economics.contribution_margin_pct : null;
   return (
-    <div className="bg-zinc-900 border border-zinc-800 hover:border-violet-500/50 rounded-xl overflow-hidden transition-colors flex flex-col">
-    <Link href={`/dashboard/winners/${p.id}?market=${market}`} className="group block flex-1">
+    <div className={cn(
+      "bg-zinc-900 border rounded-xl overflow-hidden transition-all duration-150 flex flex-col hover:-translate-y-0.5 hover:shadow-lg hover:shadow-black/40",
+      pick.tier === "winner" ? "border-emerald-500/60 ring-1 ring-emerald-400/30 hover:border-emerald-400"
+        : "border-zinc-800 hover:border-violet-500/60"
+    )}>
+    <Link href={`/dashboard/winners/${p.id}?market=${market}`} prefetch
+          className="group block flex-1 active:scale-[.98] transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 rounded-t-xl">
       <div className="relative">
         <ProductVisual src={p.image_url} alt={p.title} category={p.category} iconSize={big ? 48 : 32}
                        className={cn("w-full", big ? "aspect-[4/3]" : "aspect-square")} />
-        <span className="absolute top-2 left-2 w-7 h-7 rounded-full bg-black/60 backdrop-blur text-white text-xs font-bold flex items-center justify-center">{pick.rank}</span>
+        <span className="absolute top-2 left-2 flex items-center gap-1">
+          <span className="w-7 h-7 rounded-full bg-black/60 backdrop-blur text-white text-xs font-bold flex items-center justify-center">{pick.rank}</span>
+          <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wide shadow", TIER_TONE[pick.tier])}>
+            {TIER_LABEL[pick.tier]}
+          </span>
+        </span>
         <span className={cn("absolute top-2 right-2 rounded-lg px-2 py-1 text-sm font-extrabold tabular-nums shadow", scoreTone(pick.total))}
               title={`Score ${pick.total}/100`}>{pick.total}</span>
         <div className="absolute bottom-2 left-2 right-2 flex flex-wrap gap-1">
@@ -135,7 +152,15 @@ export function PickTile({ pick, market, big = false }: { pick: WinnerPick; mark
       </div>
       <div className="px-3 py-2.5">
         <div className="text-sm text-zinc-100 font-medium line-clamp-1 group-hover:text-white">{p.title}</div>
-        <div className="text-xs text-zinc-500 tabular-nums">{p.price_usd != null ? `$${p.price_usd.toFixed(2)}` : "—"}</div>
+        <div className="flex items-center gap-2 text-xs tabular-nums">
+          <span className="text-zinc-200 font-semibold">{p.price_usd != null ? `$${p.price_usd.toFixed(2)}` : "—"}</span>
+          {pick.confidence === "low" && (
+            <span className="inline-flex items-center gap-0.5 rounded bg-orange-500/15 text-orange-300 border border-orange-500/30 px-1.5 text-[10px] font-semibold"
+                  title="Thin evidence so far — check the ads before buying stock">
+              <AlertTriangle size={10} aria-hidden /> Check ads
+            </span>
+          )}
+        </div>
         <SearchSpark search={pick.search_trend} locked={pick.search_trend_locked} className="mt-1.5 max-w-full" />
         {pick.angles?.[0] && (
           <div className="mt-1.5 flex items-start gap-1 text-[11px] text-violet-200/90" title={`Hook: “${pick.angles[0].hook}”`}>

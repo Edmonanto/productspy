@@ -13,6 +13,7 @@ When enabled, these replace the matching free collector for every market.
 from __future__ import annotations
 
 import os
+import time
 from datetime import date
 from typing import Any
 
@@ -47,6 +48,48 @@ def _check_blocked(status: int, text: str) -> None:
         raise ApifyLimitError(_blocked)
 
 
+BUDGET_HELP = ("Apify monthly budget reached: ${used:.2f} used of ${budget:.0f} (APIFY_MONTHLY_BUDGET_USD). "
+               "Scraping is paused until the Apify billing cycle resets on {reset}.")
+_usage_cache: tuple[float, float, str] | None = None   # (checked_at, used_usd, cycle_end)
+USAGE_CACHE_SECONDS = 300
+
+
+async def _monthly_usage() -> tuple[float, str] | None:
+    """(USD used this billing cycle, cycle end date) from Apify, cached for 5 min. None if unknown."""
+    global _usage_cache
+    if _usage_cache and time.monotonic() - _usage_cache[0] < USAGE_CACHE_SECONDS:
+        return _usage_cache[1], _usage_cache[2]
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.get("https://api.apify.com/v2/users/me/limits",
+                                 headers={"Authorization": f"Bearer {config.APIFY_TOKEN}"})
+        if r.status_code >= 300:
+            return None
+        data = r.json().get("data") or {}
+        used = float((data.get("current") or {}).get("monthlyUsageUsd") or 0)
+        reset = str((data.get("monthlyUsageCycle") or {}).get("endAt") or "")[:10] or "the next cycle"
+    except Exception as exc:  # unknown usage must not stop the run
+        log.warning("[apify] could not read monthly usage: %s", exc)
+        return None
+    _usage_cache = (time.monotonic(), used, reset)
+    return used, reset
+
+
+async def _check_budget() -> None:
+    """Raise ApifyLimitError once this cycle's usage reaches APIFY_MONTHLY_BUDGET_USD."""
+    global _blocked
+    budget = config.APIFY_MONTHLY_BUDGET_USD
+    if budget <= 0:
+        return
+    got = await _monthly_usage()
+    if got is None:
+        return
+    used, reset = got
+    if used >= budget:
+        _blocked = BUDGET_HELP.format(used=used, budget=budget, reset=reset)
+        raise ApifyLimitError(_blocked)
+
+
 async def run_actor(actor: str, payload: dict, timeout: int = 600) -> list[Any]:
     """Run an actor synchronously and return its dataset. Metered and capped
     (app/usage.py); the token goes in a header, never in a logged URL."""
@@ -54,6 +97,7 @@ async def run_actor(actor: str, payload: dict, timeout: int = 600) -> list[Any]:
 
     if _blocked:
         raise ApifyLimitError(_blocked)
+    await _check_budget()
     if not await usage.allowed("apify"):
         return []
     endpoint = actor.split("~")[-1].split("/")[-1][:60]
@@ -88,6 +132,7 @@ async def run_actor_async(actor: str, payload: dict, max_wait: int = 900, keep_p
 
     if _blocked:
         raise ApifyLimitError(_blocked)
+    await _check_budget()
     if not await usage.allowed("apify"):
         return []
     endpoint = actor.split("~")[-1].split("/")[-1][:60]

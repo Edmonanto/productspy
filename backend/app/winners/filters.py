@@ -53,6 +53,7 @@ STRONG_TERMS = [
     "masterclass", "coaching", "webinar", "ebook", "e-book", "insurance", "loan", "loans", "crypto", "casino",
     "betting", "lottery", "supplement", "supplements", "vitamins", "medication", "gift card", "donation",
     "charity", "meal kit", "food delivery", "audiobook", "podcast",
+    "dog food", "cat food", "pet food", "fresh meals", "snacks", "groceries",
 ]
 _STRONG_RX = re.compile(r"\b(" + "|".join(re.escape(t) for t in sorted(STRONG_TERMS, key=len, reverse=True)) + r")\b", re.I)
 
@@ -96,3 +97,32 @@ _TEMPLATE_RX = re.compile(r"\{\{\s*[\w.\-]+\s*\}\}|\{\{\s*product\.|\[\[\s*produ
 
 def is_catalog_template(text: str | None) -> bool:
     return bool(text and _TEMPLATE_RX.search(text))
+
+
+# ── names too vague to be ONE product ───────────────────────────────────────
+# "Necklace", "Kitchen Gadget", "Skin Care Product": a bucket, not a product.
+# Ads for a heart pendant, a promise necklace and a letter necklace all land
+# in it, so its ad count, score and photo describe several different items —
+# the result is wrong. Such names are never picked.
+VAGUE_HEADS = {
+    "gadget", "gadgets", "product", "products", "item", "items", "accessory", "accessories",
+    "essentials", "finds", "stuff", "thing", "things", "bundle", "collection", "gift", "gifts",
+    "set", "kit", "jewelry", "jewellery", "clothing", "apparel", "decor", "tool", "tools",
+    "device", "devices", "supplies", "goods", "merch",
+}
+BROAD_SINGLE = {
+    "necklace", "bracelet", "ring", "rings", "earrings", "pendant", "watch", "dress", "shirt", "shoes",
+    "sneakers", "bag", "handbag", "toy", "toys", "skincare", "makeup", "cosmetics", "perfume", "lamp",
+    "light", "case", "charger", "speaker", "headphones", "earbuds", "furniture", "bedding", "pillow",
+    "blanket", "cream", "serum", "food", "clothes", "hoodie", "leggings", "jacket", "sunglasses",
+}
+
+
+def too_vague(title: str | None) -> bool:
+    """True when a product name is a category rather than one item."""
+    words = re.findall(r"[a-z]+", (title or "").lower())
+    if not words:
+        return True
+    if words[-1] in VAGUE_HEADS:
+        return True
+    return len(words) == 1 and words[0] in BROAD_SINGLE
