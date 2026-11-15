@@ -1,7 +1,7 @@
 /** Sections 5, 7, 8, 9, 10 of the product report. Each shows what the data supports and says what's missing. */
 import Link from "next/link";
-import { AlertTriangle, ExternalLink, Lock, Package } from "lucide-react";
-import { AdAngle, AdEvidence, Criterion, ResearchReport } from "@/lib/api";
+import { AlertTriangle, ExternalLink, Lock, Package, UserRound } from "lucide-react";
+import { AdAngle, AdEvidence, Criterion, CustomerAvatar, ResearchReport } from "@/lib/api";
 import { AngleList } from "@/components/visual/Visuals";
 import { cn, CriterionKey, formatPrice, SOURCE_LABEL } from "@/lib/utils";
 import CriteriaBreakdown from "./CriteriaBreakdown";
@@ -97,7 +97,84 @@ export function CompetitorSection({ report, ads, criteria }: { report: Report | 
   );
 }
 
-export function MarketSection({ report, criteria, market }: { report: Report | undefined; criteria: Criteria; market: { name: string; currency: string; flag?: string } }) {
+function AvatarList({ title, items, tone }: { title: string; items?: string[]; tone: "pain" | "want" | "doubt" }) {
+  if (!items?.length) return null;
+  const dot = tone === "pain" ? "bg-rose-400" : tone === "want" ? "bg-emerald-400" : "bg-amber-400";
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-zinc-500 mb-1">{title}</div>
+      <ul className="space-y-1">
+        {items.map((t) => (
+          <li key={t} className="flex items-start gap-2 text-sm text-zinc-300">
+            <span className={cn("mt-1.5 h-1.5 w-1.5 rounded-full shrink-0", dot)} aria-hidden />{t}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** The customer avatar: who buys this product, written nightly with the ad angles. */
+export function AvatarCard({ avatar, locked = false, available = false }: {
+  avatar?: CustomerAvatar | null; locked?: boolean; available?: boolean;
+}) {
+  if (locked) {
+    return (
+      <div className="rounded-lg border border-violet-500/20 bg-violet-600/5 px-3 py-3 space-y-2">
+        <p className="text-sm text-zinc-300 flex items-center gap-2">
+          <Lock size={14} className="text-violet-300 shrink-0" aria-hidden />
+          {available
+            ? "We've profiled who buys this product: age, lifestyle, pains, buying triggers and where they scroll."
+            : "The customer avatar (who buys it, their pains and where they scroll) is part of Starter and Pro."}
+        </p>
+        <Link href="/dashboard/billing" className="inline-block px-3 py-1.5 rounded-lg bg-violet-600 text-white text-xs font-semibold hover:bg-violet-500 print:hidden">
+          Unlock with Starter
+        </Link>
+      </div>
+    );
+  }
+  if (!avatar) return null;
+  const who = [avatar.age, avatar.gender].filter(Boolean).join(" · ");
+  return (
+    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 p-4 space-y-3">
+      <div className="flex items-start gap-3">
+        <div className="h-10 w-10 rounded-full bg-violet-600/20 text-violet-300 flex items-center justify-center shrink-0">
+          <UserRound size={20} aria-hidden />
+        </div>
+        <div className="min-w-0">
+          <div className="text-[11px] uppercase tracking-wide text-violet-300">Customer avatar</div>
+          <div className="text-white font-semibold">{avatar.name}</div>
+          {who && <div className="text-xs text-zinc-400">{who}</div>}
+        </div>
+      </div>
+      {avatar.situation && <p className="text-sm text-zinc-300">{avatar.situation}</p>}
+      <div className="grid sm:grid-cols-2 gap-3">
+        <AvatarList title="Pains" items={avatar.pains} tone="pain" />
+        <AvatarList title="Wants" items={avatar.wants} tone="want" />
+      </div>
+      {avatar.trigger && (
+        <p className="text-sm text-zinc-300"><span className="text-zinc-500">Buys when:</span> {avatar.trigger}</p>
+      )}
+      <AvatarList title="Hesitates because" items={avatar.objections} tone="doubt" />
+      {!!avatar.platforms?.length && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] uppercase tracking-wide text-zinc-500 mr-1">Scrolls on</span>
+          {avatar.platforms.map((p) => (
+            <span key={p} className="px-2 py-0.5 rounded-full bg-zinc-800 text-xs text-zinc-300">{p}</span>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] text-zinc-500 flex items-center gap-1.5">
+        <KindTag kind="hypothesis" /> Inferred by AI from the product and its ads — confirm it with your first ad tests.
+      </p>
+    </div>
+  );
+}
+
+export function MarketSection({ report, criteria, market, avatar, avatarLocked = false, avatarAvailable = false }: {
+  report: Report | undefined; criteria: Criteria; market: { name: string; currency: string; flag?: string };
+  avatar?: CustomerAvatar | null; avatarLocked?: boolean; avatarAvailable?: boolean;
+}) {
   const adapt = report?.ai.market_adaptation ?? [];
   return (
     <div className="space-y-4">
@@ -105,6 +182,7 @@ export function MarketSection({ report, criteria, market }: { report: Report | u
         Target: <span className="text-zinc-200">{market.flag} {market.name}</span> · prices in {market.currency}.
         Evidence comes from ads shown to shoppers in this market — a product trending elsewhere is scored separately.
       </p>
+      <AvatarCard avatar={avatar} locked={avatarLocked} available={avatarAvailable} />
       <CriteriaBreakdown criteria={criteria} only={["market_fit"]} comments={report?.ai.criteria_comments} />
       {report?.ai.target_audience?.length ? (
         <div>

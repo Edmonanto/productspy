@@ -261,6 +261,7 @@ export default function BillingPage() {
                 { label: "Archive", value: ent.history_days ? `${ent.history_days} days` : "Today only" },
                 { label: "Ad evidence · CSV", value: `${ent.ad_evidence ? "Yes" : "No"} · ${ent.export_csv ? "Yes" : "No"}` },
                 { label: "Suppliers · Google Trends", value: `${ent.suppliers ? "Yes" : "No"} · ${ent.search_trends ? "Yes" : "No"}` },
+                { label: "Customer avatar", value: ent.avatar ? "Yes" : "No" },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <div className="text-zinc-500 flex items-center gap-1"><Zap size={10} className="text-violet-400" />{label}</div>

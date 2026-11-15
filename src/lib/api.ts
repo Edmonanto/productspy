@@ -140,6 +140,7 @@ export interface WinnersEntitlements {
   suppliers?: boolean;
   /** Google Trends charts (Pro and up). */
   search_trends?: boolean;
+  avatar?: boolean;
 }
 
 /** Points per criterion; null = no data (left out of the score). */
@@ -157,6 +158,12 @@ export interface Criterion {
 
 /** A suggested ad angle (written daily for each pick). */
 export interface AdAngle { angle: string; hook: string; format?: string; audience?: string }
+
+/** Who buys the product (AI-inferred nightly from the product and its ads — a hypothesis to test). */
+export interface CustomerAvatar {
+  name: string; age?: string; gender?: string; situation?: string;
+  pains?: string[]; wants?: string[]; trigger?: string; objections?: string[]; platforms?: string[];
+}
 
 export interface PickEconomics {
   complete: boolean;
@@ -274,6 +281,10 @@ export interface ProductEvidence {
   assumptions?: Record<string, number>;
   history: { date: string; total: number; paid_ads?: number; videos?: number }[];
   suppliers: { platform: string; supplier_name: string; supplier_url: string; unit_cost_usd: number | null }[];
+  /** Customer avatar; null when not written yet or locked (Free). */
+  avatar?: CustomerAvatar | null;
+  avatar_available?: boolean;
+  avatar_locked?: boolean;
   /** Plan doesn't include suppliers / Google Trends (Pro): show a teaser instead. */
   suppliers_locked?: boolean;
   supplier_count?: number;
