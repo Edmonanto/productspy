@@ -152,8 +152,24 @@ def parse_web_ad(node: dict, market: str) -> AdRecord:
         variant_count=to_int(node.get("collation_count")) or 1,
         reach=to_int((node.get("reach_estimate") or None)),
         raw={"cta": snap.get("cta_text"), "caption": snap.get("caption"),
-             "platforms": node.get("publisher_platform")},
+             "platforms": node.get("publisher_platform"),
+             # Every picture of the ad (carousel cards, extra images): more chances
+             # to find one that shows the product when the first doesn't (photos.py).
+             "images": ad_images(snap, cards, thumb)},
     )
+
+
+def ad_images(snap: dict, cards: list, first: str | None, limit: int = 5) -> list[str]:
+    out: list[str] = []
+    for src in [*(snap.get("images") or []), *cards]:
+        if not isinstance(src, dict):
+            continue
+        url = src.get("original_image_url") or src.get("resized_image_url") or src.get("video_preview_image_url")
+        if url and url != first and url not in out:
+            out.append(url)
+        if len(out) >= limit:
+            break
+    return out
 
 
 def library_url(country: str, term: str) -> str:

@@ -26,6 +26,7 @@ from .scoring import MAX_PICKS, aggregate, pick_winners, score
 from .llm import llm_available
 from .verify import CANDIDATES, ad_key, verify_product
 
+VIDEOS_PER_PRODUCT = 3            # TikTok covers refreshed per candidate without a confirmed photo
 PHOTO_CANDIDATES = MAX_PICKS + 5   # photos checked per run, best-ranked first
 
 log = logging.getLogger("winners")
@@ -224,6 +225,13 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
     return verified
 
 
+def _get(row, key: str):
+    try:
+        return row[key]
+    except (KeyError, IndexError):
+        return None
+
+
 async def refresh_expired_covers(market_code: str, ranked: list[str], results: dict) -> int:
     """Leading candidates with no stored photo whose pictures come from TikTok
     videos: those cover links expire, so re-fetch the videos (one Apify run)
@@ -234,11 +242,13 @@ async def refresh_expired_covers(market_code: str, ranked: list[str], results: d
     for pid in ranked[: PHOTO_CANDIDATES * 4]:
         if len(need) >= config.PHOTO_REFRESH_MAX:
             break
-        if await photos.stored(pid):
+        have = await photos.stored(pid)
+        if have and have["ai_checked"]:      # a photo the AI confirmed: nothing to refresh
             continue
-        video = next((a for a in results[pid][1] if a.platform == "tiktok_organic" and a.ad_url), None)
-        if video is not None:
-            need.append(video)
+        # Several videos: one cover often shows only the creator, another the product.
+        videos = [a for a in results[pid][1] if a.platform == "tiktok_organic" and a.ad_url]
+        need.extend(sorted(videos, key=lambda a: -(a.views or 0))[:VIDEOS_PER_PRODUCT])
+    need = need[: config.PHOTO_REFRESH_MAX]
     if not need:
         return 0
     fresh = await refresh_tiktok_videos([a.ad_url for a in need], market_code)
@@ -337,7 +347,7 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
         res, ads = results[pid]
         prod = products[pid][0]
         try:
-            ok = await photos.ensure_photo(pid, title(pid), prod["image_url"], ads)
+            ok = await photos.ensure_photo(pid, title(pid), prod["image_url"], ads, _get(prod, "product_url"))
         except Exception:   # our side failed (DB, Pillow...): don't empty the day over it
             log.exception("[%s] photo check failed for %s", market_code, pid)
             ok = bool(prod["image_url"])
