@@ -251,7 +251,7 @@ async def market_products_with_ads(market: str, window_days: int = 60) -> dict[s
     if not ads:
         return {}
     prods = await db.fetch(
-        "select id, title, category, image_url, price_usd, cost_usd, cost_estimated, attributes "
+        "select id, title, category, image_url, price_usd, cost_usd, cost_estimated, attributes, product_url "
         "from products where id = any($1::uuid[])",
         list(ads),
     )
@@ -293,12 +293,13 @@ async def mark_verified(product_id: str, ad_keys: list[str], image_url: str | No
                     select distinct k from jsonb_array_elements_text(
                         coalesce(attributes -> 'verified_ads', '[]'::jsonb) || $2::jsonb) k
                     limit 300) x)),
-            image_url = coalesce($3, image_url),
+            -- never replace the photo we stored (photos.py): the ad link expires in days
+            image_url = case when image_url like $5 || '%' then image_url else coalesce($3, image_url) end,
             title = coalesce($4, title),
             updated_at = now()
          where id = $1
         """,
-        product_id, _j(ad_keys), image_url, name,
+        product_id, _j(ad_keys), image_url, name, f"{config.API_PUBLIC_URL}/images/",
     )
 
 

@@ -192,3 +192,162 @@ async def test_refresh_expired_covers_for_leading_candidates(monkeypatch):
     assert sent["urls"] == [v1.ad_url, v2.ad_url]            # TikTok-only candidates without a photo
     assert n == 1 and v1.thumbnail_url == "https://p16/fresh1.jpg" and saved == ["v1"]
     assert v2.thumbnail_url == "https://p16/old2.jpg"        # not returned: unchanged
+
+
+# ── store pages and extra ad pictures (when no ad picture shows the product) ──
+
+def test_candidates_include_every_ad_picture_after_thumbnails():
+    a = _ad(1, "https://x/thumb.jpg")
+    a.raw = {"images": ["https://x/card2.jpg", "https://x/thumb.jpg", "https://x/card3.jpg"]}
+    b = _ad(2, "https://x/b.jpg")
+    urls = [u for u, _ in photos.candidates(None, [a, b])]
+    assert urls == ["https://x/thumb.jpg", "https://x/b.jpg", "https://x/card2.jpg", "https://x/card3.jpg"]
+
+
+def test_store_pages_one_per_site_products_first_no_social():
+    ads = [AdRecord(platform="meta", external_id="1", market="US", landing_url="https://shop.com/collections/all"),
+           AdRecord(platform="meta", external_id="2", market="US", landing_url="https://other.com/products/brace"),
+           AdRecord(platform="meta", external_id="3", market="US", landing_url="https://www.facebook.com/somepage"),
+           AdRecord(platform="meta", external_id="4", market="US", landing_url="https://shop.com/products/brace")]
+    assert photos.store_pages("https://www.facebook.com/ads/library/?id=9", ads) == \
+        ["https://other.com/products/brace", "https://shop.com/products/brace"]
+
+
+def test_page_images_jsonld_then_og():
+    html = """<html><head>
+      <meta content="//cdn.shop.com/og.jpg" property="og:image">
+      <script type="application/ld+json">{"@context":"https://schema.org","@graph":[
+        {"@type":"Product","name":"Brace","image":["/files/a.jpg",{"url":"https://cdn.shop.com/b.jpg"}]}]}</script>
+      <meta name="twitter:image" content="https://cdn.shop.com/a.jpg?x=1&amp;y=2"></head></html>"""
+    assert photos.page_images(html, "https://shop.com/products/brace") == [
+        "https://shop.com/files/a.jpg", "https://cdn.shop.com/b.jpg",
+        "https://cdn.shop.com/og.jpg", "https://cdn.shop.com/a.jpg?x=1&y=2"]
+
+
+def test_shopify_images():
+    data = {"product": {"image": {"src": "//cdn.shopify.com/1.jpg"},
+                        "images": [{"src": "//cdn.shopify.com/1.jpg"}, {"src": "https://cdn.shopify.com/2.jpg"}]}}
+    assert photos.shopify_images(data) == ["https://cdn.shopify.com/1.jpg", "https://cdn.shopify.com/2.jpg"]
+    assert photos.shopify_images({"nope": 1}) == []
+
+
+@pytest.mark.asyncio
+async def test_store_page_photo_used_when_ads_show_something_else(monkeypatch):
+    ads = [AdRecord(platform="meta", external_id="1", market="US", thumbnail_url="https://x/person.jpg",
+                    landing_url="https://shop.com/products/brace")]
+
+    async def dl(url):
+        return _jpeg(), "image/png"
+
+    async def ai(name, jpeg):
+        return ai.calls.pop(0)
+    ai.calls = [False, True]                    # ad picture: no; store photo: yes
+    fetched = []
+
+    async def fetch(url, timeout=10.0):
+        fetched.append(url)
+        return url, '{"product": {"images": [{"src": "https://cdn.shop.com/brace.jpg"}]}}'
+    monkeypatch.setattr(photos, "download", dl)
+    monkeypatch.setattr(photos, "shows_product", ai)
+    monkeypatch.setattr(photos, "fetch_text", fetch)
+    photo, checked = await photos.find_photo("Posture Brace", None, ads)
+    assert checked and photo.source_url == "https://cdn.shop.com/brace.jpg" and photo.ad_key is None
+    assert fetched == ["https://shop.com/products/brace.json"]
+
+
+@pytest.mark.asyncio
+async def test_store_pages_not_opened_when_an_ad_picture_matches(monkeypatch):
+    ads = [AdRecord(platform="meta", external_id="1", market="US", thumbnail_url="https://x/ok.jpg",
+                    landing_url="https://shop.com/products/brace")]
+
+    async def dl(url):
+        return _jpeg(), "image/png"
+
+    async def ai(name, jpeg):
+        return True
+
+    async def fetch(url, timeout=10.0):
+        raise AssertionError("store page should not be fetched")
+    monkeypatch.setattr(photos, "download", dl)
+    monkeypatch.setattr(photos, "shows_product", ai)
+    monkeypatch.setattr(photos, "fetch_text", fetch)
+    photo, checked = await photos.find_photo("Posture Brace", None, ads)
+    assert checked and photo.source_url == "https://x/ok.jpg"
+
+
+def test_meta_ad_keeps_every_picture():
+    from app.winners.collectors.meta_ads import ad_images
+    snap = {"images": [{"original_image_url": "https://x/1.jpg"}, {"resized_image_url": "https://x/2.jpg"}]}
+    cards = [{"original_image_url": "https://x/3.jpg"}, {"video_preview_image_url": "https://x/1.jpg"}, "junk"]
+    assert ad_images(snap, cards, "https://x/1.jpg") == ["https://x/2.jpg", "https://x/3.jpg"]
+
+
+@pytest.mark.asyncio
+async def test_checked_photo_kept_when_image_url_was_replaced_by_an_ad_link(monkeypatch):
+    from app import db
+    executed = []
+
+    async def stored(pid):
+        return {"ai_checked": True, "age_days": 3}
+
+    async def execute(sql, *args):
+        executed.append(args)
+
+    async def never(*a, **k):
+        raise AssertionError("no new photo search needed")
+    monkeypatch.setattr(photos, "stored", stored)
+    monkeypatch.setattr(photos, "find_photo", never)
+    monkeypatch.setattr(db, "execute", execute)
+    assert await photos.ensure_photo("p1", "Charger", "https://p19.tiktokcdn.com/fresh.jpg", []) is True
+    assert executed and executed[0][1].startswith(f"{photos.config.API_PUBLIC_URL}/images/p1.jpg")
+
+
+@pytest.mark.asyncio
+async def test_stored_photo_used_when_fresh_ad_link_is_rejected(monkeypatch):
+    from app import db
+    executed = []
+
+    async def stored(pid):
+        return {"ai_checked": False, "age_days": 3}
+
+    async def dl(url):
+        return _jpeg(), "image/png"
+
+    async def get(pid):
+        return (b"stored", "image/jpeg")
+
+    async def shows(name, jpeg):
+        return jpeg == b"stored"             # the ad link: no; our stored photo: yes
+
+    async def execute(sql, *args):
+        executed.append(sql)
+    monkeypatch.setattr(photos, "stored", stored)
+    monkeypatch.setattr(photos, "download", dl)
+    monkeypatch.setattr(photos, "get", get)
+    monkeypatch.setattr(photos, "shows_product", shows)
+    monkeypatch.setattr(photos, "llm_available", lambda: True)
+    monkeypatch.setattr(db, "execute", execute)
+    assert await photos.ensure_photo("p1", "Charger", "https://p19.tiktokcdn.com/fresh.jpg", []) is True
+    assert any("ai_checked = true" in q for q in executed) and any("set image_url" in q for q in executed)
+
+
+@pytest.mark.asyncio
+async def test_refresh_covers_when_stored_photo_unchecked_up_to_three_videos(monkeypatch):
+    from app import config
+    from app.winners import pipeline
+    from app.winners.collectors import apify
+    vids = [AdRecord(platform="tiktok_organic", external_id=f"v{k}", market="US", views=k * 10,
+                     ad_url=f"https://www.tiktok.com/@a/video/{k}") for k in range(5)]
+    sent = {}
+
+    async def stored(pid):
+        return {"ai_checked": False}         # captured at collection, never confirmed
+
+    async def refresh(urls, market):
+        sent["urls"] = urls
+        return {}
+    monkeypatch.setattr(photos, "stored", stored)
+    monkeypatch.setattr(apify, "refresh_tiktok_videos", refresh)
+    monkeypatch.setattr(config, "PHOTO_REFRESH_MAX", 20)
+    await pipeline.refresh_expired_covers("US", ["p1"], {"p1": (None, vids)})
+    assert sent["urls"] == [vids[4].ad_url, vids[3].ad_url, vids[2].ad_url]   # most viewed first
