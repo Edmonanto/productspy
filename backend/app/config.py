@@ -251,14 +251,15 @@ WINNERS_PLANS: dict[str, dict[str, int | bool]] = {
     #            markets  picks/day  history  ad evidence  csv  AI reports/day  compare
     # suppliers = supplier listings/links; search_trends = Google Trends (Pro and up,
     # as the pricing page says). The trial is Pro, so trial users get both.
+    # avatar = the customer avatar (who buys it) on the product page, Starter and up.
     "free":    {"markets": 1,  "winners_per_day": 3,  "history_days": 0,  "ad_evidence": False, "export_csv": False,
-                "reports_per_day": 1, "compare_max": 2, "suppliers": False, "search_trends": False},
+                "reports_per_day": 1, "compare_max": 2, "suppliers": False, "search_trends": False, "avatar": False},
     "starter": {"markets": 1,  "winners_per_day": 10, "history_days": 7,  "ad_evidence": True,  "export_csv": False,
-                "reports_per_day": 5, "compare_max": 3, "suppliers": False, "search_trends": False},
+                "reports_per_day": 5, "compare_max": 3, "suppliers": False, "search_trends": False, "avatar": True},
     "pro":     {"markets": 3,  "winners_per_day": 10, "history_days": 30, "ad_evidence": True,  "export_csv": True,
-                "reports_per_day": 20, "compare_max": 5, "suppliers": True, "search_trends": True},
+                "reports_per_day": 20, "compare_max": 5, "suppliers": True, "search_trends": True, "avatar": True},
     "agency":  {"markets": 99, "winners_per_day": 10, "history_days": 90, "ad_evidence": True,  "export_csv": True,
-                "reports_per_day": 100, "compare_max": 5, "suppliers": True, "search_trends": True},
+                "reports_per_day": 100, "compare_max": 5, "suppliers": True, "search_trends": True, "avatar": True},
 }
 
 

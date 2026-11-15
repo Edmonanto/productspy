@@ -343,8 +343,9 @@ function EvidenceInner() {
       <QuoteForm productId={p.id} productTitle={p.title} initialQuantity={quoteQty ?? 100} open={quoteQty != null} onClose={() => setQuoteQty(null)} />
 
       {/* 7 Market */}
-      <Section id="market" n={7} title="Target market analysis">
-        <MarketSection report={ready} criteria={criteria} market={{ name: mk?.name ?? market, currency: mk?.currency ?? "USD", flag: mk?.flag }} />
+      <Section id="market" n={7} title="Target market & customer avatar">
+        <MarketSection report={ready} criteria={criteria} market={{ name: mk?.name ?? market, currency: mk?.currency ?? "USD", flag: mk?.flag }}
+                       avatar={data.avatar} avatarLocked={data.avatar_locked} avatarAvailable={data.avatar_available} />
       </Section>
 
       {/* 8 Creative */}

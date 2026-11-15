@@ -478,6 +478,11 @@ async def product_evidence(product_id: str, market: str | None = None,
                            ("wow", "problem", "demo3s", "upsell", "brandable", "ip_risk", "fragile_heavy", "seasonal")},
             "angles": attrs.get("angles") or [],
         },
+        # Customer avatar (who buys it), written nightly with the angles. Starter and up;
+        # Free gets a locked teaser that only says one exists.
+        "avatar": attrs.get("avatar") if ent.get("avatar") else None,
+        "avatar_available": bool(attrs.get("avatar")),
+        "avatar_locked": not ent.get("avatar"),
         "search_trend": (attrs.get("trends") or {}).get(code) if ent["search_trends"] else None,
         "search_trend_locked": not ent["search_trends"],
         "score": None if latest is None else _score_out(latest, bool(ent["search_trends"])),
