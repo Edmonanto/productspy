@@ -284,6 +284,10 @@ async def mark_not_physical(product_id: str) -> None:
 
 async def mark_verified(product_id: str, ad_keys: list[str], image_url: str | None,
                         name: str | None) -> None:
+    """Remember which ads passed the check. Verdicts made under older, looser
+    rules (verify.VERSION) are dropped, not merged: only ads that passed the
+    current rules stay on the list (the list is what the site shows)."""
+    from .verify import VERSION
     await db.execute(
         """
         update products set
@@ -291,16 +295,38 @@ async def mark_verified(product_id: str, ad_keys: list[str], image_url: str | No
                 'verified_ads',
                 (select coalesce(jsonb_agg(k), '[]'::jsonb) from (
                     select distinct k from jsonb_array_elements_text(
-                        coalesce(attributes -> 'verified_ads', '[]'::jsonb) || $2::jsonb) k
-                    limit 300) x)),
+                        case when coalesce((attributes ->> 'verify_version')::int, 1) = $6
+                             then coalesce(attributes -> 'verified_ads', '[]'::jsonb)
+                             else '[]'::jsonb end || $2::jsonb) k
+                    limit 300) x),
+                'verify_version', $6::int),
             -- never replace the photo we stored (photos.py): the ad link expires in days
             image_url = case when image_url like $5 || '%' then image_url else coalesce($3, image_url) end,
             title = coalesce($4, title),
             updated_at = now()
          where id = $1
         """,
-        product_id, _j(ad_keys), image_url, name, f"{config.API_PUBLIC_URL}/images/",
+        product_id, _j(ad_keys), image_url, name, f"{config.API_PUBLIC_URL}/images/", VERSION,
     )
+
+
+async def claimed_ads(ad_keys: list[str]) -> dict[str, str]:
+    """ad key -> the product it was verified for under the current rules.
+    One ad sells one product: an ad already matched to a product can't be
+    shown under another one too."""
+    from .verify import VERSION
+    if not ad_keys:
+        return {}
+    rows = await db.fetch(
+        """
+        select k as ad_key, p.id as product_id
+          from products p, jsonb_array_elements_text(coalesce(p.attributes -> 'verified_ads', '[]'::jsonb)) k
+         where coalesce((p.attributes ->> 'verify_version')::int, 1) = $1
+           and k = any($2::text[])
+        """,
+        VERSION, list(ad_keys),
+    )
+    return {r["ad_key"]: str(r["product_id"]) for r in rows}
 
 
 async def last_picks(market: str, before: date) -> dict[str, date]:
@@ -386,11 +412,15 @@ async def picks(market: str, day: date) -> list[dict]:
                  order by s.unit_cost_usd limit 1) as supplier_url,
                (select a.ad_url from ad_creatives a
                  where a.product_id = p.id and a.market = dw.market
+                   and (coalesce(jsonb_array_length(p.attributes -> 'verified_ads'), 0) = 0
+                        or (p.attributes -> 'verified_ads') ? (a.platform || ':' || a.external_id))
                  order by coalesce(a.platform || ':' || a.external_id = p.attributes ->> 'photo_ad', false) desc,
                           (a.platform = 'meta') desc, a.variant_count desc, a.last_seen_at desc
                  limit 1) as ad_url,
                (select a.landing_url from ad_creatives a
                  where a.product_id = p.id and a.market = dw.market and a.landing_url like 'http%'
+                   and (coalesce(jsonb_array_length(p.attributes -> 'verified_ads'), 0) = 0
+                        or (p.attributes -> 'verified_ads') ? (a.platform || ':' || a.external_id))
                  order by a.variant_count desc, a.last_seen_at desc
                  limit 1) as store_url
           from daily_winners dw

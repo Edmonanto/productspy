@@ -611,7 +611,7 @@ def test_risk_evidence_not_labelled_ai_when_ai_never_looked():
 def test_all_prompts_format_without_errors():
     from app.winners import cleanup, extract, verify
     assert '{"items"' in extract.PROMPT.format(ads="x")
-    verify.PROMPT.format(name="n", ads="a")
+    verify.PROMPT.format(name="n", ads="a", pictures=verify.PICTURES)
     cleanup.PROMPT.format(items="i")
 
 
@@ -735,3 +735,98 @@ def test_pet_food_is_not_a_product():
     from app.winners.filters import non_product_reason
     assert non_product_reason("Dog Food")
     assert non_product_reason("Fresh Dog Food Subscription")
+
+
+async def test_verify_step_takes_off_ads_already_matched_to_another_product(monkeypatch):
+    """One ad sells one product: the same "Comment CABLE" ad was shown under both
+    Portable Charger and Magnetic Wireless Charger."""
+    from datetime import date
+    from app.winners import pipeline, store, verify
+
+    cable = AdRecord(platform="tiktok_organic", external_id="cable", market="US",
+                     ad_text="Why doesn't every charger do this?? Comment CABLE",
+                     started_at=NOW - timedelta(days=20))
+    own = AdRecord(platform="tiktok_organic", external_id="pb", market="US",
+                   ad_text="Pocket-sized portable charger", started_at=NOW - timedelta(days=20))
+    prod = {"title": "Portable Charger", "attributes": {"physical": True, "verify_version": verify.VERSION},
+            "price_usd": None, "cost_usd": None, "cost_estimated": False}
+    products = {"p": (prod, [cable, own])}
+    day = date(2026, 11, 18)
+    results = {"p": (pipeline.score(pipeline._signals(prod, [cable, own], day, NOW, None)), [cable, own])}
+    sent, rejected = [], []
+
+    async def fake_verify(name, ads, ok):
+        sent.append([a.external_id for a in ads])
+        return verify.Verdict(keep=list(ads), best=ads[0], checked=True, verified=True)
+    async def rej(m, pid, ads): rejected.append([a.external_id for a in ads])
+    async def noop(*a, **k): pass
+    monkeypatch.setattr(pipeline, "verify_product", fake_verify)
+    monkeypatch.setattr(store, "reject_ads", rej)
+    monkeypatch.setattr(store, "mark_verified", noop)
+
+    stats: dict = {}
+    got = await pipeline.verify_step("US", products, results, stats, day, NOW, {},
+                                     claimed={"tiktok_organic:cable": "other-product"})
+    assert rejected == [["cable"]] and sent == [["pb"]]
+    assert [a.external_id for a in results["p"][1]] == ["pb"] and got == {"p"}
+    assert stats["ads_on_other_product"] == 1
+
+
+async def test_verify_step_rechecks_verdicts_made_under_older_rules(monkeypatch):
+    from datetime import date
+    from app.winners import pipeline, store, verify
+
+    ad = AdRecord(platform="meta", external_id="1", market="US", ad_text="Best seller! New restock",
+                  started_at=NOW - timedelta(days=20))
+    old = {"title": "Promise Necklace", "attributes": {"physical": True, "verified_ads": ["meta:1"]},
+           "price_usd": None, "cost_usd": None, "cost_estimated": False}
+    products = {"p": (old, [ad])}
+    day = date(2026, 11, 18)
+    results = {"p": (pipeline.score(pipeline._signals(old, [ad], day, NOW, None)), [ad])}
+    seen_ok = []
+
+    async def fake_verify(name, ads, ok):
+        seen_ok.append(set(ok))
+        return verify.Verdict(reject=list(ads), checked=True)
+    async def noop(*a, **k): pass
+    monkeypatch.setattr(pipeline, "verify_product", fake_verify)
+    monkeypatch.setattr(store, "reject_ads", noop)
+    monkeypatch.setattr(store, "mark_verified", noop)
+
+    await pipeline.verify_step("US", products, results, {}, day, NOW, {})
+    assert seen_ok == [set()]                       # the old "ok" was not trusted
+    assert results["p"][0].excluded == "its ads don't show this product"
+
+    # under the current rules the stored verdict is reused
+    seen_ok.clear()
+    old["attributes"]["verify_version"] = verify.VERSION
+    results = {"p": (pipeline.score(pipeline._signals(old, [ad], day, NOW, None)), [ad])}
+    await pipeline.verify_step("US", products, results, {}, day, NOW, {})
+    assert seen_ok == [{"meta:1"}]
+
+
+async def test_verify_sends_the_ads_pictures_and_strict_rules(monkeypatch):
+    from app.winners import photos, verify
+
+    ads = [AdRecord(platform="meta", external_id=str(i), market="US", ad_text=t,
+                    thumbnail_url=f"https://cdn.example/{i}.jpg")
+           for i, t in enumerate(["Pocket power bank 10000mAh", "Why doesn't every charger do this?"])]
+    seen = {}
+
+    async def fake_download(url):
+        return (b"img" + url.encode(), "image/jpeg") if url.endswith("0.jpg") else None
+    async def fake_call(system, prompt, max_tokens=8000, purpose="extract", model=None, images=None):
+        seen.update(prompt=prompt, images=images, purpose=purpose)
+        from app.winners.llm import LLMResult
+        return LLMResult({"is_product": True, "matches": [0], "best": 0, "name": "power bank"})
+    monkeypatch.setattr(photos, "download", fake_download)
+    monkeypatch.setattr(photos, "shrink", lambda data: b"jpeg:" + data)
+    monkeypatch.setattr(verify, "llm_available", lambda: True)
+    monkeypatch.setattr(verify, "llm_call", fake_call)
+
+    v = await verify.verify_product("Portable Charger", ads, set())
+    assert [a.external_id for a in v.keep] == ["0"] and [a.external_id for a in v.reject] == ["1"]
+    assert v.verified and seen["purpose"] == "verify"
+    assert seen["images"] == [(b"jpeg:imghttps://cdn.example/0.jpg", "image/jpeg")]
+    assert '"picture": 1' in seen["prompt"] and '"picture": null' in seen["prompt"]
+    assert "When in doubt, say false" in seen["prompt"] and "DIFFERENT item" in seen["prompt"]
