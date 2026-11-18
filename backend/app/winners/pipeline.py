@@ -24,7 +24,7 @@ from .filters import is_catalog_template, non_product_advertiser, non_product_re
 from .markets import get_market
 from .scoring import MAX_PICKS, aggregate, pick_winners, score
 from .llm import llm_available
-from .verify import CANDIDATES, ad_key, verify_product
+from .verify import CANDIDATES, VERSION as VERIFY_VERSION, ad_key, verify_product
 
 VIDEOS_PER_PRODUCT = 3            # TikTok covers refreshed per candidate without a confirmed photo
 PHOTO_CANDIDATES = MAX_PICKS + 5   # photos checked per run, best-ranked first
@@ -167,25 +167,46 @@ def _signals(prod, ads, day: date, now: datetime, last, history: list | None = N
 async def verify_step(market_code: str, products: dict, results: dict, stats: dict,
                       day: date, now: datetime, picked: dict,
                       history: dict | None = None, searches: dict | None = None,
-                      names: dict | None = None) -> set[str]:
+                      names: dict | None = None, claimed: dict | None = None) -> set[str]:
     """Make sure the ads behind the leading products really advertise them.
 
     Returns the ids of products whose ads have all been checked (this run or
     an earlier one). Products that aren't physical products are excluded.
     history / searches are the paid-ads time series and Google Trends data the
     product was scored with; a rescore after rejecting ads keeps them.
+    claimed maps an ad key to the product it was already matched to (store.claimed_ads):
+    one ad sells one product, so an ad matched elsewhere is taken off this product.
+    Verdicts from older rules (attributes.verify_version < VERSION) are not trusted:
+    those ads are checked again.
     """
     history = history or {}
     searches = searches or {}
     names = names if names is not None else {}
     ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
                     key=lambda pid: results[pid][0].total, reverse=True)[:CANDIDATES]
-    rejected = renamed = dropped = 0
+    claimed = dict(claimed or {})
+    rejected = renamed = dropped = elsewhere = 0
     verified: set[str] = set()
     for pid in ranked:
         prod, ads = products[pid]
         attrs = _attrs(prod["attributes"])
-        verdict = await verify_product(prod["title"], ads, set(attrs.get("verified_ads") or []))
+        taken = [a for a in ads if claimed.get(ad_key(a), pid) != pid]
+        if taken:
+            await store.reject_ads(market_code, pid, taken)
+            rejected += len(taken)
+            elsewhere += len(taken)
+            ads = [a for a in ads if a not in taken]
+            products[pid] = (prod, ads)
+            if not ads:
+                res = score(_signals(prod, [], day, now, picked.get(pid)))
+                res.excluded = "its ads show other products"
+                results[pid] = (res, [])
+                continue
+            results[pid] = (score(_signals(prod, ads, day, now, picked.get(pid),
+                                           history.get(pid), searches.get(pid))), ads)
+        current = attrs.get("verify_version") == VERIFY_VERSION
+        verdict = await verify_product(prod["title"], ads,
+                                       set(attrs.get("verified_ads") or []) if current else set())
         if verdict.not_product:
             await store.reject_ads(market_code, pid, ads)
             await store.mark_not_physical(pid)
@@ -196,6 +217,8 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
             continue
         if verdict.verified:
             verified.add(pid)
+            for a in verdict.keep:
+                claimed.setdefault(ad_key(a), pid)
         if not verdict.checked:
             continue
         if verdict.reject:
@@ -219,6 +242,7 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
                            history.get(pid), searches.get(pid))
             results[pid] = (score(sig), verdict.keep)
     stats["ads_rejected"] = rejected
+    stats["ads_on_other_product"] = elsewhere
     stats["renamed"] = renamed
     stats["not_products_dropped"] = dropped
     stats["verified"] = len(verified)
@@ -297,8 +321,11 @@ async def score_step(market_code: str, day: date, stats: dict, errors: list | No
     verified: set[str] | None = None
     names: dict[str, str] = {}      # product id -> specific name the check gave it
     try:
+        leaders = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
+                         key=lambda pid: results[pid][0].total, reverse=True)[:CANDIDATES]
+        claimed = await store.claimed_ads(sorted({ad_key(a) for pid in leaders for a in products[pid][1]}))
         verified = await verify_step(market_code, products, results, stats, day, now, picked,
-                                     history, searches, names)
+                                     history, searches, names, claimed)
     except Exception as exc:   # a failed check must not cost the day's picks
         log.exception("[%s] verification failed", market_code)
         errors.append({"step": "verify", "error": str(exc)[:300]})
