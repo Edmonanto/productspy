@@ -55,6 +55,14 @@ async def collect_step(market_code: str, collectors: list[Collector], stats: dic
             errors.append({"step": c.name, "error": str(exc)[:500]})
 
 
+def _rejected_from(ad: AdRecord) -> set[str]:
+    raw = ad.raw or {}
+    out = {str(x) for x in (raw.get("rejected_from_all") or []) if x}
+    if raw.get("rejected_from"):
+        out.add(str(raw["rejected_from"]))
+    return out
+
+
 async def extract_step(market_code: str, stats: dict) -> None:
     rows = await store.unlinked_ads(market_code)
     if not rows:
@@ -85,6 +93,9 @@ async def extract_step(market_code: str, stats: dict) -> None:
                 unknown += 1
             continue
         product_id = await store.upsert_product(guess, ad)
+        if product_id in _rejected_from(ad):   # the check already said: not this product
+            not_products.append(str(row["id"]))
+            continue
         await store.link_ad(str(row["id"]), product_id)
         touched.add(product_id)
     await store.mark_not_product(not_products)
@@ -185,15 +196,20 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
     ranked = sorted((pid for pid, (r, _) in results.items() if not r.excluded),
                     key=lambda pid: results[pid][0].total, reverse=True)[:CANDIDATES]
     claimed = dict(claimed or {})
-    rejected = renamed = dropped = elsewhere = 0
+    rejected = renamed = dropped = elsewhere = rehomed = 0
     verified: set[str] = set()
     for pid in ranked:
         prod, ads = products[pid]
         attrs = _attrs(prod["attributes"])
         taken = [a for a in ads if claimed.get(ad_key(a), pid) != pid]
         if taken:
-            await store.reject_ads(market_code, pid, taken)
-            rejected += len(taken)
+            # the ad sells the product it was matched to: move it there, so that
+            # product keeps the ad in its score instead of the ad being lost
+            by_owner: dict[str, list] = {}
+            for a in taken:
+                by_owner.setdefault(claimed[ad_key(a)], []).append(a)
+            for owner, moved in by_owner.items():
+                await store.move_ads(market_code, owner, moved)
             elsewhere += len(taken)
             ads = [a for a in ads if a not in taken]
             products[pid] = (prod, ads)
@@ -222,7 +238,13 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
         if not verdict.checked:
             continue
         if verdict.reject:
-            await store.reject_ads(market_code, pid, verdict.reject)
+            keep_for_later = [a for a in verdict.reject if a in verdict.rehome]
+            drop = [a for a in verdict.reject if a not in verdict.rehome]
+            if keep_for_later:
+                await store.rehome_ads(market_code, pid, keep_for_later)
+                rehomed += len(keep_for_later)
+            if drop:
+                await store.reject_ads(market_code, pid, drop)
             rejected += len(verdict.reject)
         await store.mark_verified(
             pid, [ad_key(a) for a in verdict.keep],
@@ -242,7 +264,8 @@ async def verify_step(market_code: str, products: dict, results: dict, stats: di
                            history.get(pid), searches.get(pid))
             results[pid] = (score(sig), verdict.keep)
     stats["ads_rejected"] = rejected
-    stats["ads_on_other_product"] = elsewhere
+    stats["ads_on_other_product"] = elsewhere     # moved to the product they were matched to
+    stats["ads_rehomed"] = rehomed                # will join the product they really sell
     stats["renamed"] = renamed
     stats["not_products_dropped"] = dropped
     stats["verified"] = len(verified)

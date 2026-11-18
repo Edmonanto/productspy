@@ -269,6 +269,35 @@ async def reject_ads(market: str, product_id: str, ads: list[AdRecord]) -> None:
         )
 
 
+async def rehome_ads(market: str, product_id: str, ads: list[AdRecord]) -> None:
+    """Take ads off a product they don't advertise but keep them: they sell another
+    real product, so the next run names them again and links them there (never
+    back to a product they were rejected from — see extract_step). Only once per ad."""
+    for a in ads:
+        await db.execute(
+            """
+            update ad_creatives set product_id = null,
+                   not_product = coalesce((raw ->> 'rehomed')::int, 0) >= 1,
+                   raw = coalesce(raw, '{}'::jsonb) || jsonb_build_object(
+                       'rejected_from', $4::text,
+                       'rejected_from_all', coalesce(raw -> 'rejected_from_all', '[]'::jsonb) || to_jsonb($4::text),
+                       'rehomed', coalesce((raw ->> 'rehomed')::int, 0) + 1)
+             where platform = $1 and external_id = $2 and market = $3
+            """,
+            a.platform, a.external_id, market, product_id,
+        )
+
+
+async def move_ads(market: str, to_product_id: str, ads: list[AdRecord]) -> None:
+    """Link ads to the product they were already matched to (one ad = one product)."""
+    for a in ads:
+        await db.execute(
+            "update ad_creatives set product_id = $4, not_product = false "
+            "where platform = $1 and external_id = $2 and market = $3",
+            a.platform, a.external_id, market, to_product_id,
+        )
+
+
 async def set_image(product_id: str, url: str) -> None:
     await db.execute("update products set image_url = $2, updated_at = now() where id = $1 and image_url is null",
                      product_id, url)

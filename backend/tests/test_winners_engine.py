@@ -737,9 +737,10 @@ def test_pet_food_is_not_a_product():
     assert non_product_reason("Fresh Dog Food Subscription")
 
 
-async def test_verify_step_takes_off_ads_already_matched_to_another_product(monkeypatch):
+async def test_verify_step_moves_ads_already_matched_to_another_product(monkeypatch):
     """One ad sells one product: the same "Comment CABLE" ad was shown under both
-    Portable Charger and Magnetic Wireless Charger."""
+    Portable Charger and Magnetic Wireless Charger. It goes to the product it was
+    matched to (so that product keeps it in its score), not into the bin."""
     from datetime import date
     from app.winners import pipeline, store, verify
 
@@ -753,23 +754,106 @@ async def test_verify_step_takes_off_ads_already_matched_to_another_product(monk
     products = {"p": (prod, [cable, own])}
     day = date(2026, 11, 18)
     results = {"p": (pipeline.score(pipeline._signals(prod, [cable, own], day, NOW, None)), [cable, own])}
-    sent, rejected = [], []
+    sent, rejected, moved = [], [], []
 
     async def fake_verify(name, ads, ok):
         sent.append([a.external_id for a in ads])
         return verify.Verdict(keep=list(ads), best=ads[0], checked=True, verified=True)
     async def rej(m, pid, ads): rejected.append([a.external_id for a in ads])
+    async def move(m, to, ads): moved.append((to, [a.external_id for a in ads]))
     async def noop(*a, **k): pass
     monkeypatch.setattr(pipeline, "verify_product", fake_verify)
     monkeypatch.setattr(store, "reject_ads", rej)
+    monkeypatch.setattr(store, "move_ads", move)
     monkeypatch.setattr(store, "mark_verified", noop)
 
     stats: dict = {}
     got = await pipeline.verify_step("US", products, results, stats, day, NOW, {},
-                                     claimed={"tiktok_organic:cable": "other-product"})
-    assert rejected == [["cable"]] and sent == [["pb"]]
+                                     claimed={"tiktok_organic:cable": "cable-product"})
+    assert moved == [("cable-product", ["cable"])] and rejected == [] and sent == [["pb"]]
     assert [a.external_id for a in results["p"][1]] == ["pb"] and got == {"p"}
     assert stats["ads_on_other_product"] == 1
+
+
+async def test_verify_step_rehomes_ads_that_sell_another_real_product(monkeypatch):
+    """A "Hug Necklace" ad under Promise Necklace is wrong there but it is a real
+    product: it is kept for the next run (named again, joins its own product);
+    a store-wide sale ad is dropped."""
+    from datetime import date
+    from app.winners import pipeline, store, verify
+
+    mk = lambda i, t: AdRecord(platform="meta", external_id=i, market="US", ad_text=t,
+                               started_at=NOW - timedelta(days=20))
+    good, hug, sale = mk("g", "Promise necklace for him"), mk("h", "The Hug Necklace"), mk("s", "Store sale")
+    prod = {"title": "Promise Necklace", "attributes": {"physical": True}, "price_usd": None,
+            "cost_usd": None, "cost_estimated": False}
+    products = {"p": (prod, [good, hug, sale])}
+    day = date(2026, 11, 18)
+    results = {"p": (pipeline.score(pipeline._signals(prod, [good, hug, sale], day, NOW, None)), [good, hug, sale])}
+    calls = {}
+
+    async def fake_verify(name, ads, ok):
+        return verify.Verdict(keep=[good], reject=[hug, sale], rehome=[hug], best=good,
+                              checked=True, verified=True)
+    async def rej(m, pid, ads): calls["rejected"] = [a.external_id for a in ads]
+    async def rehome(m, pid, ads): calls["rehomed"] = (pid, [a.external_id for a in ads])
+    async def noop(*a, **k): pass
+    monkeypatch.setattr(pipeline, "verify_product", fake_verify)
+    monkeypatch.setattr(store, "reject_ads", rej)
+    monkeypatch.setattr(store, "rehome_ads", rehome)
+    monkeypatch.setattr(store, "mark_verified", noop)
+
+    stats: dict = {}
+    await pipeline.verify_step("US", products, results, stats, day, NOW, {})
+    assert calls == {"rehomed": ("p", ["h"]), "rejected": ["s"]}
+    assert stats["ads_rehomed"] == 1 and stats["ads_rejected"] == 2
+
+
+async def test_verify_reports_rejected_ads_that_sell_another_product(monkeypatch):
+    from app.winners import verify
+    ads = [AdRecord(platform="meta", external_id=str(i), market="US", ad_text=t)
+           for i, t in enumerate(["Promise necklace", "The Hug Necklace", "Big sale on everything"])]
+
+    async def fake_llm(system, prompt, max_tokens=8000, purpose="extract"):
+        assert '"other"' in prompt
+        return {"is_product": True, "matches": [0], "other": [1, 0], "best": 0, "name": None}
+    monkeypatch.setattr(verify, "llm_available", lambda: True)
+    monkeypatch.setattr(verify, "llm_json", fake_llm)
+    v = await verify.verify_product("Promise Necklace", ads, set())
+    assert [a.external_id for a in v.keep] == ["0"]
+    assert [a.external_id for a in v.rehome] == ["1"]          # a match is never re-homed
+    assert [a.external_id for a in v.reject] == ["1", "2"]
+
+
+async def test_extract_never_links_an_ad_back_to_the_product_it_was_rejected_from(monkeypatch):
+    from app.winners import pipeline, store
+    from app.winners.extract import ProductGuess
+
+    row = {"id": "a1", "platform": "meta", "external_id": "h", "market": "US", "advertiser_name": "Shop",
+           "advertiser_id": None, "ad_text": "The Hug Necklace", "landing_url": None, "media_url": None,
+           "thumbnail_url": None, "ad_url": None, "started_at": None, "is_active": True,
+           "variant_count": 1, "reach": None, "views": None, "likes": None, "comments": None,
+           "shares": None, "ctr": None, "budget_level": None, "intent_comments": None,
+           "sampled_comments": None, "raw": {"rejected_from": "old", "rejected_from_all": ["old"]}}
+    rows = [row, dict(row, id="a2", external_id="h2", raw={})]
+    linked, marked = [], []
+
+    async def unlinked(m): return rows
+    async def guess(ads): return [(ProductGuess(name="Necklace", key="necklace"), True) for _ in ads]
+    async def keys(): return []
+    async def upsert(g, ad): return "old"
+    async def link(ad_id, pid): linked.append((ad_id, pid))
+    async def mark(ids): marked.extend(ids)
+    monkeypatch.setattr(store, "unlinked_ads", unlinked)
+    monkeypatch.setattr(pipeline, "guess_products_detailed", guess)
+    monkeypatch.setattr(pipeline, "cluster_keys", lambda gs, existing: gs)
+    monkeypatch.setattr(store, "existing_keys", keys)
+    monkeypatch.setattr(store, "upsert_product", upsert)
+    monkeypatch.setattr(store, "link_ad", link)
+    monkeypatch.setattr(store, "mark_not_product", mark)
+
+    await pipeline.extract_step("US", {})
+    assert linked == [("a2", "old")] and marked == ["a1"]
 
 
 async def test_verify_step_rechecks_verdicts_made_under_older_rules(monkeypatch):

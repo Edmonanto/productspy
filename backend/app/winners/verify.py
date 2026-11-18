@@ -20,6 +20,10 @@ Charger, a jewellery brand's "Best Seller" ad under Promise Necklace). The
 check was text-only and accepted anything in the same category. Now the AI
 also SEES each ad's picture, must find this exact item in the ad (a related
 item, a vague hook or a brand/store promo is a no), and says no when unsure.
+
+Rejected ads that clearly sell ONE other real product ("other") are not thrown
+away: they are named again on the next run and join the product they really
+sell, so that product's score counts them (store.rehome_ads).
 """
 from __future__ import annotations
 
@@ -68,6 +72,7 @@ Also say whether "{name}" itself is ONE physical product that an online store sh
 Return JSON:
 {{"is_product": true | false,
   "matches": [<i of every ad that advertises this product>],
+  "other": [<i of every NON-matching ad that clearly sells ONE other physical product>],
   "best": <i of the ad that shows the product most clearly, or null>,
   "name": "<the specific item's generic name in English, 2-5 words, no brand, never a category>" or null}}
 
@@ -93,6 +98,7 @@ class Verdict:
     checked: bool = False          # False = AI unavailable / failed: nothing changes
     verified: bool = False         # every ad of the product has passed the check (now or before)
     not_product: bool = False      # the AI says the "product" itself isn't a physical product
+    rehome: list[AdRecord] = field(default_factory=list)  # rejected, but sell another real product
 
 
 def _line(i: int, ad: AdRecord, picture: Optional[int] = None) -> str:
@@ -155,6 +161,7 @@ async def verify_product(name: str, ads: list[AdRecord], already_ok: set[str]) -
         return Verdict(keep=list(ads))
 
     keep, reject, best, new_name, checked = list(known), [], None, None, False
+    rehome: list[AdRecord] = []
     failed = not_product = False
     for start in range(0, len(todo), MAX_ADS_PER_CHECK):
         chunk = todo[start:start + MAX_ADS_PER_CHECK]
@@ -167,12 +174,16 @@ async def verify_product(name: str, ads: list[AdRecord], already_ok: set[str]) -
         if res.get("is_product") is False:
             not_product = True
         ok = {int(i) for i in res["matches"] if isinstance(i, (int, float)) or str(i).isdigit()}
+        other = {int(i) for i in (res.get("other") or [])
+                 if isinstance(i, (int, float)) or str(i).isdigit()} - ok
         for i, ad in enumerate(chunk):
             (keep if i in ok else reject).append(ad)
+            if i in other:
+                rehome.append(ad)
         b = res.get("best")
         if best is None and isinstance(b, (int, float)) and int(b) in ok and 0 <= int(b) < len(chunk):
             best = chunk[int(b)]
         if not new_name and isinstance(res.get("name"), str) and res["name"].strip():
             new_name = res["name"].strip()[:80].title()
     return Verdict(keep=keep, reject=reject, best=best, name=new_name, checked=checked,
-                   verified=checked and not failed, not_product=not_product)
+                   verified=checked and not failed, not_product=not_product, rehome=rehome)
